@@ -1,0 +1,28 @@
+{
+  "name": "pokestream",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Locally hosted stream dashboard: one big game window plus camera, party, run, progress and notes panels. Works with any game.",
+  "type": "module",
+  "scripts": {
+    "dev": "node server/index.mjs --dev",
+    "build": "tsc --noEmit && vite build",
+    "serve": "node server/index.mjs",
+    "start": "npm run build && node server/index.mjs",
+    "typecheck": "tsc --noEmit"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1"
+  },
+  "devDependencies": {
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.1.2",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.4"
+  }
+}
