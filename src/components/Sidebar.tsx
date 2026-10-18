@@ -12,7 +12,7 @@ const STATUS_TEXT: Record<SyncStatus, string> = {
   loading: 'Loading…',
   synced: 'Saved',
   saving: 'Saving…',
-  offline: 'Offline: not saving',
+  offline: 'Can’t reach Uncbox. Not saving.',
 };
 
 interface Props {

@@ -66,7 +66,7 @@ export function ChatPanel({ twitch, title, mutate }: Props) {
         </form>
       )}
       {!channel ? (
-        <p className="chat-empty muted ctl">Add a channel to show chat.</p>
+        <p className="chat-empty muted ctl">Type your channel name above and chat shows up here.</p>
       ) : (
         <ol className="chat" aria-live="polite">
           {shown.length === 0 && (

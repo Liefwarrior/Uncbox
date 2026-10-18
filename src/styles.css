@@ -1718,6 +1718,10 @@ input[type='color'] {
   margin-top: auto;
   font-size: 14px;
 }
+/* With no channel yet, the hint sits right under the channel box it refers to. */
+p.chat-empty {
+  margin-top: 10px;
+}
 .chat__msg {
   font-size: 16px;
   line-height: 1.38;
@@ -1801,6 +1805,7 @@ input[type='color'] {
 }
 .roles {
   display: flex;
+  flex-wrap: wrap;
   gap: 4px;
 }
 .role {
