@@ -24,8 +24,9 @@ was told these scopes are generally not being granted. Part 1 works either way.
 2. Under **General Information**, add the app icon and a one-line description.
 3. Under **OAuth2**:
    - Turn on **Public Client**. Uncbox then signs in with PKCE, so no secret ships with it.
-   - No redirect is needed up front. If Discord asks for one during sign-in, the Discord panel
-     says so and offers `http://localhost` to copy.
+   - Under **Redirects**, add `http://localhost` and save. Discord's sign-in requires a registered
+     redirect even though nothing redirects. If it's missing, the Discord panel opens this page
+     and offers the address to copy.
 4. Under **App Testers**, invite each Discord account that should be able to use the voice panel,
    up to 50. Each person accepts the invite in Discord. You don't need to list yourself if you
    own the app.

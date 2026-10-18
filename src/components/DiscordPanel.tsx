@@ -227,7 +227,9 @@ function Setup({ error, clientId }: { error: string; clientId: string }) {
           </button>
           ).
         </li>
-        <li>Under OAuth2, turn on Public Client.</li>
+        <li>
+          Under OAuth2, turn on Public Client and add the redirect <code>http://localhost</code>.
+        </li>
         <li>Paste its Application ID here.</li>
       </ol>
       <input value={id} placeholder="Application ID" inputMode="numeric" onChange={(e) => setId(e.target.value)} />

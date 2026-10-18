@@ -82,9 +82,10 @@ It talks to the Discord app on your PC, which only allows this for apps you auth
   and approve the prompt in Discord. Until Discord approves the app, only its listed App Testers
   can connect. See [docs/discord-rpc-approval.md](docs/discord-rpc-approval.md).
 - **With your own app:** create a blank app at
-  [discord.com/developers/applications](https://discord.com/developers/applications), turn on
-  **Public Client** under OAuth2, and paste its Application ID into the Discord panel. If Discord
-  ever asks for a redirect, the panel says so and gives you the address to add.
+  [discord.com/developers/applications](https://discord.com/developers/applications). Under
+  OAuth2, turn on **Public Client** and add the redirect `http://localhost`, then paste its
+  Application ID into the Discord panel. If the redirect is missing, the panel opens the right
+  page and gives you the address to copy.
 
 Sign-in uses PKCE, so no secret is needed or shipped. Tokens (and a secret, if you entered one)
 stay in `data/discord.json` on this PC and never reach the browser. Discord's own StreamKit overlay can't be used here: Discord blocks it from being embedded

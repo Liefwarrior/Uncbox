@@ -268,20 +268,10 @@ export function createDiscordBridge({ dataDir, onChange }) {
   }
 
   async function exchangeCode(code, verifier) {
-    const params = { grant_type: 'authorization_code', code, ...(verifier ? { code_verifier: verifier } : {}) };
-    // RPC sign-in has no browser redirect, so try without one. Some apps still make Discord ask for
-    // a registered redirect; retry with the usual one, and if the app has none, say exactly that.
-    try {
-      await tokenRequest(params);
-    } catch (err) {
-      if (!/redirect/i.test(err.message)) throw err;
-      try {
-        await tokenRequest({ ...params, redirect_uri: REDIRECT_URI });
-      } catch (retry) {
-        if (/redirect/i.test(retry.message)) throw Object.assign(new Error(retry.message), { code: 'NEEDS_REDIRECT' });
-        throw retry;
-      }
-    }
+    // Discord requires the same redirect_uri here as in AUTHORIZE, even though nothing redirects.
+    const params = { grant_type: 'authorization_code', code, redirect_uri: REDIRECT_URI };
+    if (verifier) params.code_verifier = verifier;
+    await tokenRequest(params);
   }
 
   function clearChannel() {
@@ -369,13 +359,16 @@ export function createDiscordBridge({ dataDir, onChange }) {
   }
 
   function fixFor(err) {
-    if (err?.code === 'NEEDS_REDIRECT') return 'redirect';
+    // e.g. 'Missing "redirect_uri"' or 'Invalid "redirect_uri" in request': the app lacks ours.
+    if (/redirect/i.test(err?.message ?? '')) return 'redirect';
     if (/invalid_client|secret/i.test(err?.message ?? '')) return 'public-client';
     return '';
   }
 
   function friendlyAuthError(err) {
-    if (err?.code === 'NEEDS_REDIRECT') return `Discord wants one redirect on this app: add ${REDIRECT_URI} under OAuth2 → Redirects, then try again.`;
+    if (/redirect/i.test(err?.message ?? '')) {
+      return `This Discord app needs ${REDIRECT_URI} under OAuth2 → Redirects. Its settings just opened: add it, save, then connect again.`;
+    }
     const msg = err?.message ?? '';
     // Code 5000 covers every OAuth2 failure (including Cancel), so go by Discord's message.
     if (/access_denied|cancel|closed/i.test(msg)) {
@@ -482,7 +475,8 @@ export function createDiscordBridge({ dataDir, onChange }) {
       set({ status: 'authorizing', error: '', fix: '' });
       try {
         const pkce = clientSecret() ? null : pkcePair();
-        const args = { client_id: clientId(), scopes: SCOPES };
+        // Discord's OAuth2 wants a redirect_uri even for RPC sign-in; it must be registered on the app.
+        const args = { client_id: clientId(), scopes: SCOPES, redirect_uri: REDIRECT_URI };
         if (pkce) Object.assign(args, { code_challenge: pkce.challenge, code_challenge_method: 'S256' });
         const { code } = await ipc.request('AUTHORIZE', args);
         await exchangeCode(code, pkce?.verifier);
