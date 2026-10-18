@@ -10,7 +10,9 @@
     "serve": "node server/index.mjs",
     "start": "npm run build && node server/index.mjs",
     "typecheck": "tsc --noEmit",
-    "notices": "node scripts/notices.mjs"
+    "notices": "node scripts/notices.mjs",
+    "test": "vitest run",
+    "check": "node scripts/check.mjs"
   },
   "engines": {
     "node": ">=20"
@@ -29,6 +31,7 @@
     "@types/react-dom": "^19.3.0",
     "@vitejs/plugin-react": "^6.1.2",
     "typescript": "^7.0.2",
-    "vite": "^8.3.4"
+    "vite": "^8.3.4",
+    "vitest": "^5.0.5"
   }
 }

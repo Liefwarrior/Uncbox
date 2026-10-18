@@ -63,7 +63,7 @@ function unescapeTag(v: string) {
   return v.replace(/\\(.)/g, (_, c: string) => ({ s: ' ', ':': ';', r: '\r', n: '\n', '\\': '\\' })[c] ?? c);
 }
 
-function parseLine(line: string): IrcLine {
+export function parseLine(line: string): IrcLine {
   let rest = line;
   const tags: Record<string, string> = {};
   if (rest.startsWith('@')) {
@@ -92,7 +92,7 @@ function parseLine(line: string): IrcLine {
 }
 
 /** Splits text into text and emote runs. Twitch's emote ranges count code points, not UTF-16 units. */
-function splitEmotes(text: string, emotes: string | undefined): ChatPart[] {
+export function splitEmotes(text: string, emotes: string | undefined): ChatPart[] {
   if (!emotes) return [{ kind: 'text', text }];
   const chars = Array.from(text);
   const ranges: { id: string; start: number; end: number }[] = [];

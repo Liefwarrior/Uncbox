@@ -1,7 +1,6 @@
+import { PANEL_INFO } from './panels/catalog';
 import {
-  type BoardId,
   type GridItem,
-  isWindowId,
   type PanelId,
   type PresetData,
   type PresetId,
@@ -16,27 +15,14 @@ export interface PresetDef {
   name: string;
   /** One line under the name in the preset switcher. */
   blurb: string;
-  titles: Record<PanelId, string>;
+  /** Panel titles that differ from the defaults in panels/catalog.ts. */
+  titles: Partial<Record<PanelId, string>>;
   /** Panels listed first in the sidebar; the rest are still available. */
   featured: PanelId[];
   slots: { variant: 'list' | 'tiles'; name: string; detail: string; showDown: boolean };
   layout: GridItem[];
   data: () => Omit<PresetData, 'layout'>;
 }
-
-const BASE_TITLES: Record<PanelId, string> = {
-  game: 'Game',
-  camera: 'Camera',
-  chat: 'Chat',
-  slots: 'Party',
-  run: 'Run',
-  progress: 'Progress',
-  notes: 'Notes',
-  match: 'Match',
-  record: 'Session',
-  character: 'Character',
-  discord: 'Discord',
-};
 
 const timer = () => ({ startedAt: null, elapsedMs: 0 });
 
@@ -79,7 +65,7 @@ export const PRESETS: Record<PresetId, PresetDef> = {
     id: 'pokemon',
     name: 'Pokémon',
     blurb: 'Party, badges, Nuzlocke',
-    titles: { ...BASE_TITLES, slots: 'Party', run: 'Run' },
+    titles: {},
     featured: ['game', 'camera', 'slots', 'chat', 'discord', 'run', 'progress', 'notes'],
     slots: { variant: 'list', name: 'Empty', detail: 'Lv 5 · Adamant', showDown: true },
     layout: [
@@ -107,7 +93,7 @@ export const PRESETS: Record<PresetId, PresetDef> = {
     id: 'smite2',
     name: 'SMITE 2',
     blurb: 'KDA, record, build',
-    titles: { ...BASE_TITLES, slots: 'Build', run: 'Session', notes: 'Game plan', record: 'Record' },
+    titles: { slots: 'Build', run: 'Session', notes: 'Game plan', record: 'Record' },
     featured: ['game', 'camera', 'chat', 'discord', 'match', 'record', 'slots', 'run', 'notes'],
     slots: { variant: 'tiles', name: 'Item', detail: '', showDown: false },
     layout: [
@@ -134,7 +120,7 @@ export const PRESETS: Record<PresetId, PresetDef> = {
     id: 'wow',
     name: 'WoW Forever',
     blurb: 'Leveling, raids',
-    titles: { ...BASE_TITLES, run: '/played', notes: 'Quest log', progress: 'Progress' },
+    titles: { run: '/played', notes: 'Quest log' },
     featured: ['game', 'camera', 'character', 'chat', 'discord', 'progress', 'notes', 'run'],
     slots: { variant: 'list', name: 'Empty', detail: 'Class', showDown: true },
     layout: [
@@ -176,25 +162,8 @@ export const PRESETS: Record<PresetId, PresetDef> = {
   },
 };
 
-/** Default size for a panel added to a preset whose default layout does not include it. */
-export const PANEL_SIZES: Record<PanelId, { w: number; h: number; minW: number; minH: number }> = {
-  game: { w: 17, h: 17, minW: 6, minH: 6 },
-  camera: { w: 7, h: 7, minW: 3, minH: 3 },
-  chat: { w: 7, h: 9, minW: 4, minH: 4 },
-  slots: { w: 7, h: 11, minW: 4, minH: 4 },
-  run: { w: 5, h: 6, minW: 4, minH: 4 },
-  progress: { w: 6, h: 7, minW: 4, minH: 4 },
-  notes: { w: 6, h: 7, minW: 4, minH: 3 },
-  match: { w: 5, h: 7, minW: 4, minH: 6 },
-  record: { w: 5, h: 7, minW: 4, minH: 5 },
-  character: { w: 7, h: 8, minW: 5, minH: 6 },
-  discord: { w: 4, h: 7, minW: 3, minH: 3 },
-};
-
-const WINDOW_SIZE = { w: 7, h: 8, minW: 3, minH: 3 };
-
-export function sizeOf(id: BoardId) {
-  return isWindowId(id) ? WINDOW_SIZE : PANEL_SIZES[id];
+export function panelTitle(def: PresetDef, id: PanelId): string {
+  return def.titles[id] ?? PANEL_INFO[id].title;
 }
 
 export const WOW_RACES = ['Human', 'Dwarf', 'Night Elf', 'Gnome', 'Orc', 'Undead', 'Tauren', 'Troll', 'Skyborne'];

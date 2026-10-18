@@ -1,4 +1,5 @@
-import { PRESETS, sizeOf } from '../presets';
+import { sizeOf } from '../panels/catalog';
+import { PRESETS } from '../presets';
 import {
   type AppState,
   type AppWindow,

@@ -1,0 +1,49 @@
+import type { ReactNode } from 'react';
+import { CameraPanel } from '../components/CameraPanel';
+import { CharacterPanel } from '../components/CharacterPanel';
+import { ChatPanel } from '../components/ChatPanel';
+import { DiscordPanel } from '../components/DiscordPanel';
+import { GamePanel } from '../components/GamePanel';
+import { MatchPanel } from '../components/MatchPanel';
+import { NotesPanel } from '../components/NotesPanel';
+import { ProgressPanel } from '../components/ProgressPanel';
+import { RecordPanel } from '../components/RecordPanel';
+import { RunPanel } from '../components/RunPanel';
+import { SlotsPanel } from '../components/SlotsPanel';
+import { WindowPanel } from '../components/WindowPanel';
+import { panelTitle, type PresetDef } from '../presets';
+import { type AppState, type BoardId, isWindowId, type PanelId, type PresetData } from '../state/model';
+import type { Mutate, MutatePreset } from '../state/useAppState';
+
+export interface PanelContext {
+  state: AppState;
+  data: PresetData;
+  def: PresetDef;
+  title: string;
+  mutate: Mutate;
+  mutatePreset: MutatePreset;
+}
+
+const RENDER: Record<PanelId, (c: PanelContext) => ReactNode> = {
+  game: (c) => <GamePanel game={c.data.game} mutatePreset={c.mutatePreset} />,
+  camera: (c) => <CameraPanel camera={c.state.camera} title={c.title} mutate={c.mutate} />,
+  chat: (c) => <ChatPanel twitch={c.state.twitch} title={c.title} mutate={c.mutate} />,
+  slots: (c) => <SlotsPanel slots={c.data.slots} title={c.title} def={c.def.slots} mutatePreset={c.mutatePreset} />,
+  run: (c) => <RunPanel run={c.data.run} title={c.title} mutatePreset={c.mutatePreset} />,
+  progress: (c) => (
+    <ProgressPanel milestones={c.data.milestones} counters={c.data.counters} title={c.title} mutatePreset={c.mutatePreset} />
+  ),
+  notes: (c) => <NotesPanel notes={c.data.notes} title={c.title} mutatePreset={c.mutatePreset} />,
+  match: (c) => <MatchPanel match={c.data.match} title={c.title} mutatePreset={c.mutatePreset} />,
+  record: (c) => <RecordPanel record={c.data.record} match={c.data.match} title={c.title} mutatePreset={c.mutatePreset} />,
+  character: (c) => <CharacterPanel character={c.data.character} title={c.title} mutatePreset={c.mutatePreset} />,
+  discord: (c) => <DiscordPanel pinned={c.state.discord.pinned} title={c.title} mutate={c.mutate} />,
+};
+
+export function renderPanel(id: BoardId, c: Omit<PanelContext, 'title'>): ReactNode {
+  if (isWindowId(id)) {
+    const win = c.data.windows.find((w) => w.id === id);
+    return win ? <WindowPanel win={win} mutatePreset={c.mutatePreset} /> : null;
+  }
+  return RENDER[id]({ ...c, title: panelTitle(c.def, id) });
+}

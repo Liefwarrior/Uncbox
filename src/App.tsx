@@ -1,20 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Board } from './components/Board';
-import { CameraPanel } from './components/CameraPanel';
-import { CharacterPanel } from './components/CharacterPanel';
-import { DiscordPanel } from './components/DiscordPanel';
-import { ChatPanel } from './components/ChatPanel';
-import { GamePanel } from './components/GamePanel';
-import { MatchPanel } from './components/MatchPanel';
-import { NotesPanel } from './components/NotesPanel';
-import { ProgressPanel } from './components/ProgressPanel';
-import { RecordPanel } from './components/RecordPanel';
-import { RunPanel } from './components/RunPanel';
 import { Sidebar } from './components/Sidebar';
-import { SlotsPanel } from './components/SlotsPanel';
-import { WindowPanel } from './components/WindowPanel';
+import { renderPanel } from './panels';
 import { PRESETS } from './presets';
-import { type BoardId, isWindowId } from './state/model';
+import type { BoardId } from './state/model';
 import { useAppState } from './state/useAppState';
 
 function initialStreamMode() {
@@ -64,45 +53,7 @@ export function App() {
 
   const def = PRESETS[state.preset];
   const data = state.presets[state.preset];
-  const t = def.titles;
-
-  const renderPanel = (id: BoardId) => {
-    if (isWindowId(id)) {
-      const win = data.windows.find((w) => w.id === id);
-      return win ? <WindowPanel win={win} mutatePreset={mutatePreset} /> : null;
-    }
-    switch (id) {
-      case 'game':
-        return <GamePanel game={data.game} mutatePreset={mutatePreset} />;
-      case 'camera':
-        return <CameraPanel camera={state.camera} title={t.camera} mutate={mutate} />;
-      case 'chat':
-        return <ChatPanel twitch={state.twitch} title={t.chat} mutate={mutate} />;
-      case 'slots':
-        return <SlotsPanel slots={data.slots} title={t.slots} def={def.slots} mutatePreset={mutatePreset} />;
-      case 'run':
-        return <RunPanel run={data.run} title={t.run} mutatePreset={mutatePreset} />;
-      case 'progress':
-        return (
-          <ProgressPanel
-            milestones={data.milestones}
-            counters={data.counters}
-            title={t.progress}
-            mutatePreset={mutatePreset}
-          />
-        );
-      case 'notes':
-        return <NotesPanel notes={data.notes} title={t.notes} mutatePreset={mutatePreset} />;
-      case 'match':
-        return <MatchPanel match={data.match} title={t.match} mutatePreset={mutatePreset} />;
-      case 'record':
-        return <RecordPanel record={data.record} match={data.match} title={t.record} mutatePreset={mutatePreset} />;
-      case 'discord':
-        return <DiscordPanel pinned={state.discord.pinned} title={t.discord} mutate={mutate} />;
-      case 'character':
-        return <CharacterPanel character={data.character} title={t.character} mutatePreset={mutatePreset} />;
-    }
-  };
+  const render = (id: BoardId) => renderPanel(id, { state, data, def, mutate, mutatePreset });
 
   // Draw nothing until the saved state arrives (a few ms locally). Otherwise every reload shows the
   // default preset's theme first and crossfades to the real one, which is visible on stream.
@@ -123,7 +74,7 @@ export function App() {
           layout={data.layout}
           editing={!streamMode}
           mutatePreset={mutatePreset}
-          renderPanel={renderPanel}
+          renderPanel={render}
         />
       </main>
     </div>

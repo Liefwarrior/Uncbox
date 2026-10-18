@@ -1,9 +1,9 @@
-import { PRESETS } from '../presets';
+import { panelTitle, PRESETS } from '../presets';
 import { type AppState, PANEL_IDS, type PanelId, PRESET_IDS, uid, type WindowId } from '../state/model';
 import { defaultPresetData } from '../state/hydrate';
 import type { Mutate, MutatePreset, SyncStatus } from '../state/useAppState';
 import { useArmed } from '../useArmed';
-import { placePanel } from './Board';
+import { placePanel } from '../layout';
 import { Icon } from './Icon';
 
 const STATUS_TEXT: Record<SyncStatus, string> = {
@@ -50,7 +50,7 @@ export function Sidebar({ state, mutate, mutatePreset, status, onStreamMode }: P
       <label>
         <input type="checkbox" checked={shown.has(id)} onChange={(e) => toggle(id, e.target.checked)} />
         <span className="toggle" />
-        {def.titles[id]}
+        {panelTitle(def, id)}
       </label>
     </li>
   );
