@@ -346,13 +346,10 @@ input[type='color'] {
 .ctl {
   transition: opacity 0.25s;
 }
-.is-stream .ctl {
-  opacity: 0;
-  pointer-events: none;
-}
-.is-stream .panel:hover .ctl {
-  opacity: 1;
-  pointer-events: auto;
+/* Gone, not just invisible: a hidden button that kept its width would push values around and
+   cut text short on stream. */
+.is-stream .panel:not(:hover) .ctl {
+  display: none;
 }
 .is-stream .ghost-input:hover:not(:focus) {
   border-color: transparent;
@@ -402,11 +399,19 @@ input[type='color'] {
 .sidebar__inner {
   display: flex;
   flex-direction: column;
-  gap: 6px;
   width: 300px;
   height: 100%;
-  padding: 22px 18px 18px;
+}
+.sidebar__scroll {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 6px;
+  min-height: 0;
+  padding: 22px 18px 12px;
   overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
 }
 .brand {
   display: flex;
@@ -615,6 +620,12 @@ input[type='color'] {
   border-color: var(--accent);
   background: var(--accent);
 }
+.side-link.side-link--quiet {
+  color: var(--muted);
+}
+.side-link.side-link--quiet.is-armed {
+  color: var(--bad);
+}
 .side-link {
   display: flex;
   align-items: center;
@@ -632,10 +643,11 @@ input[type='color'] {
 
 .sync {
   display: flex;
+  flex: none;
   align-items: center;
   gap: 9px;
-  margin-top: auto;
-  padding-top: 16px;
+  padding: 12px 18px 16px;
+  border-top: 1px solid var(--border);
   color: var(--muted);
   font-size: 13px;
 }
@@ -924,7 +936,10 @@ input[type='color'] {
   border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
 }
 
-/* SMITE 2: gilded corner brackets. */
+/* SMITE 2: gilded corner brackets, with room left under them so they never sit on content. */
+.theme-smite2 .panel:not(.panel--bleed) .panel__body {
+  padding-bottom: 22px;
+}
 .theme-smite2 .panel::after {
   content: '';
   position: absolute;
@@ -1390,6 +1405,17 @@ input[type='color'] {
   font-size: 13px;
   text-align: center;
 }
+/* On stream a tile shows its full name over two lines, and no stand-in letter when it has no picture. */
+.slot__name--text {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-height: 1.25;
+}
+.is-stream .slots--tiles .slot__art:not(:has(img)) {
+  display: none;
+}
 .slots--tiles .slot__grip,
 .slots--tiles .slot__ctl {
   position: absolute;
@@ -1433,13 +1459,23 @@ input[type='color'] {
   background: var(--muted);
   transition: background 0.3s;
 }
+/* Past a day the clock gets a "3d" prefix, so it steps down to keep the play button in view. */
+.timer__digits.is-long {
+  font-size: min(11cqw, 34cqh, 40px);
+}
+/* A grey dot means nothing to viewers; on stream it only shows while the timer runs. */
+.is-stream .timer:not(.is-running) .timer__dot {
+  display: none;
+}
 .timer.is-running .timer__dot {
   background: var(--good);
   animation: pulse 1.6s ease-in-out infinite;
 }
 .timer__digits {
+  min-width: 0;
   font-family: var(--font-num);
   font-size: min(15cqw, 34cqh, 56px);
+  white-space: nowrap;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
   letter-spacing: -0.01em;
@@ -1525,10 +1561,14 @@ input[type='color'] {
   gap: 6px;
   margin: 6px 0 8px;
 }
+.milestones__row:not(.is-named) {
+  flex-wrap: nowrap;
+}
 .pip {
   position: relative;
-  width: 32px;
-  height: 32px;
+  flex: 0 1 32px;
+  min-width: 12px;
+  aspect-ratio: 1;
   padding: 0;
   border: 2px solid var(--border);
   border-radius: 50%;
@@ -1660,9 +1700,9 @@ input[type='color'] {
   transition: background 0.25s, border-color 0.25s, color 0.25s, transform 0.3s var(--ease-out);
 }
 .check.on {
-  border-color: var(--good);
-  background: var(--good);
-  color: var(--on-status);
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--accent-ink);
   transform: scale(1.08);
 }
 .is-stream .check:not(.on) {
@@ -1672,6 +1712,11 @@ input[type='color'] {
   border: 0;
   border-radius: 50%;
   background: var(--accent);
+}
+.is-editing .note:not(:hover):not(:focus-within) > .icon-btn,
+.is-editing .counter:not(:hover):not(:focus-within) .counter__remove,
+.is-editing .slot:not(:hover):not(:focus-within) .slot__ctl {
+  opacity: 0;
 }
 .note.is-done .ghost-input {
   color: var(--muted);
@@ -2604,20 +2649,4 @@ p.chat-empty {
 .panel--bleed .panel__body,
 .panel--window .panel__body {
   overflow: hidden;
-}
-/* Character name and guild line sit centered, like a nameplate. */
-.character__head {
-  justify-content: center;
-}
-.character__name {
-  margin-left: 0;
-  text-align: center;
-}
-.character__guild {
-  justify-content: center;
-  text-align: center;
-}
-.character__guild .ghost-input {
-  margin-left: 0;
-  text-align: center;
 }

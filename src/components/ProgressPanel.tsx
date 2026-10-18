@@ -125,7 +125,7 @@ export function ProgressPanel({ milestones, counters, title, mutatePreset }: Pro
             <button className="icon-btn ctl" title="Plus one" onClick={() => mutatePreset((d) => void d.counters[i].value++)}>
               <Icon name="plus" size={14} />
             </button>
-            <button className="icon-btn ctl" title="Remove counter" onClick={() => removeCounter(c, i)}>
+            <button className="icon-btn ctl counter__remove" title="Remove counter" onClick={() => removeCounter(c, i)}>
               <Icon name="x" size={14} />
             </button>
           </li>
