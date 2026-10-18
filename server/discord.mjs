@@ -268,8 +268,9 @@ export function createDiscordBridge({ dataDir, onChange }) {
   }
 
   async function exchangeCode(code, verifier) {
-    // Discord requires the same redirect_uri here as in AUTHORIZE, even though nothing redirects.
-    const params = { grant_type: 'authorization_code', code, redirect_uri: REDIRECT_URI };
+    // Verified against Discord (2026-10-18): the exchange works without a redirect_uri, as long as
+    // the app has one registered (an app with none makes PKCE sign-in fail with "Missing redirect_uri").
+    const params = { grant_type: 'authorization_code', code };
     if (verifier) params.code_verifier = verifier;
     await tokenRequest(params);
   }
@@ -359,7 +360,7 @@ export function createDiscordBridge({ dataDir, onChange }) {
   }
 
   function fixFor(err) {
-    // e.g. 'Missing "redirect_uri"' or 'Invalid "redirect_uri" in request': the app lacks ours.
+    // 'Missing "redirect_uri"': the app has no registered redirect, which PKCE sign-in needs.
     if (/redirect/i.test(err?.message ?? '')) return 'redirect';
     if (/invalid_client|secret/i.test(err?.message ?? '')) return 'public-client';
     return '';
@@ -475,8 +476,9 @@ export function createDiscordBridge({ dataDir, onChange }) {
       set({ status: 'authorizing', error: '', fix: '' });
       try {
         const pkce = clientSecret() ? null : pkcePair();
-        // Discord's OAuth2 wants a redirect_uri even for RPC sign-in; it must be registered on the app.
-        const args = { client_id: clientId(), scopes: SCOPES, redirect_uri: REDIRECT_URI };
+        // No redirect_uri here: Discord rejects one in RPC sign-in ("Redirect URI cannot be used in the
+        // RPC OAuth2 Authorization flow"), though the app must still have one registered for PKCE.
+        const args = { client_id: clientId(), scopes: SCOPES };
         if (pkce) Object.assign(args, { code_challenge: pkce.challenge, code_challenge_method: 'S256' });
         const { code } = await ipc.request('AUTHORIZE', args);
         await exchangeCode(code, pkce?.verifier);
