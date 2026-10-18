@@ -35,6 +35,7 @@ const BASE_TITLES: Record<PanelId, string> = {
   match: 'Match',
   record: 'Session',
   character: 'Character',
+  discord: 'Voice',
 };
 
 const timer = () => ({ startedAt: null, elapsedMs: 0 });
@@ -79,16 +80,17 @@ export const PRESETS: Record<PresetId, PresetDef> = {
     name: 'Pokémon',
     blurb: 'Party, badges, Nuzlocke',
     titles: { ...BASE_TITLES, slots: 'Party', run: 'Run' },
-    featured: ['game', 'camera', 'slots', 'chat', 'run', 'progress', 'notes'],
+    featured: ['game', 'camera', 'slots', 'chat', 'discord', 'run', 'progress', 'notes'],
     slots: { variant: 'list', name: 'Empty', detail: 'Lv 5 · Adamant', showDown: true },
     layout: [
       { i: 'game', x: 0, y: 0, w: 17, h: 17 },
       { i: 'camera', x: 17, y: 0, w: 7, h: 7 },
       { i: 'slots', x: 17, y: 7, w: 7, h: 11 },
       { i: 'chat', x: 17, y: 18, w: 7, h: 6 },
-      { i: 'run', x: 0, y: 17, w: 5, h: 7 },
-      { i: 'progress', x: 5, y: 17, w: 6, h: 7 },
-      { i: 'notes', x: 11, y: 17, w: 6, h: 7 },
+      { i: 'run', x: 0, y: 17, w: 4, h: 7 },
+      { i: 'progress', x: 4, y: 17, w: 5, h: 7 },
+      { i: 'notes', x: 9, y: 17, w: 4, h: 7 },
+      { i: 'discord', x: 13, y: 17, w: 4, h: 7 },
     ],
     data: () => {
       const d = baseData();
@@ -106,16 +108,17 @@ export const PRESETS: Record<PresetId, PresetDef> = {
     name: 'SMITE 2',
     blurb: 'KDA, record, build',
     titles: { ...BASE_TITLES, slots: 'Build', run: 'Session', notes: 'Game plan', record: 'Record' },
-    featured: ['game', 'camera', 'chat', 'match', 'record', 'slots', 'run', 'notes'],
+    featured: ['game', 'camera', 'chat', 'discord', 'match', 'record', 'slots', 'run', 'notes'],
     slots: { variant: 'tiles', name: 'Item', detail: '', showDown: false },
     layout: [
       { i: 'game', x: 0, y: 0, w: 17, h: 17 },
       { i: 'camera', x: 17, y: 0, w: 7, h: 7 },
       { i: 'chat', x: 17, y: 7, w: 7, h: 12 },
       { i: 'run', x: 17, y: 19, w: 7, h: 5 },
-      { i: 'match', x: 0, y: 17, w: 6, h: 7 },
-      { i: 'record', x: 6, y: 17, w: 5, h: 7 },
-      { i: 'slots', x: 11, y: 17, w: 6, h: 7 },
+      { i: 'match', x: 0, y: 17, w: 5, h: 7 },
+      { i: 'record', x: 5, y: 17, w: 4, h: 7 },
+      { i: 'slots', x: 9, y: 17, w: 4, h: 7 },
+      { i: 'discord', x: 13, y: 17, w: 4, h: 7 },
     ],
     data: () => {
       const d = baseData();
@@ -132,16 +135,17 @@ export const PRESETS: Record<PresetId, PresetDef> = {
     name: 'WoW Forever',
     blurb: 'Leveling, raids',
     titles: { ...BASE_TITLES, run: '/played', notes: 'Quest log', progress: 'Progress' },
-    featured: ['game', 'camera', 'character', 'chat', 'progress', 'notes', 'run'],
+    featured: ['game', 'camera', 'character', 'chat', 'discord', 'progress', 'notes', 'run'],
     slots: { variant: 'list', name: 'Empty', detail: 'Class', showDown: true },
     layout: [
       { i: 'game', x: 0, y: 0, w: 17, h: 17 },
       { i: 'camera', x: 17, y: 0, w: 7, h: 7 },
       { i: 'character', x: 17, y: 7, w: 7, h: 8 },
       { i: 'chat', x: 17, y: 15, w: 7, h: 9 },
-      { i: 'progress', x: 0, y: 17, w: 6, h: 7 },
-      { i: 'notes', x: 6, y: 17, w: 6, h: 7 },
-      { i: 'run', x: 12, y: 17, w: 5, h: 7 },
+      { i: 'progress', x: 0, y: 17, w: 5, h: 7 },
+      { i: 'notes', x: 5, y: 17, w: 4, h: 7 },
+      { i: 'discord', x: 9, y: 17, w: 4, h: 7 },
+      { i: 'run', x: 13, y: 17, w: 4, h: 7 },
     ],
     data: () => {
       const d = baseData();
@@ -181,9 +185,10 @@ export const PANEL_SIZES: Record<PanelId, { w: number; h: number; minW: number; 
   run: { w: 5, h: 6, minW: 4, minH: 4 },
   progress: { w: 6, h: 7, minW: 4, minH: 4 },
   notes: { w: 6, h: 7, minW: 4, minH: 3 },
-  match: { w: 6, h: 7, minW: 5, minH: 6 },
+  match: { w: 5, h: 7, minW: 4, minH: 6 },
   record: { w: 5, h: 7, minW: 4, minH: 5 },
   character: { w: 7, h: 8, minW: 5, minH: 6 },
+  discord: { w: 4, h: 7, minW: 3, minH: 3 },
 };
 
 const WINDOW_SIZE = { w: 7, h: 8, minW: 3, minH: 3 };

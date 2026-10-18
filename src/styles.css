@@ -102,6 +102,7 @@
   --title-tracking: 0.04em;
   --title-size: 16px;
   --title-weight: 400;
+  --digit-w: 0.6em;
   --radius: 9px;
   --radius-sm: 5px;
   --art-radius: 7px;
@@ -2032,8 +2033,13 @@ input[type='color'] {
 }
 .digits__d {
   display: inline-block;
-  width: 0.64em;
+  width: var(--digit-w, 0.62em);
   text-align: center;
+}
+/* Marcellus draws 0 as a full circle (0.81em against 0.57em for the other digits);
+   narrow it so it sits in the same cell as the rest. */
+.theme-wow .digits__d--0 {
+  transform: scaleX(0.7);
 }
 .digits__s {
   display: inline-block;
@@ -2079,4 +2085,217 @@ input[type='color'] {
 }
 .slot.is-empty .slot__initial {
   display: none;
+}
+
+/* ---------- Discord voice ---------- */
+
+.voice {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  height: 100%;
+}
+.voice__note {
+  color: var(--muted);
+  font-size: 14px;
+}
+.voice__auth {
+  display: grid;
+  gap: 8px;
+  justify-items: start;
+}
+.voice__members {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  list-style: none;
+}
+.member {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  color: var(--muted);
+  animation: msg-in 0.35s var(--ease-out) both;
+}
+.member svg {
+  flex: none;
+  color: var(--bad);
+}
+.member__avatar {
+  flex: none;
+  width: 32px;
+  height: 32px;
+  overflow: hidden;
+  border-radius: var(--art-radius);
+  box-shadow: 0 0 0 2px transparent;
+  transition: box-shadow 0.15s ease-out;
+}
+.theme-wow .member__avatar {
+  border: 1px solid color-mix(in srgb, var(--accent) 45%, black);
+}
+.member__avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.member__name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text);
+  font-size: 16px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.member.is-speaking .member__avatar {
+  box-shadow: 0 0 0 2px var(--panel), 0 0 0 4px var(--accent);
+}
+.member.is-speaking .member__name {
+  color: var(--accent);
+}
+
+.icon-btn.is-off {
+  color: var(--bad);
+}
+
+.voice__pins {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: auto;
+}
+.pin {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  transition: border-color 0.2s;
+}
+.pin:hover {
+  border-color: color-mix(in srgb, var(--accent) 50%, var(--border));
+}
+.pin.on {
+  border-color: var(--accent);
+}
+.pin__join {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  padding: 5px 10px;
+  border: 0;
+  background: none;
+  color: var(--text);
+  font-size: 14px;
+  cursor: pointer;
+}
+.pin__join:disabled {
+  cursor: default;
+}
+.pin__join svg {
+  flex: none;
+  color: var(--accent);
+}
+.pin__name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pin__guild {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.voice__setup {
+  display: grid;
+  gap: 8px;
+  font-size: 14px;
+}
+.voice__setup ol {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding-left: 18px;
+  color: var(--muted);
+}
+.voice__setup a {
+  color: var(--accent);
+}
+.voice__setup code {
+  padding: 0 4px;
+  border-radius: var(--radius-sm);
+  background: var(--panel-2);
+  color: var(--text);
+  font-size: 13px;
+}
+.voice__setup input {
+  min-width: 0;
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--panel-2);
+  font-size: 14px;
+}
+.voice__setup input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+.voice__setup .btn {
+  justify-self: start;
+}
+
+.picker {
+  display: grid;
+  gap: 6px;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--panel-2);
+}
+.picker__head {
+  display: flex;
+  gap: 6px;
+}
+.picker__head select {
+  flex: 1;
+  max-width: none;
+}
+.picker__list {
+  display: grid;
+  gap: 2px;
+  max-height: 160px;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+  font-size: 14px;
+}
+.picker__list button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 5px 6px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  text-align: left;
+  cursor: pointer;
+}
+.picker__list button:hover:not(:disabled) {
+  background: var(--panel);
+}
+.picker__list button:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+.picker__list svg {
+  color: var(--accent);
 }

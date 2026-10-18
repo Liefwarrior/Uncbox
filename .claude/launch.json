@@ -2,10 +2,16 @@
   "version": "0.0.1",
   "configurations": [
     {
-      "name": "pokestream-dev",
+      "name": "uncbox-dev",
       "runtimeExecutable": "npm",
       "runtimeArgs": ["run", "dev"],
       "port": 5170
+    },
+    {
+      "name": "uncbox-check",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["C:/repositories/Uncbox/server/index.mjs", "--dev", "--port=5172", "--data=C:/repositories/Uncbox/data/test"],
+      "port": 5172
     }
   ]
 }

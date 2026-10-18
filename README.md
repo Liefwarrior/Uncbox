@@ -69,6 +69,25 @@ Type your channel into the chat panel. It connects anonymously and is read-only,
 needed. Bot accounts (Nightbot, StreamElements and similar) are hidden by default; the **BOT**
 button shows them.
 
+## Discord voice
+
+The **Voice** panel shows who is in your Discord voice channel, lights people up as they talk,
+and shows mute and deafen icons, all in the preset's theme. You can also mute, deafen and leave from
+the panel, and pin channels (say *Locker Room Heaven* in *Bumta Buds*) to join them with one click.
+Audio still runs through the Discord app; Uncbox just drives it.
+
+It talks to the Discord app on your PC, which only allows this for apps you authorize, so there
+is a one-time setup:
+
+1. Create an application at [discord.com/developers/applications](https://discord.com/developers/applications).
+2. Under **OAuth2**, add the redirect `http://localhost` and copy the **Client ID** and **Client Secret**.
+3. Paste both into the Voice panel and click **Connect**, then **Authorize in Discord** and approve the
+   prompt in Discord.
+
+The secret and Discord's tokens are kept in `data/discord.json` on this PC and never sent to the
+browser. Discord's own StreamKit overlay can't be used here: Discord blocks it from being embedded
+in another page.
+
 ## Going live with OBS
 
 1. Open the dashboard in a window without browser chrome:
@@ -104,6 +123,8 @@ server/index.mjs          static files, /api/state, live sync over /api/events
 src/presets.ts            preset definitions: titles, default layouts, starting data
 src/state/                state shape, loading and migration, the save/sync hook
 src/twitch.ts             read-only Twitch chat client
+server/discord.mjs        Discord voice bridge over the local RPC pipe
+src/discord.ts            Discord panel's client: live snapshot and actions
 src/media.ts              capture device and window capture hooks
 src/components/Board.tsx  the draggable grid
 src/components/*Panel.tsx one file per panel

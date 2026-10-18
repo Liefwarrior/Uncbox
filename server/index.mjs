@@ -9,6 +9,7 @@ import { createReadStream } from 'node:fs';
 import { mkdir, readFile, rename, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { createDiscordBridge } from './discord.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const distDir = path.join(root, 'dist');
@@ -88,7 +89,50 @@ function broadcast(state, fromClient) {
   for (const res of listeners) res.write(payload);
 }
 
+/** Named SSE event, so it does not reach the page's state-sync onmessage handler. */
+function broadcastEvent(name, data) {
+  const payload = `event: ${name}\ndata: ${JSON.stringify(data)}\n\n`;
+  for (const res of listeners) res.write(payload);
+}
+
+const discord = createDiscordBridge({ dataDir, onChange: (snap) => broadcastEvent('discord', snap) });
+
+async function readJson(req) {
+  try {
+    return JSON.parse((await readBody(req)) || '{}');
+  } catch (err) {
+    throw Object.assign(new Error(err.status ? err.message : 'Invalid JSON'), { status: err.status || 400 });
+  }
+}
+
+async function handleDiscord(req, res, url) {
+  const action = url.pathname.slice('/api/discord'.length);
+  try {
+    if (req.method === 'GET') {
+      if (action === '') return sendJson(res, 200, discord.snapshot());
+      if (action === '/guilds') return sendJson(res, 200, await discord.guilds());
+      if (action === '/channels') return sendJson(res, 200, await discord.channels(url.searchParams.get('guild')));
+      return sendJson(res, 404, { error: 'Not found' });
+    }
+    if (req.method !== 'POST') return sendJson(res, 405, { error: 'Method not allowed' });
+    if (action === '/config') await discord.configure(await readJson(req));
+    else if (action === '/join') await discord.join((await readJson(req)).channelId);
+    else if (action === '/leave') await discord.leave();
+    else if (action === '/voice') await discord.setVoice(await readJson(req));
+    else if (action === '/authorize') {
+      // Settles when the user answers Discord's prompt; reply now and report progress over SSE.
+      void discord.authorize();
+    } else if (action === '/forget') await discord.forget();
+    else return sendJson(res, 404, { error: 'Not found' });
+    return sendJson(res, 200, discord.snapshot());
+  } catch (err) {
+    return sendJson(res, err.status || 500, { error: err.message || 'Discord error' });
+  }
+}
+
 async function handleApi(req, res, url) {
+  if (url.pathname === '/api/discord' || url.pathname.startsWith('/api/discord/')) return handleDiscord(req, res, url);
+
   if (url.pathname === '/api/state') {
     if (req.method === 'GET') return sendJson(res, 200, await loadState());
     // POST is accepted too so the page can flush with navigator.sendBeacon on unload.
@@ -186,6 +230,8 @@ server.on('request', async (req, res) => {
     else res.end();
   }
 });
+
+discord.start().catch((err) => console.error('Discord bridge:', err.message));
 
 server.listen(port, host, () => {
   const shown = host === '0.0.0.0' ? 'localhost' : host;

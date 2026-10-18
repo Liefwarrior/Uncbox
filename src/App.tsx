@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Board } from './components/Board';
 import { CameraPanel } from './components/CameraPanel';
 import { CharacterPanel } from './components/CharacterPanel';
+import { DiscordPanel } from './components/DiscordPanel';
 import { ChatPanel } from './components/ChatPanel';
 import { GamePanel } from './components/GamePanel';
 import { MatchPanel } from './components/MatchPanel';
@@ -74,6 +75,8 @@ export function App() {
         return <MatchPanel match={data.match} title={t.match} mutatePreset={mutatePreset} />;
       case 'record':
         return <RecordPanel record={data.record} match={data.match} title={t.record} mutatePreset={mutatePreset} />;
+      case 'discord':
+        return <DiscordPanel pinned={state.discord.pinned} title={t.discord} mutate={mutate} />;
       case 'character':
         return <CharacterPanel character={data.character} title={t.character} mutatePreset={mutatePreset} />;
     }

@@ -6,7 +6,7 @@ export function Digits({ value, className }: { value: string | number; className
   return (
     <span className={`digits ${className ?? ''}`} aria-label={String(value)}>
       {Array.from(String(value)).map((ch, i) => (
-        <span key={i} className={/\d/.test(ch) ? 'digits__d' : 'digits__s'} aria-hidden="true">
+        <span key={i} className={/\d/.test(ch) ? `digits__d digits__d--${ch}` : 'digits__s'} aria-hidden="true">
           {ch}
         </span>
       ))}

@@ -16,6 +16,7 @@ export const PANEL_IDS = [
   'match',
   'record',
   'character',
+  'discord',
 ] as const;
 export type PanelId = (typeof PANEL_IDS)[number];
 
@@ -165,10 +166,19 @@ export interface PresetData {
   windows: AppWindow[];
 }
 
+export interface PinnedChannel {
+  id: string;
+  name: string;
+  guildId: string;
+  guildName: string;
+}
+
 export interface AppState {
   version: 2;
   preset: PresetId;
   twitch: { channel: string; hideBots: boolean };
+  /** Voice channels pinned to the Discord panel for one-click joining. Shared by every preset. */
+  discord: { pinned: PinnedChannel[] };
   camera: CameraSettings;
   presets: Record<PresetId, PresetData>;
 }

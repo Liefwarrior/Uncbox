@@ -29,6 +29,7 @@ export function defaultState(): AppState {
     version: 2,
     preset: 'pokemon',
     twitch: { channel: '', hideBots: true },
+    discord: { pinned: [] },
     camera: { enabled: false, deviceId: null, mirrored: true },
     presets: {
       pokemon: defaultPresetData('pokemon'),
@@ -153,6 +154,11 @@ export function hydrate(saved: unknown): AppState {
     version: 2,
     preset: PRESET_IDS.includes(saved.preset as PresetId) ? (saved.preset as PresetId) : base.preset,
     twitch: overlay(base.twitch, saved.twitch),
+    discord: {
+      pinned: (isObj(saved.discord) && Array.isArray(saved.discord.pinned) ? objects(saved.discord.pinned) : [])
+        .map((c) => overlay({ id: '', name: '', guildId: '', guildName: '' }, c))
+        .filter((c) => /^\d+$/.test(c.id)),
+    },
     camera: { ...overlay(base.camera, camera), deviceId: str(camera.deviceId) },
     presets: {
       pokemon: hydratePreset('pokemon', presets.pokemon),
