@@ -108,7 +108,8 @@ export const PRESETS: Record<PresetId, PresetDef> = {
     ],
     data: () => {
       const d = baseData();
-      d.run = { title: 'SMITE 2', subtitle: 'Ranked Conquest', timer: timer() };
+      // The match panel already names the mode, so the session line starts blank.
+      d.run = { title: 'SMITE 2', subtitle: '', timer: timer() };
       d.match = { god: '', role: 'Mid', mode: 'Ranked Conquest', k: 0, d: 0, a: 0 };
       d.notes = [note('Ward the enemy jungle entrance'), note('Anti-heal by second item if they have sustain')];
       d.milestones = { label: 'Daily goals', items: Array.from({ length: 3 }, () => milestone()) };

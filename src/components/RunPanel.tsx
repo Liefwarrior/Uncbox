@@ -71,7 +71,7 @@ export function RunPanel({ run, title, mutatePreset }: { run: PresetData['run'];
         />
         <div className={`timer ${running ? 'is-running' : ''}`}>
           <span className="timer__dot" aria-hidden="true" />
-          <Digits className="timer__digits" value={formatDuration(elapsed)} />
+          <Digits className={`timer__digits ${elapsed >= 86_400_000 ? 'is-long' : ''}`} value={formatDuration(elapsed)} />
           <button className="timer__btn ctl" title={running ? 'Pause' : 'Start'} onClick={toggle}>
             <Icon name={running ? 'pause' : 'play'} size={18} />
           </button>

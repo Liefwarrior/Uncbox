@@ -5,6 +5,7 @@ import { emptySlot, MAX_SLOTS, type SlotItem } from '../state/model';
 import type { MutatePreset } from '../state/useAppState';
 import { offerUndo } from '../undo';
 import { Icon } from './Icon';
+import { useBoard } from './Board';
 import { Panel } from './Panel';
 
 const SLOT_TYPE = 'application/x-uncbox-slot';
@@ -108,6 +109,7 @@ interface SlotProps {
 }
 
 function Slot({ index, item, hinted, def, highlighted, onEdit, onClear, onDragOver, onDragLeave, onDrop }: SlotProps) {
+  const { editing } = useBoard();
   const row = useRef<HTMLLIElement>(null);
   const file = useRef<HTMLInputElement>(null);
   const empty = !item.name && !item.detail && !item.image;
@@ -159,12 +161,16 @@ function Slot({ index, item, hinted, def, highlighted, onEdit, onClear, onDragOv
       />
 
       <div className="slot__text">
-        <input
-          className="ghost-input slot__name"
-          value={item.name}
-          placeholder={hinted ? def.name : ''}
-          onChange={(e) => onEdit({ name: e.target.value })}
-        />
+        {def.variant === 'tiles' && !editing ? (
+          <span className="slot__name slot__name--text">{item.name}</span>
+        ) : (
+          <input
+            className="ghost-input slot__name"
+            value={item.name}
+            placeholder={hinted ? def.name : ''}
+            onChange={(e) => onEdit({ name: e.target.value })}
+          />
+        )}
         {def.variant === 'list' && (
           <input
             className="ghost-input slot__detail"

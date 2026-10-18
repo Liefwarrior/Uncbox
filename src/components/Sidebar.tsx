@@ -63,46 +63,48 @@ export function Sidebar({ state, mutate, mutatePreset, status, onStreamMode }: P
   return (
     <aside className="sidebar">
       <div className="sidebar__inner">
-        <div className="brand">
-          <img src="/favicon.svg" alt="" width={22} height={22} />
-          <span>Uncbox</span>
+        <div className="sidebar__scroll">
+          <div className="brand">
+            <img src="/favicon.svg" alt="" width={22} height={22} />
+            <span>Uncbox</span>
+          </div>
+
+          <h3>Game</h3>
+          <div className="presets">
+            {PRESET_IDS.map((id) => (
+              <button
+                key={id}
+                className={`preset-card preset-card--${id} ${state.preset === id ? 'on' : ''}`}
+                onClick={() => mutate((s) => void (s.preset = id))}
+              >
+                <strong>{PRESETS[id].name}</strong>
+                <span>{PRESETS[id].blurb}</span>
+              </button>
+            ))}
+          </div>
+
+          <SetupList state={state} mutatePreset={mutatePreset} />
+
+          <button className="stream-btn" onClick={onStreamMode}>
+            <Icon name="cast" /> Stream mode
+          </button>
+          <p className="hint">Full screen, edit controls hidden. Esc to come back.</p>
+
+          <h3>On screen</h3>
+          <ul className="toggles">{def.featured.map(row)}</ul>
+          {more.length > 0 && (
+            <details className="more">
+              <summary>More panels</summary>
+              <ul className="toggles">{more.map(row)}</ul>
+            </details>
+          )}
+          <button className="side-link" onClick={addWindow}>
+            <Icon name="plus" /> Add an app window
+          </button>
+          <button className={`side-link side-link--quiet ${armed ? 'is-armed' : ''}`} onClick={resetLayout}>
+            <Icon name="layout" /> {armed ? 'Reset layout?' : 'Reset layout'}
+          </button>
         </div>
-
-        <h3>Game</h3>
-        <div className="presets">
-          {PRESET_IDS.map((id) => (
-            <button
-              key={id}
-              className={`preset-card preset-card--${id} ${state.preset === id ? 'on' : ''}`}
-              onClick={() => mutate((s) => void (s.preset = id))}
-            >
-              <strong>{PRESETS[id].name}</strong>
-              <span>{PRESETS[id].blurb}</span>
-            </button>
-          ))}
-        </div>
-
-        <SetupList state={state} mutatePreset={mutatePreset} />
-
-        <button className="stream-btn" onClick={onStreamMode}>
-          <Icon name="cast" /> Stream mode
-        </button>
-        <p className="hint">Full screen, edit controls hidden. Esc to come back.</p>
-
-        <h3>On screen</h3>
-        <ul className="toggles">{def.featured.map(row)}</ul>
-        {more.length > 0 && (
-          <details className="more">
-            <summary>More</summary>
-            <ul className="toggles">{more.map(row)}</ul>
-          </details>
-        )}
-        <button className="side-link" onClick={addWindow}>
-          <Icon name="plus" /> Add an app window
-        </button>
-        <button className={`side-link ${armed ? 'is-armed' : ''}`} onClick={resetLayout}>
-          <Icon name="layout" /> {armed ? 'Reset layout?' : 'Reset layout'}
-        </button>
 
         <footer className={`sync sync--${status}`}>
           <span className="sync__dot" />

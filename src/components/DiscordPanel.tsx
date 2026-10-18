@@ -60,30 +60,6 @@ export function DiscordPanel({ pinned, title, mutate }: Props) {
           title
         )
       }
-      actions={
-        ready &&
-        d.channel && (
-          <>
-            <button
-              className={`icon-btn ${d.self.mute ? 'is-off' : ''}`}
-              title={d.self.mute ? 'Unmute' : 'Mute'}
-              onClick={() => run(() => discordApi.voice({ mute: !d.self.mute }))}
-            >
-              <Icon name={d.self.mute ? 'micOff' : 'mic'} size={15} />
-            </button>
-            <button
-              className={`icon-btn ${d.self.deaf ? 'is-off' : ''}`}
-              title={d.self.deaf ? 'Undeafen' : 'Deafen'}
-              onClick={() => run(() => discordApi.voice({ deaf: !d.self.deaf }))}
-            >
-              <Icon name={d.self.deaf ? 'headphonesOff' : 'headphones'} size={15} />
-            </button>
-            <button className="icon-btn" title="Leave voice" onClick={() => run(discordApi.leave)}>
-              <Icon name="leave" size={15} />
-            </button>
-          </>
-        )
-      }
     >
       <div className="voice">
         {!d.reachable ? (
@@ -134,6 +110,28 @@ export function DiscordPanel({ pinned, title, mutate }: Props) {
               </ul>
             ) : (
               <p className="voice__note ctl">Not in a voice channel.</p>
+            )}
+
+            {d.channel && (
+              <div className="voice__controls ctl">
+                <button
+                  className={`icon-btn ${d.self.mute ? 'is-off' : ''}`}
+                  title={d.self.mute ? 'Unmute' : 'Mute'}
+                  onClick={() => run(() => discordApi.voice({ mute: !d.self.mute }))}
+                >
+                  <Icon name={d.self.mute ? 'micOff' : 'mic'} size={15} />
+                </button>
+                <button
+                  className={`icon-btn ${d.self.deaf ? 'is-off' : ''}`}
+                  title={d.self.deaf ? 'Undeafen' : 'Deafen'}
+                  onClick={() => run(() => discordApi.voice({ deaf: !d.self.deaf }))}
+                >
+                  <Icon name={d.self.deaf ? 'headphonesOff' : 'headphones'} size={15} />
+                </button>
+                <button className="icon-btn" title="Leave voice" onClick={() => run(discordApi.leave)}>
+                  <Icon name="leave" size={15} />
+                </button>
+              </div>
             )}
 
             {(pinned.length > 0 || editing) && (
