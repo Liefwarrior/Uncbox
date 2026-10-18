@@ -1,24 +1,35 @@
-import { type AppState, MAX_MILESTONES, uid } from '../state/model';
-import type { Mutate } from '../state/useAppState';
+import { useState } from 'react';
+import { counter, MAX_MILESTONES, milestone, type PresetData } from '../state/model';
+import type { MutatePreset } from '../state/useAppState';
+import { Digits } from './Digits';
 import { Icon } from './Icon';
 import { Panel } from './Panel';
 
 interface Props {
-  milestones: AppState['milestones'];
-  counters: AppState['counters'];
-  mutate: Mutate;
+  milestones: PresetData['milestones'];
+  counters: PresetData['counters'];
+  title: string;
+  mutatePreset: MutatePreset;
 }
 
-export function ProgressPanel({ milestones, counters, mutate }: Props) {
+export function ProgressPanel({ milestones, counters, title, mutatePreset }: Props) {
+  const done = milestones.items.filter((m) => m.done).length;
+  const named = milestones.items.some((m) => m.name);
+  const [renaming, setRenaming] = useState<number | null>(null);
+  const rename = (i: number, name: string) => {
+    mutatePreset((d) => void (d.milestones.items[i].name = name.trim()));
+    setRenaming(null);
+  };
+
   return (
     <Panel
-      title="Progress"
-      className="panel--progress"
+      id="progress"
+      title={title}
       actions={
         <button
           className="btn btn--small"
           title="Add counter"
-          onClick={() => mutate((s) => void s.counters.push({ id: uid(), label: 'Counter', value: 0 }))}
+          onClick={() => mutatePreset((d) => void d.counters.push(counter('Counter')))}
         >
           <Icon name="plus" size={14} /> Counter
         </button>
@@ -30,41 +41,62 @@ export function ProgressPanel({ milestones, counters, mutate }: Props) {
             className="ghost-input milestones__label"
             value={milestones.label}
             placeholder="Milestones"
-            onChange={(e) => mutate((s) => void (s.milestones.label = e.target.value))}
+            onChange={(e) => mutatePreset((d) => void (d.milestones.label = e.target.value))}
           />
           <span className="milestones__count">
-            {milestones.done.filter(Boolean).length}/{milestones.done.length}
+            {done}/{milestones.items.length}
           </span>
           <span className="ctl row">
             <button
               className="icon-btn"
-              title="One fewer"
-              disabled={milestones.done.length <= 1}
-              onClick={() => mutate((s) => void s.milestones.done.pop())}
+              title="Remove last"
+              disabled={milestones.items.length <= 1}
+              onClick={() => mutatePreset((d) => void d.milestones.items.pop())}
             >
               <Icon name="minus" size={14} />
             </button>
             <button
               className="icon-btn"
-              title="One more"
-              disabled={milestones.done.length >= MAX_MILESTONES}
-              onClick={() => mutate((s) => void s.milestones.done.push(false))}
+              title="Add one"
+              disabled={milestones.items.length >= MAX_MILESTONES}
+              onClick={() => mutatePreset((d) => void d.milestones.items.push(milestone()))}
             >
               <Icon name="plus" size={14} />
             </button>
           </span>
         </div>
-        <div className="milestones__row">
-          {milestones.done.map((done, i) => (
+        <div className={`milestones__row ${named ? 'is-named' : ''}`}>
+          {milestones.items.map((m, i) =>
+            renaming === i ? (
+              <input
+                key={m.id}
+                className="chip chip--input"
+                autoFocus
+                defaultValue={m.name}
+                placeholder="Name"
+                onBlur={(e) => rename(i, e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') rename(i, e.currentTarget.value);
+                  if (e.key === 'Escape') setRenaming(null);
+                }}
+              />
+            ) : (
             <button
-              key={i}
-              className={`pip ${done ? 'on' : ''}`}
-              title={done ? 'Mark as not done' : 'Mark as done'}
-              onClick={() => mutate((s) => void (s.milestones.done[i] = !s.milestones.done[i]))}
+              key={m.id}
+              className={`${m.name ? 'chip' : 'pip'} ${m.done ? 'on' : ''}`}
+              title={`${m.name || `#${i + 1}`} · double-click to name`}
+              onClick={() => mutatePreset((d) => void (d.milestones.items[i].done = !d.milestones.items[i].done))}
+              onDoubleClick={() => setRenaming(i)}
             >
-              {i + 1}
+              {m.name ? (
+                <>
+                  <span className="chip__mark">{m.done && <Icon name="check" size={12} />}</span>
+                  {m.name}
+                </>
+              ) : null}
             </button>
-          ))}
+            ),
+          )}
         </div>
       </div>
 
@@ -74,27 +106,23 @@ export function ProgressPanel({ milestones, counters, mutate }: Props) {
             <input
               className="ghost-input counter__label"
               value={c.label}
-              onChange={(e) => mutate((s) => void (s.counters[i].label = e.target.value))}
+              onChange={(e) => mutatePreset((d) => void (d.counters[i].label = e.target.value))}
             />
             <button
               className="icon-btn ctl"
               title="Minus one"
-              onClick={() => mutate((s) => void (s.counters[i].value = Math.max(0, s.counters[i].value - 1)))}
+              onClick={() => mutatePreset((d) => void (d.counters[i].value = Math.max(0, d.counters[i].value - 1)))}
             >
               <Icon name="minus" size={14} />
             </button>
-            <span className="counter__value">{c.value}</span>
-            <button
-              className="icon-btn ctl"
-              title="Plus one"
-              onClick={() => mutate((s) => void s.counters[i].value++)}
-            >
+            <Digits key={c.value} className="counter__value bump" value={c.value} />
+            <button className="icon-btn ctl" title="Plus one" onClick={() => mutatePreset((d) => void d.counters[i].value++)}>
               <Icon name="plus" size={14} />
             </button>
             <button
-              className="icon-btn ctl counter__remove"
+              className="icon-btn ctl"
               title="Remove counter"
-              onClick={() => mutate((s) => void s.counters.splice(i, 1))}
+              onClick={() => mutatePreset((d) => void d.counters.splice(i, 1))}
             >
               <Icon name="x" size={14} />
             </button>

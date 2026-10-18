@@ -4,7 +4,7 @@ function describe(err: unknown): string {
   const name = err instanceof DOMException ? err.name : '';
   switch (name) {
     case 'NotAllowedError':
-      return 'Permission denied. Allow camera access for this page in the browser’s site settings.';
+      return 'Camera blocked. Allow it in site settings.';
     case 'NotFoundError':
     case 'OverconstrainedError':
       return 'That device is not connected. Pick another one.';

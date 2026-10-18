@@ -1,15 +1,40 @@
 // Everything the dashboard remembers. Saved to data/state.json by the local server and shared
 // live between every open window, so a phone or second monitor can drive the streamed one.
+// Each game preset keeps its own layout and data; Twitch and camera settings are shared.
 
-export type PanelId = 'camera' | 'party' | 'run' | 'progress' | 'notes';
+export const PRESET_IDS = ['pokemon', 'smite2', 'wow'] as const;
+export type PresetId = (typeof PRESET_IDS)[number];
 
-export const PANEL_LABELS: Record<PanelId, string> = {
-  camera: 'Camera',
-  party: 'Party',
-  run: 'Run',
-  progress: 'Progress',
-  notes: 'Notes',
-};
+export const PANEL_IDS = [
+  'game',
+  'camera',
+  'chat',
+  'slots',
+  'run',
+  'progress',
+  'notes',
+  'match',
+  'record',
+  'character',
+] as const;
+export type PanelId = (typeof PANEL_IDS)[number];
+
+/** App window panels can be added any number of times, so each gets its own id. */
+export type WindowId = `win-${string}`;
+export type BoardId = PanelId | WindowId;
+
+export function isWindowId(id: string): id is WindowId {
+  return id.startsWith('win-');
+}
+
+/** Position on the board grid, in cells. */
+export interface GridItem {
+  i: BoardId;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
 
 export type VideoSource = 'none' | 'device' | 'window' | 'chroma';
 export type VideoFit = 'contain' | 'cover' | 'stretch';
@@ -40,7 +65,15 @@ export interface CameraSettings {
   mirrored: boolean;
 }
 
-export interface PartyMember {
+/** Another app's window (Discord, Spotify, a popped-out chat…) captured into a themed panel. */
+export interface AppWindow {
+  id: WindowId;
+  title: string;
+  fit: VideoFit;
+  crop: Crop;
+}
+
+export interface SlotItem {
   id: string;
   name: string;
   detail: string;
@@ -55,115 +88,113 @@ export interface Counter {
   value: number;
 }
 
+export interface Milestone {
+  id: string;
+  /** Optional; unnamed milestones render as numbered pips, named ones as chips. */
+  name: string;
+  done: boolean;
+}
+
 export interface NoteItem {
   id: string;
   text: string;
   done: boolean;
 }
 
-export interface AppState {
-  version: 1;
+export const SMITE_ROLES = ['Solo', 'Jungle', 'Mid', 'Support', 'Carry'] as const;
+export type SmiteRole = (typeof SMITE_ROLES)[number];
+
+export interface MatchState {
+  god: string;
+  role: SmiteRole | '';
+  mode: string;
+  k: number;
+  d: number;
+  a: number;
+}
+
+export interface MatchResult {
+  id: string;
+  god: string;
+  role: SmiteRole | '';
+  k: number;
+  d: number;
+  a: number;
+  win: boolean;
+  at: number;
+}
+
+export interface RecordState {
+  wins: number;
+  losses: number;
+  /** Newest first. */
+  history: MatchResult[];
+}
+
+export interface CharacterState {
+  name: string;
+  race: string;
+  cls: string;
+  level: number;
+  maxLevel: number;
+  /** Progress through the current level, 0–100. */
+  xp: number;
+  zone: string;
+  realm: string;
+  guild: string;
+  gold: string;
+  hardcore: boolean;
+}
+
+export interface PresetData {
+  layout: GridItem[];
+  game: GameSettings;
   run: {
     title: string;
     subtitle: string;
     /** Running when startedAt is set; total = elapsedMs + (now - startedAt). */
     timer: { startedAt: number | null; elapsedMs: number };
   };
-  party: PartyMember[];
+  slots: SlotItem[];
   counters: Counter[];
-  milestones: { label: string; done: boolean[] };
+  milestones: { label: string; items: Milestone[] };
   notes: NoteItem[];
-  game: GameSettings;
-  camera: CameraSettings;
-  layout: {
-    panels: Record<PanelId, boolean>;
-    /** Put the side column (camera + party) on the left instead of the right. */
-    sideLeft: boolean;
-    sideWidth: number;
-    bottomHeight: number;
-  };
+  match: MatchState;
+  record: RecordState;
+  character: CharacterState;
+  windows: AppWindow[];
 }
 
-export const MAX_PARTY = 12;
+export interface AppState {
+  version: 2;
+  preset: PresetId;
+  twitch: { channel: string; hideBots: boolean };
+  camera: CameraSettings;
+  presets: Record<PresetId, PresetData>;
+}
+
+export const GRID_COLS = 24;
+export const GRID_ROWS = 24;
+export const MAX_SLOTS = 12;
 export const MAX_MILESTONES = 24;
+export const MAX_HISTORY = 30;
 
 export function uid(): string {
   return Math.random().toString(36).slice(2, 10);
 }
 
-export function emptyMember(): PartyMember {
+export function emptySlot(): SlotItem {
   return { id: uid(), name: '', detail: '', image: '', down: false };
 }
 
-export function defaultState(): AppState {
-  return {
-    version: 1,
-    run: {
-      title: 'Pokémon',
-      subtitle: 'Any% casual run',
-      timer: { startedAt: null, elapsedMs: 0 },
-    },
-    party: Array.from({ length: 6 }, emptyMember),
-    counters: [
-      { id: uid(), label: 'Deaths', value: 0 },
-      { id: uid(), label: 'Resets', value: 0 },
-    ],
-    milestones: { label: 'Badges', done: Array(8).fill(false) },
-    notes: [{ id: uid(), text: 'Every bit of text is editable, just click it', done: false }],
-    game: {
-      source: 'none',
-      deviceId: null,
-      fit: 'contain',
-      pixelated: true,
-      crop: { top: 0, right: 0, bottom: 0, left: 0 },
-      chroma: '#00b140',
-    },
-    camera: { enabled: false, deviceId: null, mirrored: true },
-    layout: {
-      panels: { camera: true, party: true, run: true, progress: true, notes: true },
-      sideLeft: false,
-      sideWidth: 330,
-      bottomHeight: 220,
-    },
-  };
+export function milestone(name = ''): Milestone {
+  return { id: uid(), name, done: false };
 }
 
-function isPlainObject(v: unknown): v is Record<string, unknown> {
-  return typeof v === 'object' && v !== null && !Array.isArray(v);
+export function counter(label: string, value = 0): Counter {
+  return { id: uid(), label, value };
 }
 
-/**
- * Lay saved data over the defaults so fields added in newer versions still get a value.
- * Arrays are taken whole from the saved side; type mismatches fall back to the default.
- */
-function overlay<T>(base: T, saved: unknown): T {
-  if (saved === undefined || saved === null) return base;
-  if (isPlainObject(base)) {
-    if (!isPlainObject(saved)) return base;
-    const out: Record<string, unknown> = { ...base };
-    for (const key of Object.keys(base)) out[key] = overlay((base as Record<string, unknown>)[key], saved[key]);
-    return out as T;
-  }
-  if (Array.isArray(base)) return (Array.isArray(saved) ? saved : base) as T;
-  return (typeof saved === typeof base ? saved : base) as T;
-}
-
-export function hydrate(saved: unknown): AppState {
-  const base = defaultState();
-  const state = overlay(base, saved);
-  // Nullable fields have null defaults, so overlay() can't type-check them; do it here.
-  const s = isPlainObject(saved) ? saved : {};
-  const game = isPlainObject(s.game) ? s.game : {};
-  const camera = isPlainObject(s.camera) ? s.camera : {};
-  state.game.deviceId = typeof game.deviceId === 'string' ? game.deviceId : null;
-  state.camera.deviceId = typeof camera.deviceId === 'string' ? camera.deviceId : null;
-  const timer = isPlainObject(s.run) && isPlainObject(s.run.timer) ? s.run.timer : {};
-  state.run.timer.startedAt = typeof timer.startedAt === 'number' ? timer.startedAt : null;
-  state.party = state.party.filter(isPlainObject).map((m) => overlay(emptyMember(), m)).slice(0, MAX_PARTY);
-  state.counters = state.counters
-    .filter(isPlainObject)
-    .map((c) => overlay({ id: uid(), label: 'Counter', value: 0 }, c));
-  state.notes = state.notes.filter(isPlainObject).map((n) => overlay({ id: uid(), text: '', done: false }, n));
-  state.milestones.done = state.milestones.done.map(Boolean).slice(0, MAX_MILESTONES);
-  return state;
+export function note(text: string): NoteItem {
+  return { id: uid(), text, done: false };
 }

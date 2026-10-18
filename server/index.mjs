@@ -12,11 +12,13 @@ import { fileURLToPath } from 'node:url';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const distDir = path.join(root, 'dist');
-const dataDir = path.join(root, 'data');
+const dataArg = process.argv.find((a) => a.startsWith('--data='));
+const dataDir = dataArg ? path.resolve(dataArg.slice(7)) : path.join(root, 'data');
 const stateFile = path.join(dataDir, 'state.json');
 
 const isDev = process.argv.includes('--dev');
-const port = Number(process.env.PORT) || 5170;
+const portArg = process.argv.find((a) => a.startsWith('--port='));
+const port = Number(portArg?.slice(7) || process.env.PORT) || 5170;
 // Loopback only by default. Set HOST=0.0.0.0 to reach it from a phone or second PC on your LAN
 // (there is no auth, so only do that on a network you trust).
 const host = process.env.HOST || '127.0.0.1';
@@ -187,5 +189,5 @@ server.on('request', async (req, res) => {
 
 server.listen(port, host, () => {
   const shown = host === '0.0.0.0' ? 'localhost' : host;
-  console.log(`PokéStream ${isDev ? '(dev) ' : ''}running at http://${shown}:${port}`);
+  console.log(`Uncbox ${isDev ? '(dev) ' : ''}running at http://${shown}:${port}`);
 });

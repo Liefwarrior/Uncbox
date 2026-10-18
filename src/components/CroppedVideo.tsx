@@ -7,6 +7,8 @@ interface Props {
   crop?: Crop;
   pixelated?: boolean;
   mirrored?: boolean;
+  /** Reports the visible (post-crop) aspect ratio whenever it changes. */
+  onAspect?: (aspect: number) => void;
 }
 
 const NO_CROP: Crop = { top: 0, right: 0, bottom: 0, left: 0 };
@@ -15,7 +17,7 @@ const NO_CROP: Crop = { top: 0, right: 0, bottom: 0, left: 0 };
  * Plays a MediaStream with edges trimmed off, then fits the remaining region into the container.
  * Cropping is done by oversizing the <video> inside a clipped box, so it costs nothing per frame.
  */
-export function CroppedVideo({ stream, fit, crop = NO_CROP, pixelated = false, mirrored = false }: Props) {
+export function CroppedVideo({ stream, fit, crop = NO_CROP, pixelated = false, mirrored = false, onAspect }: Props) {
   const wrap = useRef<HTMLDivElement>(null);
   const video = useRef<HTMLVideoElement>(null);
   const [box, setBox] = useState({ w: 0, h: 0 });
@@ -51,6 +53,11 @@ export function CroppedVideo({ stream, fit, crop = NO_CROP, pixelated = false, m
   const r = clamp(crop.right);
   const t = clamp(crop.top);
   const b = clamp(crop.bottom);
+
+  const aspect = src.w && src.h ? (src.w * (1 - l - r)) / (src.h * (1 - t - b)) : 0;
+  useEffect(() => {
+    if (aspect) onAspect?.(aspect);
+  }, [aspect, onAspect]);
 
   let frame: CSSProperties = { visibility: 'hidden' };
   let inner: CSSProperties = {};

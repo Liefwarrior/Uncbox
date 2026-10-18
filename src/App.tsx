@@ -1,11 +1,19 @@
-import { type CSSProperties, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
+import { Board } from './components/Board';
 import { CameraPanel } from './components/CameraPanel';
+import { CharacterPanel } from './components/CharacterPanel';
+import { ChatPanel } from './components/ChatPanel';
 import { GamePanel } from './components/GamePanel';
+import { MatchPanel } from './components/MatchPanel';
 import { NotesPanel } from './components/NotesPanel';
-import { PartyPanel } from './components/PartyPanel';
 import { ProgressPanel } from './components/ProgressPanel';
+import { RecordPanel } from './components/RecordPanel';
 import { RunPanel } from './components/RunPanel';
 import { Sidebar } from './components/Sidebar';
+import { SlotsPanel } from './components/SlotsPanel';
+import { WindowPanel } from './components/WindowPanel';
+import { PRESETS } from './presets';
+import { type BoardId, isWindowId } from './state/model';
 import { useAppState } from './state/useAppState';
 
 function initialStreamMode() {
@@ -14,7 +22,7 @@ function initialStreamMode() {
 }
 
 export function App() {
-  const { state, mutate, status } = useAppState();
+  const { state, mutate, mutatePreset, status } = useAppState();
   // Per-window, not saved: a phone can stay in edit mode while the captured window is in stream mode.
   const [streamMode, setStreamMode] = useState(initialStreamMode);
 
@@ -31,36 +39,63 @@ export function App() {
     return () => window.removeEventListener('keydown', onKey);
   }, []);
 
-  const { panels, sideLeft, sideWidth, bottomHeight } = state.layout;
-  const hasSide = panels.camera || panels.party;
-  const hasBottom = panels.run || panels.progress || panels.notes;
-  const boardClass = ['board', hasSide && 'has-side', hasBottom && 'has-bottom', sideLeft && 'side-left']
-    .filter(Boolean)
-    .join(' ');
-  const boardStyle = { '--side-w': `${sideWidth}px`, '--bottom-h': `${bottomHeight}px` } as CSSProperties;
+  const def = PRESETS[state.preset];
+  const data = state.presets[state.preset];
+  const t = def.titles;
+
+  const renderPanel = (id: BoardId) => {
+    if (isWindowId(id)) {
+      const win = data.windows.find((w) => w.id === id);
+      return win ? <WindowPanel win={win} mutatePreset={mutatePreset} /> : null;
+    }
+    switch (id) {
+      case 'game':
+        return <GamePanel game={data.game} mutatePreset={mutatePreset} />;
+      case 'camera':
+        return <CameraPanel camera={state.camera} title={t.camera} mutate={mutate} />;
+      case 'chat':
+        return <ChatPanel twitch={state.twitch} title={t.chat} mutate={mutate} />;
+      case 'slots':
+        return <SlotsPanel slots={data.slots} title={t.slots} def={def.slots} mutatePreset={mutatePreset} />;
+      case 'run':
+        return <RunPanel run={data.run} title={t.run} mutatePreset={mutatePreset} />;
+      case 'progress':
+        return (
+          <ProgressPanel
+            milestones={data.milestones}
+            counters={data.counters}
+            title={t.progress}
+            mutatePreset={mutatePreset}
+          />
+        );
+      case 'notes':
+        return <NotesPanel notes={data.notes} title={t.notes} mutatePreset={mutatePreset} />;
+      case 'match':
+        return <MatchPanel match={data.match} title={t.match} mutatePreset={mutatePreset} />;
+      case 'record':
+        return <RecordPanel record={data.record} match={data.match} title={t.record} mutatePreset={mutatePreset} />;
+      case 'character':
+        return <CharacterPanel character={data.character} title={t.character} mutatePreset={mutatePreset} />;
+    }
+  };
 
   return (
-    <div className={`app ${streamMode ? 'is-stream' : ''}`}>
-      {!streamMode && (
-        <Sidebar layout={state.layout} mutate={mutate} status={status} onStreamMode={() => setStreamMode(true)} />
-      )}
-      <main className={boardClass} style={boardStyle}>
-        <GamePanel game={state.game} mutate={mutate} streamMode={streamMode} />
-        {hasSide && (
-          <div className="board__side">
-            {panels.camera && <CameraPanel camera={state.camera} mutate={mutate} />}
-            {panels.party && <PartyPanel party={state.party} mutate={mutate} />}
-          </div>
-        )}
-        {hasBottom && (
-          <div className="board__bottom">
-            {panels.run && <RunPanel run={state.run} mutate={mutate} />}
-            {panels.progress && (
-              <ProgressPanel milestones={state.milestones} counters={state.counters} mutate={mutate} />
-            )}
-            {panels.notes && <NotesPanel notes={state.notes} mutate={mutate} />}
-          </div>
-        )}
+    <div className={`app theme-${state.preset} ${streamMode ? 'is-stream' : 'is-editing'}`}>
+      <Sidebar
+        state={state}
+        mutate={mutate}
+        mutatePreset={mutatePreset}
+        status={status}
+        onStreamMode={() => setStreamMode(true)}
+      />
+      <main className="stage">
+        <Board
+          key={state.preset}
+          layout={data.layout}
+          editing={!streamMode}
+          mutatePreset={mutatePreset}
+          renderPanel={renderPanel}
+        />
       </main>
     </div>
   );

@@ -1,82 +1,107 @@
-import { type AppState, PANEL_LABELS, type PanelId } from '../state/model';
-import type { Mutate, SyncStatus } from '../state/useAppState';
+import { PRESETS } from '../presets';
+import { type AppState, PANEL_IDS, type PanelId, PRESET_IDS, uid, type WindowId } from '../state/model';
+import { defaultPresetData } from '../state/hydrate';
+import type { Mutate, MutatePreset, SyncStatus } from '../state/useAppState';
+import { useArmed } from '../useArmed';
+import { placePanel } from './Board';
 import { Icon } from './Icon';
 
 const STATUS_TEXT: Record<SyncStatus, string> = {
   loading: 'Loading…',
   synced: 'Saved',
   saving: 'Saving…',
-  offline: 'Server offline, changes not saved',
+  offline: 'Offline: not saving',
 };
 
 interface Props {
-  layout: AppState['layout'];
+  state: AppState;
   mutate: Mutate;
+  mutatePreset: MutatePreset;
   status: SyncStatus;
   onStreamMode: () => void;
 }
 
-export function Sidebar({ layout, mutate, status, onStreamMode }: Props) {
+export function Sidebar({ state, mutate, mutatePreset, status, onStreamMode }: Props) {
+  const def = PRESETS[state.preset];
+  const data = state.presets[state.preset];
+  const shown = new Set(data.layout.map((item) => item.i));
+  const more = PANEL_IDS.filter((id) => !def.featured.includes(id));
+  const { armed, trigger } = useArmed();
+
+  const toggle = (id: PanelId, on: boolean) =>
+    mutatePreset((d) => {
+      d.layout = on ? [...d.layout, placePanel(d.layout, id)] : d.layout.filter((item) => item.i !== id);
+    });
+  const addWindow = () =>
+    mutatePreset((d) => {
+      const id: WindowId = `win-${uid()}`;
+      d.windows.push({ id, title: 'App window', fit: 'contain', crop: { top: 0, right: 0, bottom: 0, left: 0 } });
+      d.layout.push(placePanel(d.layout, id));
+    });
+  const resetLayout = () =>
+    trigger(() =>
+      mutatePreset((d) => {
+        d.layout = defaultPresetData(state.preset).layout;
+        d.windows = [];
+      }),
+    );
+  const row = (id: PanelId) => (
+    <li key={id}>
+      <label>
+        <input type="checkbox" checked={shown.has(id)} onChange={(e) => toggle(id, e.target.checked)} />
+        <span className="toggle" />
+        {def.titles[id]}
+      </label>
+    </li>
+  );
+
   return (
     <aside className="sidebar">
-      <div className="brand">
-        <img src="/favicon.svg" alt="" width={20} height={20} />
-        <span>PokéStream</span>
+      <div className="sidebar__inner">
+        <div className="brand">
+          <img src="/favicon.svg" alt="" width={22} height={22} />
+          <span>Uncbox</span>
+        </div>
+
+        <h3>Preset</h3>
+        <div className="presets">
+          {PRESET_IDS.map((id) => (
+            <button
+              key={id}
+              className={`preset-card preset-card--${id} ${state.preset === id ? 'on' : ''}`}
+              onClick={() => mutate((s) => void (s.preset = id))}
+            >
+              <strong>{PRESETS[id].name}</strong>
+              <span>{PRESETS[id].blurb}</span>
+            </button>
+          ))}
+        </div>
+
+        <button className="stream-btn" onClick={onStreamMode}>
+          <Icon name="cast" /> Stream mode
+        </button>
+        <p className="hint">F8 or Esc to exit.</p>
+
+        <h3>Panels</h3>
+        <ul className="toggles">{def.featured.map(row)}</ul>
+        {more.length > 0 && (
+          <details className="more">
+            <summary>More panels</summary>
+            <ul className="toggles">{more.map(row)}</ul>
+          </details>
+        )}
+        <button className="side-link" onClick={addWindow}>
+          <Icon name="plus" /> Add app window
+        </button>
+        <button className={`side-link ${armed ? 'is-armed' : ''}`} onClick={resetLayout}>
+          <Icon name="layout" /> {armed ? 'Reset layout?' : 'Reset layout'}
+        </button>
+
+        <footer className={`sync sync--${status}`}>
+          <span className="sync__dot" />
+          {STATUS_TEXT[status]}
+        </footer>
       </div>
-
-      <button className="stream-btn" onClick={onStreamMode}>
-        <Icon name="cast" /> Stream mode
-      </button>
-      <p className="hint">Hides this sidebar and the edit controls. F8 or Esc to come back.</p>
-
-      <h3>Panels</h3>
-      <ul className="toggles">
-        {(Object.keys(PANEL_LABELS) as PanelId[]).map((id) => (
-          <li key={id}>
-            <label>
-              <input
-                type="checkbox"
-                checked={layout.panels[id]}
-                onChange={(e) => mutate((s) => void (s.layout.panels[id] = e.target.checked))}
-              />
-              <span className="toggle" />
-              {PANEL_LABELS[id]}
-            </label>
-          </li>
-        ))}
-      </ul>
-
-      <h3>Layout</h3>
-      <button className="side-link" onClick={() => mutate((s) => void (s.layout.sideLeft = !s.layout.sideLeft))}>
-        <Icon name="swap" /> Side column on the {layout.sideLeft ? 'left' : 'right'}
-      </button>
-      <label className="slider">
-        <span>Side width</span>
-        <input
-          type="range"
-          min={220}
-          max={560}
-          step={10}
-          value={layout.sideWidth}
-          onChange={(e) => mutate((s) => void (s.layout.sideWidth = Number(e.target.value)))}
-        />
-      </label>
-      <label className="slider">
-        <span>Bottom height</span>
-        <input
-          type="range"
-          min={140}
-          max={420}
-          step={10}
-          value={layout.bottomHeight}
-          onChange={(e) => mutate((s) => void (s.layout.bottomHeight = Number(e.target.value)))}
-        />
-      </label>
-
-      <footer className={`sync sync--${status}`}>
-        <span className="sync__dot" />
-        {STATUS_TEXT[status]}
-      </footer>
     </aside>
   );
 }

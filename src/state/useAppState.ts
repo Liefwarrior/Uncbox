@@ -1,11 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { type AppState, defaultState, hydrate } from './model';
+import { defaultState, hydrate } from './hydrate';
+import type { AppState, PresetData } from './model';
 
 const clientId = Math.random().toString(36).slice(2);
 const SAVE_DELAY_MS = 250;
 
 export type SyncStatus = 'loading' | 'synced' | 'saving' | 'offline';
 export type Mutate = (recipe: (draft: AppState) => void) => void;
+/** Mutates the active preset's data. */
+export type MutatePreset = (recipe: (draft: PresetData) => void) => void;
 
 /**
  * Loads state from the local server, saves changes back (debounced), and applies
@@ -90,5 +93,10 @@ export function useAppState() {
     });
   }, []);
 
-  return { state, mutate, status };
+  const mutatePreset: MutatePreset = useCallback(
+    (recipe) => mutate((s) => recipe(s.presets[s.preset])),
+    [mutate],
+  );
+
+  return { state, mutate, mutatePreset, status };
 }

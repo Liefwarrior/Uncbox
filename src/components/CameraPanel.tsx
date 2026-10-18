@@ -5,15 +5,16 @@ import { CroppedVideo } from './CroppedVideo';
 import { Icon } from './Icon';
 import { Panel } from './Panel';
 
-export function CameraPanel({ camera, mutate }: { camera: CameraSettings; mutate: Mutate }) {
+export function CameraPanel({ camera, title, mutate }: { camera: CameraSettings; title: string; mutate: Mutate }) {
   const { stream, error, retry } = useDeviceStream(camera.enabled, camera.deviceId);
   const devices = useVideoDevices(stream);
   const setEnabled = (enabled: boolean) => mutate((s) => void (s.camera.enabled = enabled));
 
   return (
     <Panel
-      title="Camera"
-      className="panel--camera"
+      id="camera"
+      title={title}
+      bleed
       actions={
         <>
           {camera.enabled && (
@@ -47,29 +48,29 @@ export function CameraPanel({ camera, mutate }: { camera: CameraSettings; mutate
         </>
       }
     >
-      <div className="camera-frame">
-        {stream ? (
-          <CroppedVideo stream={stream} fit="cover" mirrored={camera.mirrored} />
-        ) : (
-          <div className="camera-empty">
-            {!camera.enabled ? (
-              <>
-                <button className="btn btn--accent ctl" onClick={() => setEnabled(true)}>
-                  <Icon name="video" /> Start camera
-                </button>
-                <p className="muted ctl">If OBS already shows your webcam, hide this panel instead.</p>
-              </>
-            ) : error ? (
-              <>
-                <p className="error">{error}</p>
-                <button className="btn" onClick={retry}>Retry</button>
-              </>
-            ) : (
-              <p className="muted">Starting camera…</p>
-            )}
-          </div>
-        )}
-      </div>
+      {stream ? (
+        <CroppedVideo stream={stream} fit="cover" mirrored={camera.mirrored} />
+      ) : (
+        <div className="camera-empty ctl">
+          {!camera.enabled ? (
+            <>
+              <button className="btn btn--accent ctl" onClick={() => setEnabled(true)}>
+                <Icon name="video" /> Start camera
+              </button>
+              <p className="muted ctl">Using OBS for your camera? Hide this panel.</p>
+            </>
+          ) : error ? (
+            <>
+              <p className="error">{error}</p>
+              <button className="btn" onClick={retry}>
+                Retry
+              </button>
+            </>
+          ) : (
+            <p className="muted">Starting camera…</p>
+          )}
+        </div>
+      )}
     </Panel>
   );
 }

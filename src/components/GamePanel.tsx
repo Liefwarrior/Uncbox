@@ -1,14 +1,16 @@
 import { useState } from 'react';
 import { useDeviceStream, useVideoDevices, useWindowStream } from '../media';
 import type { GameSettings, VideoFit, VideoSource } from '../state/model';
-import type { Mutate } from '../state/useAppState';
+import type { MutatePreset } from '../state/useAppState';
+import { useBoard } from './Board';
+import { CropEditor } from './CropEditor';
 import { CroppedVideo } from './CroppedVideo';
 import { Icon, type IconName } from './Icon';
 
 const SOURCES: { id: VideoSource; label: string; icon: IconName; hint: string }[] = [
-  { id: 'device', label: 'Capture device', icon: 'video', hint: 'Capture card for Switch, 3DS, GameCube… or any webcam-style input.' },
-  { id: 'window', label: 'Window', icon: 'monitor', hint: 'An emulator window (mGBA, melonDS, Dolphin, RetroArch…) or a whole screen.' },
-  { id: 'chroma', label: 'Chroma slot', icon: 'droplet', hint: 'A solid color you key out in OBS, with your game capture layered underneath.' },
+  { id: 'device', label: 'Capture device', icon: 'video', hint: 'Capture card or camera input' },
+  { id: 'window', label: 'Window', icon: 'monitor', hint: 'Emulator, PC game or full screen' },
+  { id: 'chroma', label: 'Green screen', icon: 'droplet', hint: 'Solid color to key out in OBS' },
 ];
 
 const FITS: { id: VideoFit; label: string }[] = [
@@ -19,19 +21,21 @@ const FITS: { id: VideoFit; label: string }[] = [
 
 interface Props {
   game: GameSettings;
-  mutate: Mutate;
-  streamMode: boolean;
+  mutatePreset: MutatePreset;
 }
 
-export function GamePanel({ game, mutate, streamMode }: Props) {
+export function GamePanel({ game, mutatePreset }: Props) {
+  const { editing, hide, fitWidthToAspect } = useBoard();
   const device = useDeviceStream(game.source === 'device', game.deviceId);
   const win = useWindowStream(game.source === 'window');
   const devices = useVideoDevices(device.stream);
   const [cropOpen, setCropOpen] = useState(false);
+  const [aspect, setAspect] = useState(0);
 
   const stream = game.source === 'device' ? device.stream : game.source === 'window' ? win.stream : null;
   const error = game.source === 'device' ? device.error : game.source === 'window' ? win.error : null;
-  const set = (patch: Partial<GameSettings>) => mutate((s) => void Object.assign(s.game, patch));
+  const capturing = game.source === 'device' || game.source === 'window';
+  const set = (patch: Partial<GameSettings>) => mutatePreset((d) => void Object.assign(d.game, patch));
   const choose = (source: VideoSource) => {
     set({ source });
     // The window picker needs this click's user activation, so open it right away.
@@ -44,46 +48,57 @@ export function GamePanel({ game, mutate, streamMode }: Props) {
       style={game.source === 'chroma' ? { background: game.chroma } : undefined}
     >
       {stream ? (
-        <CroppedVideo stream={stream} fit={game.fit} crop={game.crop} pixelated={game.pixelated} />
-      ) : game.source !== 'chroma' ? (
+        <CroppedVideo
+          stream={stream}
+          fit={game.fit}
+          crop={game.crop}
+          pixelated={game.pixelated}
+          onAspect={setAspect}
+        />
+      ) : game.source !== 'chroma' && editing ? (
         <div className="game-empty">
           {game.source === 'none' && (
             <>
-              <img src="/favicon.svg" alt="" width={56} height={56} />
-              <h3>Choose a game source</h3>
-              <div className="source-cards">
+              <h3>Choose game source</h3>
+              <div className="source-row">
                 {SOURCES.map((s) => (
-                  <button key={s.id} className="source-card" onClick={() => choose(s.id)}>
-                    <Icon name={s.icon} size={22} />
-                    <strong>{s.label}</strong>
-                    <span>{s.hint}</span>
+                  <button key={s.id} className="btn source-btn" onClick={() => choose(s.id)}>
+                    <Icon name={s.icon} size={18} /> {s.label}
                   </button>
                 ))}
               </div>
+              <p className="muted">Capture card for consoles, window for emulators and PC games, green screen to key out in OBS.</p>
             </>
           )}
           {game.source === 'device' && (
             <>
               <h3>{error ? 'Capture device unavailable' : 'Connecting to capture device…'}</h3>
               {error && <p className="error">{error}</p>}
-              {error && <button className="btn" onClick={device.retry}>Retry</button>}
+              {error && (
+                <button className="btn" onClick={device.retry}>
+                  Retry
+                </button>
+              )}
             </>
           )}
           {game.source === 'window' && (
             <>
-              <h3>Pick the window to show</h3>
-              <p className="muted">Browsers ask again after every reload; that is a browser rule, not a bug.</p>
+              <h3>Window capture</h3>
+              <p className="muted">Your browser asks again after each reload.</p>
               {error && <p className="error">{error}</p>}
               <button className="btn btn--accent" onClick={() => void win.pick()}>
-                <Icon name="monitor" /> Pick window
+                <Icon name="monitor" /> Choose window
               </button>
             </>
           )}
         </div>
       ) : null}
 
-      {!streamMode && (
+      {editing && (
         <div className="game-toolbar">
+          <span className="drag-handle game-toolbar__grip" title="Drag to move">
+            <Icon name="grip" size={14} /> Game
+          </span>
           <div className="seg">
             {[{ id: 'none' as const, label: 'None' }, ...SOURCES].map((s) => (
               <button key={s.id} className={game.source === s.id ? 'on' : ''} onClick={() => choose(s.id)}>
@@ -93,11 +108,7 @@ export function GamePanel({ game, mutate, streamMode }: Props) {
           </div>
 
           {game.source === 'device' && (
-            <select
-              value={game.deviceId ?? ''}
-              onChange={(e) => set({ deviceId: e.target.value || null })}
-              title="Video input"
-            >
+            <select value={game.deviceId ?? ''} onChange={(e) => set({ deviceId: e.target.value || null })} title="Video input">
               <option value="">System default</option>
               {devices.map((d, i) => (
                 <option key={d.deviceId || i} value={d.deviceId}>
@@ -107,7 +118,9 @@ export function GamePanel({ game, mutate, streamMode }: Props) {
             </select>
           )}
           {game.source === 'window' && stream && (
-            <button className="btn" onClick={() => void win.pick()}>Change window</button>
+            <button className="btn" onClick={() => void win.pick()}>
+              Choose window
+            </button>
           )}
           {game.source === 'chroma' && (
             <label className="inline" title="Key this color out in OBS">
@@ -117,7 +130,7 @@ export function GamePanel({ game, mutate, streamMode }: Props) {
 
           <span className="spacer" />
 
-          {(game.source === 'device' || game.source === 'window') && (
+          {capturing && (
             <>
               <div className="seg">
                 {FITS.map((f) => (
@@ -133,35 +146,29 @@ export function GamePanel({ game, mutate, streamMode }: Props) {
               <button className={`btn ${cropOpen ? 'btn--on' : ''}`} onClick={() => setCropOpen((o) => !o)}>
                 <Icon name="crop" /> Crop
               </button>
+              <button
+                className="btn"
+                disabled={!stream || !aspect}
+                title="Resize this window's width to the game's shape, removing the black bars"
+                onClick={() => fitWidthToAspect('game', aspect)}
+              >
+                <Icon name="fit" /> Fit to game
+              </button>
             </>
           )}
+          <button className="icon-btn" title="Hide the game window" onClick={() => hide('game')}>
+            <Icon name="x" size={14} />
+          </button>
         </div>
       )}
 
-      {cropOpen && !streamMode && (game.source === 'device' || game.source === 'window') && (
-        <div className="crop-editor">
-          <p className="muted">Trim the edges of the source, e.g. an emulator’s menu bar or a capture card’s black borders.</p>
-          {(['top', 'bottom', 'left', 'right'] as const).map((edge) => (
-            <label key={edge}>
-              <span>{edge}</span>
-              <input
-                type="range"
-                min={0}
-                max={45}
-                step={0.5}
-                value={game.crop[edge]}
-                onChange={(e) => mutate((s) => void (s.game.crop[edge] = Number(e.target.value)))}
-              />
-              <output>{game.crop[edge].toFixed(1)}%</output>
-            </label>
-          ))}
-          <div className="row">
-            <button className="btn" onClick={() => set({ crop: { top: 0, right: 0, bottom: 0, left: 0 } })}>
-              Reset
-            </button>
-            <button className="btn btn--accent" onClick={() => setCropOpen(false)}>Done</button>
-          </div>
-        </div>
+      {cropOpen && editing && capturing && (
+        <CropEditor
+          crop={game.crop}
+          onChange={(edge, value) => mutatePreset((d) => void (d.game.crop[edge] = value))}
+          onReset={() => set({ crop: { top: 0, right: 0, bottom: 0, left: 0 } })}
+          onClose={() => setCropOpen(false)}
+        />
       )}
     </section>
   );
