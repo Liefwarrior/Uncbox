@@ -44,7 +44,7 @@ export function GamePanel({ game, mutatePreset }: Props) {
 
   return (
     <section
-      className={`panel panel--game ${game.source === 'chroma' ? 'is-chroma' : ''}`}
+      className={`panel panel--game ${game.source === 'chroma' ? 'is-chroma' : ''} ${!stream && game.source !== 'chroma' ? 'is-empty' : ''}`}
       style={game.source === 'chroma' ? { background: game.chroma } : undefined}
     >
       {stream ? (

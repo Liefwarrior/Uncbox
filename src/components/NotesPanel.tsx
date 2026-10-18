@@ -18,6 +18,7 @@ export function NotesPanel({ notes, title, mutatePreset }: { notes: NoteItem[]; 
     <Panel
       id="notes"
       title={title}
+      empty={notes.length === 0}
       actions={
         notes.some((n) => n.done) && (
           <button

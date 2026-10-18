@@ -27,6 +27,7 @@ export function ChatPanel({ twitch, title, mutate }: Props) {
     <Panel
       id="chat"
       label={title}
+      empty={!channel}
       title={
         channel ? (
           <>

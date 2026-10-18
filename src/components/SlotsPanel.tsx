@@ -39,6 +39,7 @@ export function SlotsPanel({ slots, title, def, mutatePreset }: Props) {
     <Panel
       id="slots"
       title={title}
+      empty={slots.every((m) => !m.name && !m.detail && !m.image)}
       actions={
         <>
           <button

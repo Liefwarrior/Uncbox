@@ -29,6 +29,7 @@ export function WindowPanel({ win, mutatePreset }: { win: AppWindow; mutatePrese
       id={win.id}
       className="panel--window"
       label={win.title}
+      empty={!stream}
       title={
         editing ? (
           <input

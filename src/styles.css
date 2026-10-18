@@ -709,6 +709,12 @@ input[type='color'] {
 
 .board__inner {
   height: 100%;
+  transition: opacity 0.4s;
+}
+/* A panel with nothing in it (camera off, no chat channel, empty party) stays off stream entirely.
+   Hovering brings it back so it can still be set up. */
+.is-stream .board__inner:has(> .is-empty):not(:hover) {
+  opacity: 0;
 }
 
 /* ---------- panel chrome ---------- */

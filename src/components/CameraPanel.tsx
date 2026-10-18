@@ -15,6 +15,7 @@ export function CameraPanel({ camera, title, mutate }: { camera: CameraSettings;
       id="camera"
       title={title}
       bleed
+      empty={!stream}
       actions={
         <>
           {camera.enabled && (

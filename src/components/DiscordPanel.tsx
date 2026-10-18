@@ -37,6 +37,7 @@ export function DiscordPanel({ pinned, title, mutate }: Props) {
     <Panel
       id="discord"
       label={title}
+      empty={!ready || !d.channel}
       title={
         d.channel ? (
           <>
