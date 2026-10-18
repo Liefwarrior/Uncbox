@@ -1771,8 +1771,9 @@ input[type='color'] {
 .character__name {
   color: var(--class);
   font-family: var(--font-display);
-  font-size: clamp(22px, 9cqw, 32px);
-  text-shadow: 0 0 18px color-mix(in srgb, var(--class) 45%, transparent);
+  font-size: clamp(18px, 6cqw, 24px);
+  line-height: 1.2;
+  text-shadow: 0 0 12px color-mix(in srgb, var(--class) 35%, transparent);
   transition: color 0.5s, text-shadow 0.5s;
 }
 .hc-badge {
@@ -1882,10 +1883,10 @@ input[type='color'] {
 .character__guild {
   display: flex;
   gap: 10px;
-  margin-top: -6px;
+  margin-top: -4px;
   color: var(--text);
   font-family: var(--font-display);
-  font-size: 16px;
+  font-size: 14px;
 }
 .character__guild .ghost-input {
   flex: 1;
@@ -2341,4 +2342,21 @@ input[type='color'] {
 }
 .voice__switch:hover {
   color: var(--accent);
+}
+
+/* Character name and guild line sit centered, like a nameplate. */
+.character__head {
+  justify-content: center;
+}
+.character__name {
+  margin-left: 0;
+  text-align: center;
+}
+.character__guild {
+  justify-content: center;
+  text-align: center;
+}
+.character__guild .ghost-input {
+  margin-left: 0;
+  text-align: center;
 }

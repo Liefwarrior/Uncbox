@@ -82,6 +82,10 @@ export function App() {
     }
   };
 
+  // Draw nothing until the saved state arrives (a few ms locally). Otherwise every reload shows the
+  // default preset's theme first and crossfades to the real one, which is visible on stream.
+  if (status === 'loading') return null;
+
   return (
     <div className={`app theme-${state.preset} ${streamMode ? 'is-stream' : 'is-editing'}`}>
       <Sidebar
