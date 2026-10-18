@@ -1,15 +1,39 @@
 // Discord voice bridge. Talks to the Discord desktop app over its local RPC pipe, follows the
 // voice channel you are in, and reports members, who is speaking, and mute/deafen state.
 //
-// Discord only lets an app read voice state after the user authorizes it, so the user creates a
-// developer app once and gives us its client ID and secret. The secret and tokens stay in
-// data/discord.json and never reach the browser.
+// Discord only lets an app use voice RPC after the user authorizes it. Two ways to have an app:
+//
+// - Built in: Uncbox's own Discord app (server/discord-app.json or UNCBOX_DISCORD_CLIENT_ID).
+//   It is a "Public Client", so sign-in uses PKCE and no secret ships with Uncbox. Until Discord
+//   approves its RPC scopes, only accounts listed as App Testers on it (up to 50) can sign in.
+// - Your own: a developer app the user creates; Client ID only if Public Client is on, otherwise
+//   Client ID and Secret. Any secret and all tokens stay in data/discord.json, never in the page.
 
 import { EventEmitter } from 'node:events';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomBytes, randomUUID } from 'node:crypto';
+import { readFileSync } from 'node:fs';
 import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import net from 'node:net';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+function builtInClientId() {
+  if (process.env.UNCBOX_DISCORD_CLIENT_ID) return process.env.UNCBOX_DISCORD_CLIENT_ID.trim();
+  try {
+    const file = path.join(path.dirname(fileURLToPath(import.meta.url)), 'discord-app.json');
+    return String(JSON.parse(readFileSync(file, 'utf8')).clientId ?? '').trim();
+  } catch {
+    return '';
+  }
+}
+const BUILT_IN_CLIENT_ID = builtInClientId();
+
+/** PKCE pair: the challenge goes to Discord with AUTHORIZE, the verifier with the token exchange. */
+function pkcePair() {
+  const verifier = randomBytes(48).toString('base64url');
+  const challenge = createHash('sha256').update(verifier).digest('base64url');
+  return { verifier, challenge };
+}
 
 const OP = { HANDSHAKE: 0, FRAME: 1, CLOSE: 2, PING: 3, PONG: 4 };
 const SCOPES = ['rpc', 'rpc.voice.read', 'rpc.voice.write'];
@@ -163,10 +187,16 @@ export function createDiscordBridge({ dataDir, onChange }) {
   let channelSubs = [];
   let emitTimer = null;
 
+  // The user's own app wins over the built-in one; a secret only ever belongs to the user's own.
+  const clientId = () => config.clientId || BUILT_IN_CLIENT_ID;
+  const clientSecret = () => (config.clientId ? config.clientSecret || '' : '');
+
   const snapshot = () => ({
     status: state.status,
     error: state.error,
-    configured: Boolean(config.clientId && config.clientSecret),
+    configured: Boolean(clientId()),
+    builtIn: !config.clientId && Boolean(BUILT_IN_CLIENT_ID),
+    hasBuiltIn: Boolean(BUILT_IN_CLIENT_ID),
     clientId: config.clientId || '',
     user: state.user,
     channel: state.channel,
@@ -203,7 +233,9 @@ export function createDiscordBridge({ dataDir, onChange }) {
   }
 
   async function tokenRequest(params) {
-    const body = new URLSearchParams({ client_id: config.clientId, client_secret: config.clientSecret, ...params });
+    // Public clients (PKCE) send no secret; Discord checks the code_verifier instead.
+    const body = new URLSearchParams({ client_id: clientId(), ...params });
+    if (clientSecret()) body.set('client_secret', clientSecret());
     const res = await fetch(TOKEN_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -213,19 +245,21 @@ export function createDiscordBridge({ dataDir, onChange }) {
     if (!res.ok) {
       throw new Error(json.error_description || json.error || `Token request failed (${res.status})`);
     }
+    config.tokenClientId = clientId();
     config.accessToken = json.access_token;
     config.refreshToken = json.refresh_token;
     config.expiresAt = Date.now() + (json.expires_in ?? 0) * 1000;
     await save();
   }
 
-  async function exchangeCode(code) {
+  async function exchangeCode(code, verifier) {
+    const params = { grant_type: 'authorization_code', code, ...(verifier ? { code_verifier: verifier } : {}) };
     // RPC authorization has no browser redirect, but Discord may still want the registered URI.
     try {
-      await tokenRequest({ grant_type: 'authorization_code', code });
+      await tokenRequest(params);
     } catch (err) {
       if (!/redirect/i.test(err.message)) throw err;
-      await tokenRequest({ grant_type: 'authorization_code', code, redirect_uri: REDIRECT_URI });
+      await tokenRequest({ ...params, redirect_uri: REDIRECT_URI });
     }
   }
 
@@ -313,6 +347,19 @@ export function createDiscordBridge({ dataDir, onChange }) {
     await refreshChannel();
   }
 
+  function friendlyAuthError(err) {
+    // Unapproved apps only accept their listed App Testers; anyone else gets invalid_scope.
+    if (err?.code === 5000 || /invalid_scope/i.test(err?.message ?? '')) {
+      return snapshot().builtIn
+        ? 'This Discord account is not a tester on the Uncbox app yet.'
+        : 'Discord refused the voice permissions. Add this account under App Testers in your app.';
+    }
+    if (/invalid_client|secret/i.test(err?.message ?? '')) {
+      return 'Discord wants a Client Secret, or turn on Public Client for this app.';
+    }
+    return err?.message || 'Authorization was cancelled.';
+  }
+
   /** The live connection, once authorized; anything else is a 409 for the caller. */
   function ready() {
     if (!ipc || state.status !== 'ready') {
@@ -330,13 +377,18 @@ export function createDiscordBridge({ dataDir, onChange }) {
     clearTimeout(retryTimer);
     ipc?.close();
     ipc = null;
-    if (!config.clientId || !config.clientSecret) {
+    if (!clientId()) {
       set({ status: 'unconfigured', error: '', user: null });
       clearChannel();
       return;
     }
+    // Tokens belong to the app that issued them; drop them if the app changed.
+    if (config.tokenClientId && config.tokenClientId !== clientId()) {
+      config.accessToken = config.refreshToken = config.expiresAt = config.tokenClientId = undefined;
+      await save().catch(() => {});
+    }
     set({ status: 'connecting', error: '' });
-    const conn = new IpcConnection(config.clientId);
+    const conn = new IpcConnection(clientId());
     conn.on('event', onEvent);
     conn.on('closed', (reason) => {
       if (ipc !== conn) return;
@@ -385,12 +437,9 @@ export function createDiscordBridge({ dataDir, onChange }) {
       const id = String(clientId ?? '').trim();
       const secret = String(clientSecret ?? '').trim();
       if (!/^\d{15,22}$/.test(id)) throw Object.assign(new Error('Client ID should be a long number'), { status: 400 });
-      if (!secret && !(config.clientSecret && config.clientId === id)) {
-        throw Object.assign(new Error('Client secret is required'), { status: 400 });
-      }
-      const changedApp = config.clientId !== id;
-      config = { ...config, clientId: id, clientSecret: secret || config.clientSecret };
-      if (changedApp) config.accessToken = config.refreshToken = config.expiresAt = undefined;
+      // No secret is fine: that app must have Public Client on, and sign-in uses PKCE.
+      const keepSecret = config.clientId === id ? config.clientSecret : undefined;
+      config = { ...config, clientId: id, clientSecret: secret || keepSecret };
       await save();
       await connect();
     },
@@ -398,11 +447,14 @@ export function createDiscordBridge({ dataDir, onChange }) {
       if (!ipc) throw Object.assign(new Error('Discord is not connected'), { status: 409 });
       set({ status: 'authorizing', error: '' });
       try {
-        const { code } = await ipc.request('AUTHORIZE', { client_id: config.clientId, scopes: SCOPES });
-        await exchangeCode(code);
+        const pkce = clientSecret() ? null : pkcePair();
+        const args = { client_id: clientId(), scopes: SCOPES };
+        if (pkce) Object.assign(args, { code_challenge: pkce.challenge, code_challenge_method: 'S256' });
+        const { code } = await ipc.request('AUTHORIZE', args);
+        await exchangeCode(code, pkce?.verifier);
         await authenticate();
       } catch (err) {
-        set({ status: 'needs-auth', error: err.message || 'Authorization was cancelled' });
+        set({ status: 'needs-auth', error: friendlyAuthError(err) });
       }
     },
     async guilds() {

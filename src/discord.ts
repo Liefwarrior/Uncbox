@@ -18,6 +18,9 @@ export interface DiscordSnapshot {
   status: DiscordStatus;
   error: string;
   configured: boolean;
+  /** Signed in through Uncbox's own Discord app rather than one the user made. */
+  builtIn: boolean;
+  hasBuiltIn: boolean;
   clientId: string;
   user: { id: string; name: string } | null;
   channel: { id: string; name: string; guildId: string | null } | null;
@@ -40,6 +43,8 @@ const EMPTY: DiscordSnapshot = {
   status: 'connecting',
   error: '',
   configured: false,
+  builtIn: false,
+  hasBuiltIn: false,
   clientId: '',
   user: null,
   channel: null,

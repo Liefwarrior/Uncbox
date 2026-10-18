@@ -76,16 +76,18 @@ and shows mute and deafen icons, all in the preset's theme. You can also mute, d
 the panel, and pin channels (say *Locker Room Heaven* in *Bumta Buds*) to join them with one click.
 Audio still runs through the Discord app; Uncbox just drives it.
 
-It talks to the Discord app on your PC, which only allows this for apps you authorize, so there
-is a one-time setup:
+It talks to the Discord app on your PC, which only allows this for apps you authorize.
 
-1. Create an application at [discord.com/developers/applications](https://discord.com/developers/applications).
-2. Under **OAuth2**, add the redirect `http://localhost` and copy the **Client ID** and **Client Secret**.
-3. Paste both into the Voice panel and click **Connect**, then **Authorize in Discord** and approve the
-   prompt in Discord.
+- **With the official Uncbox app** (its ID in `server/discord-app.json`): click **Connect Discord**
+  and approve the prompt in Discord. Until Discord approves the app, only its listed App Testers
+  can connect. See [docs/discord-rpc-approval.md](docs/discord-rpc-approval.md).
+- **With your own app:** create one at
+  [discord.com/developers/applications](https://discord.com/developers/applications), add the
+  OAuth2 redirect `http://localhost`, turn on **Public Client**, and paste its Client ID into the
+  Voice panel. A Client Secret is only needed if Public Client is off.
 
-The secret and Discord's tokens are kept in `data/discord.json` on this PC and never sent to the
-browser. Discord's own StreamKit overlay can't be used here: Discord blocks it from being embedded
+Sign-in uses PKCE, so no secret is needed or shipped. Tokens (and a secret, if you entered one)
+stay in `data/discord.json` on this PC and never reach the browser. Discord's own StreamKit overlay can't be used here: Discord blocks it from being embedded
 in another page.
 
 ## Going live with OBS
@@ -115,6 +117,11 @@ $env:HOST = "0.0.0.0"; npm start
 
 Then visit `http://<your-pc-ip>:5170`. There is no login, so only do this on a network you
 trust. `--port=` and `--data=<folder>` change the port and where state is saved.
+
+## Licenses
+
+Uncbox's third-party licenses are in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). Run
+`npm run notices` after adding or updating a dependency to regenerate it.
 
 ## Project layout
 

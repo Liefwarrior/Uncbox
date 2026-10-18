@@ -82,7 +82,7 @@ export function DiscordPanel({ pinned, title, mutate }: Props) {
               disabled={d.status === 'authorizing'}
               onClick={() => run(discordApi.authorize)}
             >
-              {d.status === 'authorizing' ? 'Approve in Discord…' : 'Authorize in Discord'}
+              {d.status === 'authorizing' ? 'Approve in Discord…' : d.builtIn ? 'Connect Discord' : 'Authorize in Discord'}
             </button>
             {d.error && <p className="error">{d.error}</p>}
           </div>
@@ -185,18 +185,19 @@ function Setup({ error, clientId }: { error: string; clientId: string }) {
           .
         </li>
         <li>
-          Under OAuth2, add the redirect <code>http://localhost</code>, then copy the Client ID and Client Secret.
+          Under OAuth2, add the redirect <code>http://localhost</code> and turn on Public Client.
         </li>
+        <li>Paste the Client ID. A secret is only needed if Public Client is off.</li>
       </ol>
       <input value={id} placeholder="Client ID" inputMode="numeric" onChange={(e) => setId(e.target.value)} />
       <input
         value={secret}
         type="password"
-        placeholder="Client Secret"
+        placeholder="Client Secret (optional)"
         autoComplete="off"
         onChange={(e) => setSecret(e.target.value)}
       />
-      <button className="btn btn--accent" disabled={saving || !id.trim() || !secret.trim()}>
+      <button className="btn btn--accent" disabled={saving || !id.trim()}>
         Connect
       </button>
       {(message || error) && <p className="error">{message || error}</p>}
