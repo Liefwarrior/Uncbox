@@ -72,7 +72,9 @@ export function DiscordPanel({ pinned, title, mutate }: Props) {
       }
     >
       <div className="voice">
-        {d.status === 'unconfigured' || d.status === 'error' ? (
+        {!d.reachable ? (
+          <p className="voice__note ctl">Can’t reach Uncbox. Is it still running?</p>
+        ) : d.status === 'unconfigured' || d.status === 'error' ? (
           editing ? (
             <Setup error={d.error} clientId={d.clientId} />
           ) : null

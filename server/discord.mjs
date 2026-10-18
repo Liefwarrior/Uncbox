@@ -39,6 +39,7 @@ const OP = { HANDSHAKE: 0, FRAME: 1, CLOSE: 2, PING: 3, PONG: 4 };
 const SCOPES = ['rpc', 'rpc.voice.read', 'rpc.voice.write'];
 const VOICE_TYPES = new Set([2, 13]); // voice, stage
 const RETRY_MS = 5000;
+const HANDSHAKE_TIMEOUT_MS = 8000;
 const TOKEN_URL = 'https://discord.com/api/oauth2/token';
 const REDIRECT_URI = 'http://localhost';
 
@@ -75,8 +76,19 @@ class IpcConnection extends EventEmitter {
     this.socket.on('close', () => this.onClose());
     this.socket.on('error', () => {});
     const ready = new Promise((resolve, reject) => {
-      this.once('ready', resolve);
-      this.once('closed', (reason) => reject(reason));
+      // A Discord that is starting up or stuck can accept the pipe and never answer.
+      const timer = setTimeout(() => {
+        this.closeReason = new Error('Discord did not respond');
+        this.socket?.destroy();
+      }, HANDSHAKE_TIMEOUT_MS);
+      this.once('ready', (data) => {
+        clearTimeout(timer);
+        resolve(data);
+      });
+      this.once('closed', (reason) => {
+        clearTimeout(timer);
+        reject(reason);
+      });
     });
     this.write(OP.HANDSHAKE, { v: 1, client_id: this.clientId });
     return ready;

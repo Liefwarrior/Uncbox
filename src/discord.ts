@@ -55,22 +55,34 @@ const EMPTY: DiscordSnapshot = {
   members: [],
 };
 
+/** `reachable` is false while the Uncbox server itself can't be reached. */
 export function useDiscord() {
   const [snap, setSnap] = useState<DiscordSnapshot>(EMPTY);
+  const [reachable, setReachable] = useState(true);
   useEffect(() => {
     let alive = true;
-    fetch('/api/discord')
-      .then((r) => (r.ok ? r.json() : null))
-      .then((s) => alive && s && setSnap(s))
-      .catch(() => {});
+    const load = () =>
+      fetch('/api/discord')
+        .then((r) => (r.ok ? r.json() : Promise.reject(new Error(r.statusText))))
+        .then((s) => {
+          if (!alive) return;
+          setSnap(s);
+          setReachable(true);
+        })
+        .catch(() => alive && setReachable(false));
     const events = new EventSource('/api/events');
+    // Pushed updates only arrive on change, so re-read the snapshot every time the stream
+    // (re)connects: after a server restart the page would otherwise keep a stale state forever.
+    events.onopen = () => void load();
+    events.onerror = () => setReachable(false);
     events.addEventListener('discord', (e) => setSnap(JSON.parse((e as MessageEvent).data)));
+    void load();
     return () => {
       alive = false;
       events.close();
     };
   }, []);
-  return snap;
+  return { ...snap, reachable };
 }
 
 async function call<T>(path: string, body?: unknown): Promise<T> {

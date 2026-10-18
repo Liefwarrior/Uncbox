@@ -25,6 +25,10 @@ function useElementSize<T extends HTMLElement>() {
   useLayoutEffect(() => {
     const el = ref.current;
     if (!el) return;
+    // Measure now as well: ResizeObserver only reports on painted frames, so a window that loads
+    // while covered or in the background would otherwise sit with an empty board.
+    const r = el.getBoundingClientRect();
+    setSize({ w: r.width, h: r.height });
     const ro = new ResizeObserver(([e]) => setSize({ w: e.contentRect.width, h: e.contentRect.height }));
     ro.observe(el);
     return () => ro.disconnect();
