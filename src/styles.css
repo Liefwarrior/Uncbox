@@ -982,7 +982,11 @@ input[type='color'] {
   white-space: nowrap;
 }
 .panel__sub {
+  min-width: 0;
+  overflow: hidden;
   color: var(--muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
   font-family: var(--font-ui);
   font-weight: 500;
   letter-spacing: 0;
@@ -2438,6 +2442,11 @@ p.chat-empty {
   color: var(--bad);
 }
 
+.voice__controls {
+  display: flex;
+  gap: 4px;
+  margin-top: 8px;
+}
 .voice__pins {
   display: flex;
   flex-wrap: wrap;

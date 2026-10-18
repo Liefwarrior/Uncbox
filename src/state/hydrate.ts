@@ -25,6 +25,10 @@ export function defaultPresetData(id: PresetId): PresetData {
   return { layout: def.layout.map((item) => ({ ...item })), ...def.data() };
 }
 
+function eachPreset(make: (id: PresetId) => PresetData): Record<PresetId, PresetData> {
+  return Object.fromEntries(PRESET_IDS.map((id) => [id, make(id)])) as Record<PresetId, PresetData>;
+}
+
 export function defaultState(): AppState {
   return {
     version: 2,
@@ -32,11 +36,7 @@ export function defaultState(): AppState {
     twitch: { channel: '', hideBots: true },
     discord: { pinned: [] },
     camera: { enabled: false, deviceId: null, mirrored: true },
-    presets: {
-      pokemon: defaultPresetData('pokemon'),
-      smite2: defaultPresetData('smite2'),
-      wow: defaultPresetData('wow'),
-    },
+    presets: eachPreset(defaultPresetData),
   };
 }
 
@@ -161,10 +161,6 @@ export function hydrate(saved: unknown): AppState {
         .filter((c) => /^\d+$/.test(c.id)),
     },
     camera: { ...overlay(base.camera, camera), deviceId: str(camera.deviceId) },
-    presets: {
-      pokemon: hydratePreset('pokemon', presets.pokemon),
-      smite2: hydratePreset('smite2', presets.smite2),
-      wow: hydratePreset('wow', presets.wow),
-    },
+    presets: eachPreset((id) => hydratePreset(id, presets[id])),
   };
 }
