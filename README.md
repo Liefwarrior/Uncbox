@@ -97,9 +97,11 @@ in another page.
    ```bash
    start msedge --app=http://localhost:5170
    ```
-2. Press **Stream mode** (or `F8`). The sidebar and edit controls go away and the layout locks;
-   hovering a panel brings its controls back. `Esc` or `F8` returns to editing.
-   `?stream=1` on the URL opens straight into stream mode.
+2. Press **Stream mode** (or `F8`). The window goes full screen, so the browser's tabs and address
+   bar disappear, and the sidebar and edit controls go away and the layout locks; hovering a panel
+   brings its controls back. `Esc` or `F8` brings the browser bar back and returns to editing.
+   `?stream=1` on the URL opens straight into stream mode (without full screen, since browsers only
+   allow that after a click or key press).
 3. In OBS, add a **Window Capture** of that window.
 4. Using the chroma slot: add a **Chroma Key** filter to the window capture, match the slot's
    color, and put your game capture source underneath.

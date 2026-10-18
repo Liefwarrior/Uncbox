@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Board } from './components/Board';
 import { CameraPanel } from './components/CameraPanel';
 import { CharacterPanel } from './components/CharacterPanel';
@@ -26,19 +26,41 @@ export function App() {
   const { state, mutate, mutatePreset, status } = useAppState();
   // Per-window, not saved: a phone can stay in edit mode while the captured window is in stream mode.
   const [streamMode, setStreamMode] = useState(initialStreamMode);
+  const streaming = useRef(streamMode);
+  streaming.current = streamMode;
+
+  // Stream mode also goes full screen, which hides the browser's tabs and address bar. Browsers
+  // only allow that from a click or key press, so it is requested here rather than in an effect.
+  const enterStream = useCallback(() => {
+    setStreamMode(true);
+    if (!document.fullscreenElement) document.documentElement.requestFullscreen?.().catch(() => {});
+  }, []);
+  const exitStream = useCallback(() => {
+    setStreamMode(false);
+    if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+  }, []);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'F8') {
         e.preventDefault();
-        setStreamMode((m) => !m);
+        if (streaming.current) exitStream();
+        else enterStream();
       } else if (e.key === 'Escape') {
-        setStreamMode(false);
+        exitStream();
       }
     };
+    // The browser takes Esc itself to leave full screen, so the page never sees that key press.
+    const onFullscreen = () => {
+      if (!document.fullscreenElement) setStreamMode(false);
+    };
     window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, []);
+    document.addEventListener('fullscreenchange', onFullscreen);
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      document.removeEventListener('fullscreenchange', onFullscreen);
+    };
+  }, [enterStream, exitStream]);
 
   const def = PRESETS[state.preset];
   const data = state.presets[state.preset];
@@ -93,7 +115,7 @@ export function App() {
         mutate={mutate}
         mutatePreset={mutatePreset}
         status={status}
-        onStreamMode={() => setStreamMode(true)}
+        onStreamMode={enterStream}
       />
       <main className="stage">
         <Board
