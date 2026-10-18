@@ -376,16 +376,21 @@ export function createDiscordBridge({ dataDir, onChange }) {
 
   function friendlyAuthError(err) {
     if (err?.code === 'NEEDS_REDIRECT') return `Discord wants one redirect on this app: add ${REDIRECT_URI} under OAuth2 → Redirects, then try again.`;
-    // Unapproved apps only accept their listed App Testers; anyone else gets invalid_scope.
-    if (err?.code === 5000 || /invalid_scope/i.test(err?.message ?? '')) {
+    const msg = err?.message ?? '';
+    // Code 5000 covers every OAuth2 failure (including Cancel), so go by Discord's message.
+    if (/access_denied|cancel|closed/i.test(msg)) {
+      return 'The Discord prompt was closed. Scroll to the bottom of it and click Authorize.';
+    }
+    // Unapproved apps only accept their owner and listed App Testers; anyone else gets invalid_scope.
+    if (/invalid_scope/i.test(msg)) {
       return snapshot().builtIn
         ? 'This Discord account is not a tester on the Uncbox app yet.'
-        : 'Discord refused the voice permissions. Add this account under App Testers in your app.';
+        : 'Discord refused the voice permissions for this account. If you don’t own this app, ask its owner to add you under App Testers.';
     }
-    if (/invalid_client|secret/i.test(err?.message ?? '')) {
+    if (/invalid_client|secret/i.test(msg)) {
       return 'Discord wants a Client Secret, or turn on Public Client for this app.';
     }
-    return err?.message || 'Authorization was cancelled.';
+    return msg ? `Discord said: ${msg}` : 'Authorization didn’t finish. Try again.';
   }
 
   /** The live connection, once authorized; anything else is a 409 for the caller. */

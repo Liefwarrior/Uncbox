@@ -2333,3 +2333,12 @@ input[type='color'] {
 .panel--window .panel__body {
   overflow: hidden;
 }
+.voice__switch {
+  align-self: flex-start;
+  margin-top: auto;
+  color: var(--muted);
+  font-size: 13px;
+}
+.voice__switch:hover {
+  color: var(--accent);
+}

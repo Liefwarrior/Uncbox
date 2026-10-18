@@ -165,6 +165,16 @@ export function DiscordPanel({ pinned, title, mutate }: Props) {
           </>
         )}
         {error && <p className="error ctl">{error}</p>}
+        {editing && d.reachable && d.clientId && d.status !== 'unconfigured' && d.status !== 'error' && (
+          <button
+            type="button"
+            className="link-btn voice__switch"
+            title={`Current Application ID: ${d.clientId}`}
+            onClick={() => run(discordApi.forget)}
+          >
+            Use a different app
+          </button>
+        )}
       </div>
     </Panel>
   );
