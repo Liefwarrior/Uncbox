@@ -50,7 +50,7 @@ function pipePath(n) {
 }
 
 /** One connection to Discord's IPC socket: framing, request/response by nonce, and events. */
-class IpcConnection extends EventEmitter {
+export class IpcConnection extends EventEmitter {
   constructor(clientId) {
     super();
     this.clientId = clientId;
@@ -176,6 +176,36 @@ function toMember(vs) {
     mute: Boolean(v.mute || v.self_mute || vs.mute),
     deaf: Boolean(v.deaf || v.self_deaf),
   };
+}
+
+/** Which Discord app setting blocks sign-in, so the panel can open that page: 'redirect' or 'public-client'. */
+export function fixFor(err) {
+  // 'Missing "redirect_uri"': the app has no registered redirect, which PKCE sign-in needs.
+  if (/redirect/i.test(err?.message ?? '')) return 'redirect';
+  if (/invalid_client|secret/i.test(err?.message ?? '')) return 'public-client';
+  return '';
+}
+
+/** What to tell the user when sign-in fails; `builtIn` is true for Uncbox's own Discord app. */
+export function friendlyAuthError(err, builtIn) {
+  if (/redirect/i.test(err?.message ?? '')) {
+    return `This Discord app needs ${REDIRECT_URI} under OAuth2 → Redirects. Its settings just opened: add it, save, then connect again.`;
+  }
+  const msg = err?.message ?? '';
+  // Code 5000 covers every OAuth2 failure (including Cancel), so go by Discord's message.
+  if (/access_denied|cancel|closed/i.test(msg)) {
+    return 'The Discord prompt was closed. Scroll to the bottom of it and click Authorize.';
+  }
+  // Unapproved apps only accept their owner and listed App Testers; anyone else gets invalid_scope.
+  if (/invalid_scope/i.test(msg)) {
+    return builtIn
+      ? 'This Discord account is not a tester on the Uncbox app yet.'
+      : 'Discord refused the voice permissions for this account. If you don’t own this app, ask its owner to add you under App Testers.';
+  }
+  if (/invalid_client|secret/i.test(msg)) {
+    return 'Discord wants a Client Secret, or turn on Public Client for this app.';
+  }
+  return msg ? `Discord said: ${msg}` : 'Authorization didn’t finish. Try again.';
 }
 
 /**
@@ -359,34 +389,6 @@ export function createDiscordBridge({ dataDir, onChange }) {
     await refreshChannel();
   }
 
-  function fixFor(err) {
-    // 'Missing "redirect_uri"': the app has no registered redirect, which PKCE sign-in needs.
-    if (/redirect/i.test(err?.message ?? '')) return 'redirect';
-    if (/invalid_client|secret/i.test(err?.message ?? '')) return 'public-client';
-    return '';
-  }
-
-  function friendlyAuthError(err) {
-    if (/redirect/i.test(err?.message ?? '')) {
-      return `This Discord app needs ${REDIRECT_URI} under OAuth2 → Redirects. Its settings just opened: add it, save, then connect again.`;
-    }
-    const msg = err?.message ?? '';
-    // Code 5000 covers every OAuth2 failure (including Cancel), so go by Discord's message.
-    if (/access_denied|cancel|closed/i.test(msg)) {
-      return 'The Discord prompt was closed. Scroll to the bottom of it and click Authorize.';
-    }
-    // Unapproved apps only accept their owner and listed App Testers; anyone else gets invalid_scope.
-    if (/invalid_scope/i.test(msg)) {
-      return snapshot().builtIn
-        ? 'This Discord account is not a tester on the Uncbox app yet.'
-        : 'Discord refused the voice permissions for this account. If you don’t own this app, ask its owner to add you under App Testers.';
-    }
-    if (/invalid_client|secret/i.test(msg)) {
-      return 'Discord wants a Client Secret, or turn on Public Client for this app.';
-    }
-    return msg ? `Discord said: ${msg}` : 'Authorization didn’t finish. Try again.';
-  }
-
   /** The live connection, once authorized; anything else is a 409 for the caller. */
   function ready() {
     if (!ipc || state.status !== 'ready') {
@@ -484,7 +486,7 @@ export function createDiscordBridge({ dataDir, onChange }) {
         await exchangeCode(code, pkce?.verifier);
         await authenticate();
       } catch (err) {
-        set({ status: 'needs-auth', error: friendlyAuthError(err), fix: fixFor(err) });
+        set({ status: 'needs-auth', error: friendlyAuthError(err, snapshot().builtIn), fix: fixFor(err) });
       }
     },
     async guilds() {
