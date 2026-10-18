@@ -1,6 +1,5 @@
 import { MAX_HISTORY, type MatchState, type RecordState, uid } from '../state/model';
 import type { MutatePreset } from '../state/useAppState';
-import { useArmed } from '../useArmed';
 import { Digits } from './Digits';
 import { Icon } from './Icon';
 import { kdaRatio } from './MatchPanel';
@@ -38,18 +37,19 @@ export function RecordPanel({ record, match, title, mutatePreset }: Props) {
       else d.record.losses++;
       Object.assign(d.match, { k: 0, d: 0, a: 0 });
     });
-  const { armed, trigger } = useArmed();
-  const reset = () => trigger(() => mutatePreset((d) => void (d.record = { wins: 0, losses: 0, history: [] })));
 
   return (
     <Panel
       id="record"
       title={title}
-      actions={
-        <button className={`icon-btn ${armed ? 'is-armed' : ''}`} title="New session" onClick={reset}>
-          {armed ? 'Clear?' : <Icon name="reset" />}
-        </button>
-      }
+      menu={[
+        {
+          label: 'Start a new session',
+          icon: 'reset',
+          confirm: 'Click again to clear the record',
+          onSelect: () => mutatePreset((d) => void (d.record = { wins: 0, losses: 0, history: [] })),
+        },
+      ]}
     >
       <div className="record">
         <div className="record__top">

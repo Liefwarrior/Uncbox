@@ -38,6 +38,19 @@ export function DiscordPanel({ pinned, title, mutate }: Props) {
       id="discord"
       label={title}
       empty={!ready || !d.channel}
+      menu={[
+        ready && editing && { label: 'Pin a voice channel', icon: 'pin', onSelect: () => setPicking(true) },
+        // Only when signed in through an app of your own; the built-in app has nothing to switch from.
+        d.reachable &&
+          !!d.clientId &&
+          d.status !== 'unconfigured' &&
+          d.status !== 'error' && {
+            label: 'Use a different Discord app',
+            icon: 'swap',
+            confirm: 'Click again to sign out',
+            onSelect: () => run(discordApi.forget),
+          },
+      ]}
       title={
         d.channel ? (
           <>
@@ -167,16 +180,6 @@ export function DiscordPanel({ pinned, title, mutate }: Props) {
           </>
         )}
         {error && <p className="error ctl">{error}</p>}
-        {editing && d.reachable && d.clientId && d.status !== 'unconfigured' && d.status !== 'error' && (
-          <button
-            type="button"
-            className="link-btn voice__switch"
-            title={`Current Application ID: ${d.clientId}`}
-            onClick={() => run(discordApi.forget)}
-          >
-            Use a different app
-          </button>
-        )}
       </div>
     </Panel>
   );

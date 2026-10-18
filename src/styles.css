@@ -792,6 +792,105 @@ input[type='color'] {
   opacity: 0;
 }
 
+/* ---------- undo toast and menus ---------- */
+
+.toast {
+  position: absolute;
+  bottom: 24px;
+  left: 50%;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 8px 8px 8px 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--panel-2);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+  font-size: 14px;
+  transform: translateX(-50%);
+  animation: rise 0.3s var(--ease-out);
+}
+.is-stream .toast {
+  display: none;
+}
+.toast__undo {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--accent);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.toast__undo:hover {
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+}
+
+.menu {
+  position: fixed;
+  z-index: 50;
+  display: grid;
+  min-width: 200px;
+  padding: 6px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--panel-2);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.5);
+  animation: rise 0.18s var(--ease-out);
+}
+.menu hr {
+  width: 100%;
+  margin: 4px 0;
+  border: 0;
+  border-top: 1px solid var(--border);
+}
+.menu__item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 10px;
+  border: 0;
+  border-radius: calc(var(--radius-sm) - 2px);
+  background: transparent;
+  font-size: 14px;
+  text-align: left;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.menu__item:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+}
+.menu__item:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.menu__item.is-armed {
+  color: var(--bad);
+}
+.menu__icon,
+.menu__check {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  color: var(--muted);
+}
+.menu__check {
+  border: 1.5px solid var(--border);
+  border-radius: 4px;
+}
+.menu__check.on {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+
 /* ---------- panel chrome ---------- */
 
 .panel {
@@ -1197,6 +1296,14 @@ input[type='color'] {
   object-fit: contain;
   transition: filter 0.5s;
 }
+.slot__add {
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+}
+.slot__art:hover .slot__add {
+  color: var(--accent);
+}
 .slot__text {
   display: flex;
   flex: 1;
@@ -1357,6 +1464,46 @@ input[type='color'] {
   display: flex;
   align-items: center;
   gap: 8px;
+}
+.list-editor {
+  display: grid;
+  gap: 8px;
+}
+.list-editor ol {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.list-editor li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.list-editor__n {
+  flex: none;
+  width: 20px;
+  color: var(--muted);
+  font-size: 13px;
+  text-align: right;
+}
+.list-editor input {
+  flex: 1;
+  min-width: 0;
+  padding: 5px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--panel-2);
+  font-size: 14px;
+}
+.list-editor input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+.list-editor .list-editor__label {
+  font-family: var(--font-display);
+  font-size: 16px;
 }
 .milestones__label {
   flex: 1;
@@ -2144,13 +2291,6 @@ input[type='color'] {
   content: '− ';
 }
 
-.chip--input {
-  width: 140px;
-  color: var(--text);
-  outline: none;
-  border-color: var(--accent);
-}
-
 .record__rate span {
   font-size: 13px;
   font-weight: 600;
@@ -2451,16 +2591,6 @@ input[type='color'] {
 .panel--window .panel__body {
   overflow: hidden;
 }
-.voice__switch {
-  align-self: flex-start;
-  margin-top: auto;
-  color: var(--muted);
-  font-size: 13px;
-}
-.voice__switch:hover {
-  color: var(--accent);
-}
-
 /* Character name and guild line sit centered, like a nameplate. */
 .character__head {
   justify-content: center;

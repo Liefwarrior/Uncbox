@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { PresetData } from '../state/model';
 import type { MutatePreset } from '../state/useAppState';
-import { useArmed } from '../useArmed';
 import { Digits } from './Digits';
 import { Icon } from './Icon';
 import { Panel } from './Panel';
@@ -43,18 +42,19 @@ export function RunPanel({ run, title, mutatePreset }: { run: PresetData['run'];
         t.startedAt = null;
       }
     });
-  const { armed, trigger } = useArmed();
-  const reset = () => trigger(() => mutatePreset((d) => void (d.run.timer = { startedAt: null, elapsedMs: 0 })));
 
   return (
     <Panel
       id="run"
       title={title}
-      actions={
-        <button className={`icon-btn ${armed ? 'is-armed' : ''}`} title="Reset timer" onClick={reset}>
-          {armed ? 'Reset?' : <Icon name="reset" />}
-        </button>
-      }
+      menu={[
+        {
+          label: 'Reset timer',
+          icon: 'reset',
+          confirm: 'Click again to reset',
+          onSelect: () => mutatePreset((d) => void (d.run.timer = { startedAt: null, elapsedMs: 0 })),
+        },
+      ]}
     >
       <div className="run">
         <input

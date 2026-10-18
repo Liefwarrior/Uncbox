@@ -24,15 +24,7 @@ export function CharacterPanel({ character: c, title, mutatePreset }: Props) {
     <Panel
       id="character"
       title={title}
-      actions={
-        <button
-          className={`icon-btn ${c.hardcore ? 'on' : ''}`}
-          title="Hardcore character (one life)"
-          onClick={() => set({ hardcore: !c.hardcore })}
-        >
-          <Icon name="flame" size={15} />
-        </button>
-      }
+      menu={[{ label: 'Hardcore (one life)', checked: c.hardcore, onSelect: () => set({ hardcore: !c.hardcore }) }]}
     >
       <div className="character" style={{ '--class': classColor } as CSSProperties}>
         <div className="character__head">

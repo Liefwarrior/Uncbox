@@ -3,15 +3,16 @@ import ReactGridLayout, { type Layout, verticalCompactor } from 'react-grid-layo
 import 'react-grid-layout/css/styles.css';
 import 'react-resizable/css/styles.css';
 import { sizeOf } from '../panels/catalog';
-import { type BoardId, GRID_COLS, GRID_ROWS, type GridItem, isWindowId } from '../state/model';
+import { type AppWindow, type BoardId, GRID_COLS, GRID_ROWS, type GridItem, isWindowId } from '../state/model';
 import type { MutatePreset } from '../state/useAppState';
+import { offerUndo } from '../undo';
 
 const MARGIN = 12;
 
 interface BoardApi {
   editing: boolean;
-  /** Hides a built-in panel; deletes an app window panel. */
-  hide: (id: BoardId) => void;
+  /** Hides a built-in panel or deletes an app window panel, with an Undo toast named after it. */
+  hide: (id: BoardId, name?: string) => void;
   /** Resize a panel's width so its content area matches an aspect ratio (width / height). */
   fitWidthToAspect: (id: BoardId, aspect: number) => void;
 }
@@ -79,11 +80,22 @@ export function Board({ layout, editing, mutatePreset, renderPanel }: Props) {
   const api = useMemo<BoardApi>(
     () => ({
       editing,
-      hide: (id) =>
+      hide: (id, name) => {
+        let item: GridItem | undefined;
+        let win: AppWindow | undefined;
         mutatePreset((d) => {
-          d.layout = d.layout.filter((item) => item.i !== id);
+          item = d.layout.find((it) => it.i === id) ?? item;
+          win = d.windows.find((w) => w.id === id) ?? win;
+          d.layout = d.layout.filter((it) => it.i !== id);
           if (isWindowId(id)) d.windows = d.windows.filter((w) => w.id !== id);
-        }),
+        });
+        offerUndo(`${name || win?.title || 'Panel'} hidden`, () =>
+          mutatePreset((d) => {
+            if (win && !d.windows.some((w) => w.id === id)) d.windows.push(win);
+            if (item && !d.layout.some((it) => it.i === id)) d.layout.push(item);
+          }),
+        );
+      },
       fitWidthToAspect: (id, aspect) =>
         mutatePreset((d) => {
           const item = d.layout.find((it) => it.i === id);

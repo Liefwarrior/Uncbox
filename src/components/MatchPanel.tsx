@@ -22,11 +22,7 @@ export function MatchPanel({ match, title, mutatePreset }: { match: MatchState; 
     <Panel
       id="match"
       title={title}
-      actions={
-        <button className="icon-btn" title="Reset KDA" onClick={() => set({ k: 0, d: 0, a: 0 })}>
-          <Icon name="reset" />
-        </button>
-      }
+      menu={[{ label: 'Reset kills, deaths and assists', icon: 'reset', onSelect: () => set({ k: 0, d: 0, a: 0 }) }]}
     >
       <div className="match">
         <input

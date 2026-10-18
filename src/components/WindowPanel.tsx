@@ -42,35 +42,23 @@ export function WindowPanel({ win, mutatePreset }: { win: AppWindow; mutatePrese
           win.title
         )
       }
-      actions={
-        <>
-          {stream && (
-            <>
-              <button
-                className={`icon-btn ${win.fit === 'cover' ? 'on' : ''}`}
-                title={win.fit === 'cover' ? 'Filling the panel (click to fit)' : 'Fitting inside the panel (click to fill)'}
-                onClick={() => set((w) => void (w.fit = w.fit === 'cover' ? 'contain' : 'cover'))}
-              >
-                <Icon name="fit" size={14} />
-              </button>
-              <button className={`icon-btn ${cropOpen ? 'on' : ''}`} title="Crop" onClick={() => setCropOpen((o) => !o)}>
-                <Icon name="crop" size={14} />
-              </button>
-              <button
-                className="icon-btn"
-                title="Resize the panel to the window's shape"
-                disabled={!aspect}
-                onClick={() => fitWidthToAspect(win.id, aspect)}
-              >
-                <Icon name="layout" size={14} />
-              </button>
-            </>
-          )}
-          <button className="icon-btn" title="Choose window" onClick={() => void pick()}>
-            <Icon name="monitor" size={14} />
-          </button>
-        </>
-      }
+      menu={[
+        // The window picker needs this click's user activation, so it opens straight from the menu.
+        { label: stream ? 'Choose another window' : 'Choose window', icon: 'monitor', onSelect: () => void pick() },
+        stream && 'divider',
+        stream && {
+          label: 'Fill the panel',
+          checked: win.fit === 'cover',
+          onSelect: () => set((w) => void (w.fit = w.fit === 'cover' ? 'contain' : 'cover')),
+        },
+        stream && { label: 'Crop edges', icon: 'crop', onSelect: () => setCropOpen(true) },
+        stream && {
+          label: 'Fit panel to window',
+          icon: 'fit',
+          disabled: !aspect,
+          onSelect: () => fitWidthToAspect(win.id, aspect),
+        },
+      ]}
     >
       {stream ? (
         <CroppedVideo stream={stream} fit={win.fit} crop={win.crop} onAspect={setAspect} />

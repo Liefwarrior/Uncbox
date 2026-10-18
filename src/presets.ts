@@ -67,7 +67,7 @@ export const PRESETS: Record<PresetId, PresetDef> = {
     blurb: 'Party, badges, Nuzlocke',
     titles: {},
     featured: ['game', 'camera', 'slots', 'chat', 'discord', 'run', 'progress', 'notes'],
-    slots: { variant: 'list', name: 'Empty', detail: 'Lv 5 · Adamant', showDown: true },
+    slots: { variant: 'list', name: 'Pokémon', detail: 'Level, nature', showDown: true },
     layout: [
       { i: 'game', x: 0, y: 0, w: 17, h: 17 },
       { i: 'camera', x: 17, y: 0, w: 7, h: 7 },
@@ -122,7 +122,7 @@ export const PRESETS: Record<PresetId, PresetDef> = {
     blurb: 'Leveling, raids',
     titles: { run: '/played', notes: 'Quest log' },
     featured: ['game', 'camera', 'character', 'chat', 'discord', 'progress', 'notes', 'run'],
-    slots: { variant: 'list', name: 'Empty', detail: 'Class', showDown: true },
+    slots: { variant: 'list', name: 'Name', detail: 'Class', showDown: true },
     layout: [
       { i: 'game', x: 0, y: 0, w: 17, h: 17 },
       { i: 'camera', x: 17, y: 0, w: 7, h: 7 },

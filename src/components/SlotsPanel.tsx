@@ -3,6 +3,7 @@ import { fileToAvatar, imageFromDrop } from '../image';
 import type { PresetDef } from '../presets';
 import { emptySlot, MAX_SLOTS, type SlotItem } from '../state/model';
 import type { MutatePreset } from '../state/useAppState';
+import { offerUndo } from '../undo';
 import { Icon } from './Icon';
 import { Panel } from './Panel';
 
@@ -18,6 +19,7 @@ interface Props {
 /** Pokémon party, SMITE build, WoW group: a short ordered list of named things with pictures. */
 export function SlotsPanel({ slots, title, def, mutatePreset }: Props) {
   const [dropTarget, setDropTarget] = useState<number | null>(null);
+  const firstEmpty = slots.findIndex((m) => !m.name && !m.detail && !m.image);
 
   const edit = (i: number, patch: Partial<SlotItem>) => mutatePreset((d) => void Object.assign(d.slots[i], patch));
   const onDrop = async (i: number, e: DragEvent) => {
@@ -40,26 +42,24 @@ export function SlotsPanel({ slots, title, def, mutatePreset }: Props) {
       id="slots"
       title={title}
       empty={slots.every((m) => !m.name && !m.detail && !m.image)}
-      actions={
-        <>
-          <button
-            className="icon-btn"
-            title="Remove last slot"
-            disabled={slots.length <= 1}
-            onClick={() => mutatePreset((d) => void d.slots.pop())}
-          >
-            <Icon name="minus" />
-          </button>
-          <button
-            className="icon-btn"
-            title="Add slot"
-            disabled={slots.length >= MAX_SLOTS}
-            onClick={() => mutatePreset((d) => void d.slots.push(emptySlot()))}
-          >
-            <Icon name="plus" />
-          </button>
-        </>
-      }
+      menu={[
+        {
+          label: 'Add a slot',
+          icon: 'plus',
+          disabled: slots.length >= MAX_SLOTS,
+          onSelect: () => mutatePreset((d) => void d.slots.push(emptySlot())),
+        },
+        {
+          label: 'Remove the last slot',
+          icon: 'minus',
+          disabled: slots.length <= 1,
+          onSelect: () => {
+            const last = slots[slots.length - 1];
+            mutatePreset((d) => void d.slots.pop());
+            offerUndo('Slot removed', () => mutatePreset((d) => void (d.slots.length < MAX_SLOTS && d.slots.push(last))));
+          },
+        },
+      ]}
     >
       <ol className={`slots slots--${def.variant}`}>
         {slots.map((m, i) => (
@@ -67,10 +67,19 @@ export function SlotsPanel({ slots, title, def, mutatePreset }: Props) {
             key={m.id}
             index={i}
             item={m}
+            hinted={i === firstEmpty}
             def={def}
             highlighted={dropTarget === i}
             onEdit={(patch) => edit(i, patch)}
-            onClear={() => mutatePreset((d) => void (d.slots[i] = { ...emptySlot(), id: m.id }))}
+            onClear={() => {
+              mutatePreset((d) => void (d.slots[i] = { ...emptySlot(), id: m.id }));
+              offerUndo(`${m.name || 'Slot'} cleared`, () =>
+                mutatePreset((d) => {
+                  const j = d.slots.findIndex((x) => x.id === m.id);
+                  if (j >= 0) d.slots[j] = m;
+                }),
+              );
+            }}
             onDragOver={(e) => {
               e.preventDefault();
               setDropTarget(i);
@@ -87,6 +96,8 @@ export function SlotsPanel({ slots, title, def, mutatePreset }: Props) {
 interface SlotProps {
   index: number;
   item: SlotItem;
+  /** Only the first empty slot shows example text, so an empty party doesn't read as six of the same thing. */
+  hinted: boolean;
   def: PresetDef['slots'];
   highlighted: boolean;
   onEdit: (patch: Partial<SlotItem>) => void;
@@ -96,7 +107,7 @@ interface SlotProps {
   onDrop: (e: DragEvent) => void;
 }
 
-function Slot({ index, item, def, highlighted, onEdit, onClear, onDragOver, onDragLeave, onDrop }: SlotProps) {
+function Slot({ index, item, hinted, def, highlighted, onEdit, onClear, onDragOver, onDragLeave, onDrop }: SlotProps) {
   const row = useRef<HTMLLIElement>(null);
   const file = useRef<HTMLInputElement>(null);
   const empty = !item.name && !item.detail && !item.image;
@@ -124,8 +135,16 @@ function Slot({ index, item, def, highlighted, onEdit, onClear, onDragOver, onDr
         <Icon name="grip" size={14} />
       </span>
 
-      <button className="slot__art" title="Set image (or drop one here)" onClick={() => file.current?.click()}>
-        {item.image ? <img src={item.image} alt="" /> : <span className="slot__initial">{item.name.slice(0, 1).toUpperCase()}</span>}
+      <button className="slot__art" title="Add a picture (or drop one here)" onClick={() => file.current?.click()}>
+        {item.image ? (
+          <img src={item.image} alt="" />
+        ) : item.name ? (
+          <span className="slot__initial">{item.name.slice(0, 1).toUpperCase()}</span>
+        ) : (
+          <span className="slot__add ctl">
+            <Icon name="image" size={18} />
+          </span>
+        )}
       </button>
       <input
         ref={file}
@@ -143,14 +162,14 @@ function Slot({ index, item, def, highlighted, onEdit, onClear, onDragOver, onDr
         <input
           className="ghost-input slot__name"
           value={item.name}
-          placeholder={def.variant === 'tiles' ? `${def.name} ${index + 1}` : def.name}
+          placeholder={hinted ? def.name : ''}
           onChange={(e) => onEdit({ name: e.target.value })}
         />
         {def.variant === 'list' && (
           <input
             className="ghost-input slot__detail"
             value={item.detail}
-            placeholder={def.detail}
+            placeholder={hinted ? def.detail : ''}
             onChange={(e) => onEdit({ detail: e.target.value })}
           />
         )}
@@ -158,7 +177,7 @@ function Slot({ index, item, def, highlighted, onEdit, onClear, onDragOver, onDr
 
       {down && <span className="slot__ko">Fainted</span>}
       <div className="slot__ctl ctl">
-        {def.showDown && (
+        {def.showDown && !empty && (
           <button
             className={`icon-btn ${item.down ? 'on' : ''}`}
             title={item.down ? 'Revive' : 'Mark fainted'}

@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Board } from './components/Board';
 import { Sidebar } from './components/Sidebar';
+import { UndoToast } from './components/UndoToast';
 import { renderPanel } from './panels';
 import { PRESETS } from './presets';
 import type { BoardId } from './state/model';
 import { useAppState } from './state/useAppState';
+import { dismissUndo } from './undo';
 
 function initialStreamMode() {
   const v = new URLSearchParams(window.location.search).get('stream');
@@ -51,6 +53,9 @@ export function App() {
     };
   }, [enterStream, exitStream]);
 
+  // An undo restores into the active preset, so it must not outlive a switch to another one.
+  useEffect(dismissUndo, [state.preset]);
+
   const def = PRESETS[state.preset];
   const data = state.presets[state.preset];
   const render = (id: BoardId) => renderPanel(id, { state, data, def, mutate, mutatePreset });
@@ -76,6 +81,7 @@ export function App() {
           mutatePreset={mutatePreset}
           renderPanel={render}
         />
+        <UndoToast />
       </main>
     </div>
   );

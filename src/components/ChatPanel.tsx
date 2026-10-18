@@ -1,10 +1,17 @@
 import { useEffect, useState } from 'react';
 import type { AppState } from '../state/model';
 import type { Mutate } from '../state/useAppState';
-import { emoteUrl, isBot, normalizeChannel, useTwitchChat } from '../twitch';
+import { type ChatStatus, emoteUrl, isBot, normalizeChannel, useTwitchChat } from '../twitch';
 import { useBoard } from './Board';
 import { Icon } from './Icon';
 import { Panel } from './Panel';
+
+const STATUS_TEXT: Record<ChatStatus, string> = {
+  idle: 'No channel',
+  connecting: 'Connecting…',
+  connected: 'Connected',
+  error: 'Could not join',
+};
 
 interface Props {
   twitch: AppState['twitch'];
@@ -37,18 +44,14 @@ export function ChatPanel({ twitch, title, mutate }: Props) {
           title
         )
       }
-      actions={
-        <>
-          <span className={`live-dot live-dot--${status}`} title={status} />
-          <button
-            className={`icon-btn ${twitch.hideBots ? 'on' : ''}`}
-            title={twitch.hideBots ? 'Bots hidden (Nightbot, StreamElements…)' : 'Showing bots'}
-            onClick={() => mutate((s) => void (s.twitch.hideBots = !s.twitch.hideBots))}
-          >
-            <Icon name="bot" size={15} />
-          </button>
-        </>
-      }
+      actions={channel && <span className={`live-dot live-dot--${status}`} title={STATUS_TEXT[status]} />}
+      menu={[
+        {
+          label: 'Hide bot messages',
+          checked: twitch.hideBots,
+          onSelect: () => mutate((s) => void (s.twitch.hideBots = !s.twitch.hideBots)),
+        },
+      ]}
     >
       {editing && (
         <form

@@ -162,7 +162,7 @@ export function GamePanel({ game, mutatePreset }: Props) {
               </button>
             </>
           )}
-          <button className="icon-btn" title="Hide the game window" onClick={() => hide('game')}>
+          <button className="icon-btn" title="Hide the game window" onClick={() => hide('game', 'Game')}>
             <Icon name="x" size={14} />
           </button>
         </div>
