@@ -35,7 +35,7 @@ const BASE_TITLES: Record<PanelId, string> = {
   match: 'Match',
   record: 'Session',
   character: 'Character',
-  discord: 'Voice',
+  discord: 'Discord',
 };
 
 const timer = () => ({ startedAt: null, elapsedMs: 0 });

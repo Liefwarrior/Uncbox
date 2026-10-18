@@ -10,6 +10,7 @@ import { mkdir, readFile, rename, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createDiscordBridge } from './discord.mjs';
+import { openInBrowser, pageFor } from './open.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const distDir = path.join(root, 'dist');
@@ -132,6 +133,22 @@ async function handleDiscord(req, res, url) {
 
 async function handleApi(req, res, url) {
   if (url.pathname === '/api/discord' || url.pathname.startsWith('/api/discord/')) return handleDiscord(req, res, url);
+
+  if (url.pathname === '/api/open' && req.method === 'POST') {
+    // Only the PC Uncbox runs on may open pages on it, even when HOST exposes the server to the LAN.
+    const ip = req.socket.remoteAddress ?? '';
+    if (!['127.0.0.1', '::1', '::ffff:127.0.0.1'].includes(ip)) return sendJson(res, 403, { error: 'Local only' });
+    let body;
+    try {
+      body = await readJson(req);
+    } catch (err) {
+      return sendJson(res, err.status || 400, { error: err.message });
+    }
+    const target = pageFor(body.target, { discordAppId: discord.snapshot().clientId || discord.appId() });
+    if (!target) return sendJson(res, 400, { error: 'Unknown page' });
+    openInBrowser(target);
+    return sendJson(res, 200, { ok: true, url: target });
+  }
 
   if (url.pathname === '/api/state') {
     if (req.method === 'GET') return sendJson(res, 200, await loadState());

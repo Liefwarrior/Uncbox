@@ -183,6 +183,7 @@ export function createDiscordBridge({ dataDir, onChange }) {
     members: [],
     speaking: new Set(),
     self: { mute: false, deaf: false },
+    fix: '',
   };
   let channelSubs = [];
   let emitTimer = null;
@@ -194,6 +195,8 @@ export function createDiscordBridge({ dataDir, onChange }) {
   const snapshot = () => ({
     status: state.status,
     error: state.error,
+    /** A setting on the Discord app blocks sign-in: 'redirect' or 'public-client'. */
+    fix: state.fix,
     configured: Boolean(clientId()),
     builtIn: !config.clientId && Boolean(BUILT_IN_CLIENT_ID),
     hasBuiltIn: Boolean(BUILT_IN_CLIENT_ID),
@@ -254,12 +257,18 @@ export function createDiscordBridge({ dataDir, onChange }) {
 
   async function exchangeCode(code, verifier) {
     const params = { grant_type: 'authorization_code', code, ...(verifier ? { code_verifier: verifier } : {}) };
-    // RPC authorization has no browser redirect, but Discord may still want the registered URI.
+    // RPC sign-in has no browser redirect, so try without one. Some apps still make Discord ask for
+    // a registered redirect; retry with the usual one, and if the app has none, say exactly that.
     try {
       await tokenRequest(params);
     } catch (err) {
       if (!/redirect/i.test(err.message)) throw err;
-      await tokenRequest({ ...params, redirect_uri: REDIRECT_URI });
+      try {
+        await tokenRequest({ ...params, redirect_uri: REDIRECT_URI });
+      } catch (retry) {
+        if (/redirect/i.test(retry.message)) throw Object.assign(new Error(retry.message), { code: 'NEEDS_REDIRECT' });
+        throw retry;
+      }
     }
   }
 
@@ -347,7 +356,14 @@ export function createDiscordBridge({ dataDir, onChange }) {
     await refreshChannel();
   }
 
+  function fixFor(err) {
+    if (err?.code === 'NEEDS_REDIRECT') return 'redirect';
+    if (/invalid_client|secret/i.test(err?.message ?? '')) return 'public-client';
+    return '';
+  }
+
   function friendlyAuthError(err) {
+    if (err?.code === 'NEEDS_REDIRECT') return `Discord wants one redirect on this app: add ${REDIRECT_URI} under OAuth2 → Redirects, then try again.`;
     // Unapproved apps only accept their listed App Testers; anyone else gets invalid_scope.
     if (err?.code === 5000 || /invalid_scope/i.test(err?.message ?? '')) {
       return snapshot().builtIn
@@ -395,7 +411,7 @@ export function createDiscordBridge({ dataDir, onChange }) {
       ipc = null;
       clearChannel();
       // 4000 = invalid client ID: retrying will not help until the config changes.
-      if (reason?.code === 4000) set({ status: 'error', error: 'Discord rejected that Client ID.' });
+      if (reason?.code === 4000) set({ status: 'error', error: "Discord doesn't recognize that Application ID." });
       else {
         set({ status: 'offline', error: '' });
         scheduleRetry();
@@ -407,7 +423,7 @@ export function createDiscordBridge({ dataDir, onChange }) {
     } catch (err) {
       if (ipc !== conn) return;
       ipc = null;
-      if (err?.code === 4000) set({ status: 'error', error: 'Discord rejected that Client ID.' });
+      if (err?.code === 4000) set({ status: 'error', error: "Discord doesn't recognize that Application ID." });
       else {
         set({ status: 'offline', error: '' });
         scheduleRetry();
@@ -433,10 +449,11 @@ export function createDiscordBridge({ dataDir, onChange }) {
       await connect();
     },
     snapshot,
+    appId: () => clientId(),
     async configure({ clientId, clientSecret }) {
       const id = String(clientId ?? '').trim();
       const secret = String(clientSecret ?? '').trim();
-      if (!/^\d{15,22}$/.test(id)) throw Object.assign(new Error('Client ID should be a long number'), { status: 400 });
+      if (!/^\d{15,22}$/.test(id)) throw Object.assign(new Error('The Application ID should be a long number'), { status: 400 });
       // No secret is fine: that app must have Public Client on, and sign-in uses PKCE.
       const keepSecret = config.clientId === id ? config.clientSecret : undefined;
       config = { ...config, clientId: id, clientSecret: secret || keepSecret };
@@ -445,7 +462,7 @@ export function createDiscordBridge({ dataDir, onChange }) {
     },
     async authorize() {
       if (!ipc) throw Object.assign(new Error('Discord is not connected'), { status: 409 });
-      set({ status: 'authorizing', error: '' });
+      set({ status: 'authorizing', error: '', fix: '' });
       try {
         const pkce = clientSecret() ? null : pkcePair();
         const args = { client_id: clientId(), scopes: SCOPES };
@@ -454,7 +471,7 @@ export function createDiscordBridge({ dataDir, onChange }) {
         await exchangeCode(code, pkce?.verifier);
         await authenticate();
       } catch (err) {
-        set({ status: 'needs-auth', error: friendlyAuthError(err) });
+        set({ status: 'needs-auth', error: friendlyAuthError(err), fix: fixFor(err) });
       }
     },
     async guilds() {

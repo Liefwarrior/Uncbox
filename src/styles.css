@@ -2299,3 +2299,16 @@ input[type='color'] {
 .picker__list svg {
   color: var(--accent);
 }
+
+.link-btn {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--accent);
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+.voice__auth .btn--small {
+  justify-self: start;
+}

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { discordApi, type Guild, useDiscord, type VoiceChannel } from '../discord';
+import { discordApi, type Guild, openPage, useDiscord, type VoiceChannel } from '../discord';
 import type { AppState, PinnedChannel } from '../state/model';
 import type { Mutate } from '../state/useAppState';
 import { useBoard } from './Board';
@@ -22,6 +22,11 @@ export function DiscordPanel({ pinned, title, mutate }: Props) {
   const [error, setError] = useState('');
   const [picking, setPicking] = useState(false);
   const ready = d.status === 'ready';
+
+  // A Discord app setting is blocking sign-in: take the user straight to that app's OAuth2 page.
+  useEffect(() => {
+    if (editing && d.fix) openPage('discord-oauth', true);
+  }, [editing, d.fix]);
 
   const run = (action: () => Promise<unknown>) => {
     setError('');
@@ -85,6 +90,12 @@ export function DiscordPanel({ pinned, title, mutate }: Props) {
               {d.status === 'authorizing' ? 'Approve in Discord…' : d.builtIn ? 'Connect Discord' : 'Authorize in Discord'}
             </button>
             {d.error && <p className="error">{d.error}</p>}
+            {d.fix === 'redirect' && <CopyButton text="http://localhost" />}
+            {d.fix && (
+              <button className="btn btn--small" onClick={() => openPage('discord-oauth')}>
+                Open app settings
+              </button>
+            )}
           </div>
         ) : (
           <>
@@ -157,11 +168,31 @@ export function DiscordPanel({ pinned, title, mutate }: Props) {
   );
 }
 
+function CopyButton({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <button
+      className="btn btn--small"
+      onClick={() =>
+        navigator.clipboard.writeText(text).then(() => {
+          setCopied(true);
+          setTimeout(() => setCopied(false), 1500);
+        })
+      }
+    >
+      {copied ? 'Copied' : `Copy ${text}`}
+    </button>
+  );
+}
+
 function Setup({ error, clientId }: { error: string; clientId: string }) {
   const [id, setId] = useState(clientId);
   const [secret, setSecret] = useState('');
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
+
+  // The Application ID is the one thing Uncbox can't fill in itself, so open the page that has it.
+  useEffect(() => openPage('discord-portal', true), []);
 
   return (
     <form
@@ -178,22 +209,20 @@ function Setup({ error, clientId }: { error: string; clientId: string }) {
     >
       <ol>
         <li>
-          Create an app at{' '}
-          <a href="https://discord.com/developers/applications" target="_blank" rel="noreferrer">
-            discord.com/developers
-          </a>
-          .
+          In the Developer Portal that just opened, create a blank app (or{' '}
+          <button type="button" className="link-btn" onClick={() => openPage('discord-portal')}>
+            open it again
+          </button>
+          ).
         </li>
-        <li>
-          Under OAuth2, add the redirect <code>http://localhost</code> and turn on Public Client.
-        </li>
-        <li>Paste the Client ID. A secret is only needed if Public Client is off.</li>
+        <li>Under OAuth2, turn on Public Client.</li>
+        <li>Paste its Application ID here.</li>
       </ol>
-      <input value={id} placeholder="Client ID" inputMode="numeric" onChange={(e) => setId(e.target.value)} />
+      <input value={id} placeholder="Application ID" inputMode="numeric" onChange={(e) => setId(e.target.value)} />
       <input
         value={secret}
         type="password"
-        placeholder="Client Secret (optional)"
+        placeholder="Client Secret (only if Public Client is off)"
         autoComplete="off"
         onChange={(e) => setSecret(e.target.value)}
       />

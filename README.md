@@ -71,7 +71,7 @@ button shows them.
 
 ## Discord voice
 
-The **Voice** panel shows who is in your Discord voice channel, lights people up as they talk,
+The **Discord** panel shows who is in your Discord voice channel, lights people up as they talk,
 and shows mute and deafen icons, all in the preset's theme. You can also mute, deafen and leave from
 the panel, and pin channels (say *Locker Room Heaven* in *Bumta Buds*) to join them with one click.
 Audio still runs through the Discord app; Uncbox just drives it.
@@ -81,10 +81,10 @@ It talks to the Discord app on your PC, which only allows this for apps you auth
 - **With the official Uncbox app** (its ID in `server/discord-app.json`): click **Connect Discord**
   and approve the prompt in Discord. Until Discord approves the app, only its listed App Testers
   can connect. See [docs/discord-rpc-approval.md](docs/discord-rpc-approval.md).
-- **With your own app:** create one at
-  [discord.com/developers/applications](https://discord.com/developers/applications), add the
-  OAuth2 redirect `http://localhost`, turn on **Public Client**, and paste its Client ID into the
-  Voice panel. A Client Secret is only needed if Public Client is off.
+- **With your own app:** create a blank app at
+  [discord.com/developers/applications](https://discord.com/developers/applications), turn on
+  **Public Client** under OAuth2, and paste its Application ID into the Discord panel. If Discord
+  ever asks for a redirect, the panel says so and gives you the address to add.
 
 Sign-in uses PKCE, so no secret is needed or shipped. Tokens (and a secret, if you entered one)
 stay in `data/discord.json` on this PC and never reach the browser. Discord's own StreamKit overlay can't be used here: Discord blocks it from being embedded

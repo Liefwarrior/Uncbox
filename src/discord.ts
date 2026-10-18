@@ -17,6 +17,8 @@ export interface VoiceMember {
 export interface DiscordSnapshot {
   status: DiscordStatus;
   error: string;
+  /** A Discord app setting blocks sign-in; Uncbox opens that app's OAuth2 page for it. */
+  fix: '' | 'redirect' | 'public-client';
   configured: boolean;
   /** Signed in through Uncbox's own Discord app rather than one the user made. */
   builtIn: boolean;
@@ -42,6 +44,7 @@ export interface VoiceChannel {
 const EMPTY: DiscordSnapshot = {
   status: 'connecting',
   error: '',
+  fix: '',
   configured: false,
   builtIn: false,
   hasBuiltIn: false,
@@ -91,3 +94,22 @@ export const discordApi = {
   leave: () => call('/leave', {}),
   voice: (patch: { mute?: boolean; deaf?: boolean }) => call('/voice', patch),
 };
+
+/**
+ * Opens a setup page in the default browser, via the local server. With once = true it opens at
+ * most once per browser session, so reloading the dashboard does not keep popping windows.
+ */
+export function openPage(target: 'discord-portal' | 'discord-oauth', once = false) {
+  const key = `uncbox:opened:${target}`;
+  try {
+    if (once && sessionStorage.getItem(key)) return;
+    sessionStorage.setItem(key, '1');
+  } catch {
+    // Storage blocked: open anyway.
+  }
+  void fetch('/api/open', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ target }),
+  });
+}
