@@ -4,7 +4,9 @@ import { defaultPresetData } from '../state/hydrate';
 import type { Mutate, MutatePreset, SyncStatus } from '../state/useAppState';
 import { useArmed } from '../useArmed';
 import { placePanel } from '../layout';
+import { PANEL_INFO } from '../panels/catalog';
 import { Icon } from './Icon';
+import { SetupList } from './SetupList';
 
 const STATUS_TEXT: Record<SyncStatus, string> = {
   loading: 'Loading…',
@@ -50,7 +52,10 @@ export function Sidebar({ state, mutate, mutatePreset, status, onStreamMode }: P
       <label>
         <input type="checkbox" checked={shown.has(id)} onChange={(e) => toggle(id, e.target.checked)} />
         <span className="toggle" />
-        {panelTitle(def, id)}
+        <span className="toggles__text">
+          {panelTitle(def, id)}
+          <small>{PANEL_INFO[id].hint}</small>
+        </span>
       </label>
     </li>
   );
@@ -63,7 +68,7 @@ export function Sidebar({ state, mutate, mutatePreset, status, onStreamMode }: P
           <span>Uncbox</span>
         </div>
 
-        <h3>Preset</h3>
+        <h3>Game</h3>
         <div className="presets">
           {PRESET_IDS.map((id) => (
             <button
@@ -77,21 +82,23 @@ export function Sidebar({ state, mutate, mutatePreset, status, onStreamMode }: P
           ))}
         </div>
 
+        <SetupList state={state} mutatePreset={mutatePreset} />
+
         <button className="stream-btn" onClick={onStreamMode}>
           <Icon name="cast" /> Stream mode
         </button>
-        <p className="hint">F8 or Esc to exit.</p>
+        <p className="hint">Full screen, edit controls hidden. Esc to come back.</p>
 
-        <h3>Panels</h3>
+        <h3>On screen</h3>
         <ul className="toggles">{def.featured.map(row)}</ul>
         {more.length > 0 && (
           <details className="more">
-            <summary>More panels</summary>
+            <summary>More</summary>
             <ul className="toggles">{more.map(row)}</ul>
           </details>
         )}
         <button className="side-link" onClick={addWindow}>
-          <Icon name="plus" /> Add app window
+          <Icon name="plus" /> Add an app window
         </button>
         <button className={`side-link ${armed ? 'is-armed' : ''}`} onClick={resetLayout}>
           <Icon name="layout" /> {armed ? 'Reset layout?' : 'Reset layout'}

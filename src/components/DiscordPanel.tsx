@@ -80,13 +80,14 @@ export function DiscordPanel({ pinned, title, mutate }: Props) {
             <Setup error={d.error} clientId={d.clientId} />
           ) : null
         ) : d.status === 'offline' ? (
-          <p className="voice__note ctl">Discord isn’t running.</p>
+          <p className="voice__note ctl">Open the Discord app. This connects by itself.</p>
         ) : d.status === 'connecting' ? (
           <p className="voice__note ctl">Connecting to Discord…</p>
         ) : d.status === 'needs-auth' || d.status === 'authorizing' ? (
           <div className="voice__auth ctl">
             <button
               className="btn btn--accent"
+              data-setup
               disabled={d.status === 'authorizing'}
               onClick={() => run(discordApi.authorize)}
             >

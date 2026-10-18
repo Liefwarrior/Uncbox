@@ -8,9 +8,9 @@ import { CroppedVideo } from './CroppedVideo';
 import { Icon, type IconName } from './Icon';
 
 const SOURCES: { id: VideoSource; label: string; icon: IconName; hint: string }[] = [
-  { id: 'device', label: 'Capture device', icon: 'video', hint: 'Capture card or camera input' },
-  { id: 'window', label: 'Window', icon: 'monitor', hint: 'Emulator, PC game or full screen' },
-  { id: 'chroma', label: 'Green screen', icon: 'droplet', hint: 'Solid color to key out in OBS' },
+  { id: 'device', label: 'Capture card', icon: 'video', hint: 'A console plugged into this PC' },
+  { id: 'window', label: 'Window', icon: 'monitor', hint: 'An emulator or PC game' },
+  { id: 'chroma', label: 'Green screen', icon: 'droplet', hint: 'Keep your game capture in OBS' },
 ];
 
 const FITS: { id: VideoFit; label: string }[] = [
@@ -59,15 +59,21 @@ export function GamePanel({ game, mutatePreset }: Props) {
         <div className="game-empty">
           {game.source === 'none' && (
             <>
-              <h3>Choose game source</h3>
+              <h3>Where is your game?</h3>
               <div className="source-row">
-                {SOURCES.map((s) => (
-                  <button key={s.id} className="btn source-btn" onClick={() => choose(s.id)}>
-                    <Icon name={s.icon} size={18} /> {s.label}
+                {SOURCES.map((s, i) => (
+                  <button
+                    key={s.id}
+                    className="source-card"
+                    data-setup={i === 0 ? '' : undefined}
+                    onClick={() => choose(s.id)}
+                  >
+                    <Icon name={s.icon} size={22} />
+                    <strong>{s.label}</strong>
+                    <span>{s.hint}</span>
                   </button>
                 ))}
               </div>
-              <p className="muted">Capture card for consoles, window for emulators and PC games, green screen to key out in OBS.</p>
             </>
           )}
           {game.source === 'device' && (

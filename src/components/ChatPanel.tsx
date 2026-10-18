@@ -59,7 +59,7 @@ export function ChatPanel({ twitch, title, mutate }: Props) {
           }}
         >
           <Icon name="message" size={14} />
-          <input value={draft} placeholder="Twitch channel" onChange={(e) => setDraft(e.target.value)} onBlur={commit} />
+          <input value={draft} placeholder="Your Twitch channel name" data-setup onChange={(e) => setDraft(e.target.value)} onBlur={commit} />
         </form>
       )}
       {!channel ? (

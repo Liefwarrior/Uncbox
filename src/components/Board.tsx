@@ -114,7 +114,7 @@ export function Board({ layout, editing, mutatePreset, renderPanel }: Props) {
             onLayoutChange={onLayoutChange}
           >
             {layout.map((item, index) => (
-              <div key={item.i} className="board__cell">
+              <div key={item.i} className="board__cell" data-panel={item.i}>
                 <div className="board__inner" style={{ '--i': index } as CSSProperties}>
                   {renderPanel(item.i)}
                 </div>

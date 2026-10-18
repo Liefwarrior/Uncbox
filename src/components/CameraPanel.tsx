@@ -55,7 +55,7 @@ export function CameraPanel({ camera, title, mutate }: { camera: CameraSettings;
         <div className="camera-empty ctl">
           {!camera.enabled ? (
             <>
-              <button className="btn btn--accent ctl" onClick={() => setEnabled(true)}>
+              <button className="btn btn--accent ctl" data-setup onClick={() => setEnabled(true)}>
                 <Icon name="video" /> Start camera
               </button>
               <p className="muted ctl">Using OBS for your camera? Hide this panel.</p>
