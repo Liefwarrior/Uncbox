@@ -1,4 +1,4 @@
-## Interface: 11507, 11508, 11509, 11510, 11600
+## Interface: 16001, 16002, 11509
 ## Title: Uncbox
 ## Notes: Shows your character and quest log on your Uncbox stream dashboard.
 ## Author: Liefwarrior

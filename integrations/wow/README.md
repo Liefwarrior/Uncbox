@@ -10,8 +10,8 @@ for the game panel, so it reads the strip from that video and crops it out. View
 
 1. In the WoW preset, click **Connect WoW** in the Get set up list, then **Install addon** in the
    Quest log. Uncbox finds WoW in the usual places and copies the addon in. If it can't find WoW,
-   it opens the folder with the addon: copy `Uncbox` into
-   `World of Warcraft\_classic_era_\Interface\AddOns` (or whichever version you play).
+   it opens the folder with the addon: copy `Uncbox` into WoW Forever's AddOns folder,
+   `World of Warcraft\_classic_beta_\Interface\AddOns` during the beta.
 2. Start WoW, or type `/reload` if it's open. If Uncbox shows as out of date in the AddOns list on
    the character screen, tick **Load out of date AddOns**.
 3. Show WoW in the game panel as a **Window**.
@@ -20,10 +20,11 @@ Hardcore stays a manual switch in the Character panel's ⋯ menu.
 
 ## Good to know
 
+- It's made for WoW Forever (Interface 16001) and also loads in Classic Era.
 - `/uncbox` hides or shows the strip. While it's hidden, the dashboard stops updating.
 - The strip has to be visible on screen: keep other windows and addon frames off the top-left
   corner. Alt+Z doesn't hide it.
-- Quests under a collapsed header in your quest log are skipped.
+- Quests under a collapsed header in your quest log may be skipped.
 - It works through a capture card too, as long as the picture isn't scaled down too far.
 
 ## What's in here
