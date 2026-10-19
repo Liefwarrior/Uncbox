@@ -8,11 +8,11 @@ import { fileURLToPath } from 'node:url';
 
 export const ADDON_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), 'addon');
 
-/** Where WoW usually lives: each drive's Program Files folders, its root and a Games folder. */
+/** Where WoW usually lives: each drive's Program Files folders, its root, and Games and Battle.net folders. */
 export function defaultRoots() {
   const roots = [];
   for (const drive of 'CDEFGH') {
-    for (const dir of ['Program Files (x86)', 'Program Files', '', 'Games']) {
+    for (const dir of ['Program Files (x86)', 'Program Files', '', 'Games', 'Battle.net']) {
       roots.push(path.win32.join(`${drive}:\\`, dir, 'World of Warcraft'));
     }
   }

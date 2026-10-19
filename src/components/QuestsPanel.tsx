@@ -13,8 +13,9 @@ const post = (url: string, body?: object) =>
     async (r) => (r.ok ? r.json() : Promise.reject(new Error((await r.json().catch(() => null))?.error ?? r.statusText))),
   );
 
-/** "_classic_era_" → "classic era" */
-const flavorName = (flavor: string) => flavor.replace(/^_+|_+$/g, '').replace(/_/g, ' ');
+/** "_classic_era_" → "classic era"; the WoW Forever beta lives in _classic_beta_. */
+const flavorName = (flavor: string) =>
+  flavor === '_classic_beta_' ? 'Forever beta' : flavor.replace(/^_+|_+$/g, '').replace(/_/g, ' ');
 
 /** "Kobold Vermin slain: 4/10" → ["Kobold Vermin slain", "4/10"] */
 function splitProgress(text: string): [string, string] {
