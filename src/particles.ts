@@ -3,8 +3,8 @@ import { loadSlim } from '@tsparticles/slim';
 import type { BackgroundId } from './backgrounds';
 
 // Loaded on demand (see Backdrop), so the animation library only downloads for people who pick an
-// animated background. Everything moves slowly and runs at 30 fps: it sits behind the game and
-// shouldn't compete with it, on screen or for the GPU.
+// animated background. It draws once per screen refresh, up to 120 fps, so motion stays smooth on
+// high-refresh monitors; the shapes are few and slow, so that costs the game almost nothing.
 
 export interface Palette {
   accent: string;
@@ -17,7 +17,7 @@ const ready = loadSlim(tsParticles);
 function optionsFor(id: BackgroundId, c: Palette, still: boolean): ISourceOptions {
   const base: ISourceOptions = {
     fullScreen: { enable: false },
-    fpsLimit: 30,
+    fpsLimit: 120,
     detectRetina: true,
     pauseOnBlur: false,
     pauseOnOutsideViewport: true,
