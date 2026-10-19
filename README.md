@@ -2,33 +2,16 @@
 
 <img src="assets/branding/uncbox-icon.svg" alt="" width="88" height="88">
 
-# Uncbox
 
-**Your whole stream on one screen.** The game, your camera, Twitch chat, Discord voice and live
-stats, arranged the way you like and styled to match the game you're playing.
-
-[![Buy Me a Coffee](https://img.shields.io/badge/Buy_me_a_coffee-FFDD00?style=for-the-badge&logo=buymeacoffee&logoColor=black)](https://www.buymeacoffee.com/YOUR_HANDLE)
+[![Buy Me a Coffee](https://img.shields.io/badge/Buy_me_a_coffee-FFDD00?style=for-the-badge&logo=buymeacoffee&logoColor=black)](https://www.buymeacoffee.com/liefwarrior)
 <!-- TODO(Liefwarrior): replace YOUR_HANDLE above (and in Support below) with your Buy Me a Coffee page. -->
 
-<img src="docs/screenshots/smite2.webp" alt="Uncbox in stream mode with the SMITE 2 preset: game, camera, chat, match stats, win record, item build and Discord voice" width="100%">
-
-<sub>Sample data. Your game and camera fill the two big frames.</sub>
 
 </div>
 
-## Why Uncbox
-
-- **One window to capture.** Point OBS at Uncbox and everything around your game comes along:
-  chat, voice, stats, notes, other apps.
-- **Looks made for the game.** Each game preset has its own colors, fonts and frame style, and
-  every panel follows it, captured windows included.
-- **Simple to run live.** Tap a counter, log a win, check off a badge. A phone or second
-  monitor can drive it while the captured screen stays clean.
-- **Nothing empty on stream.** A panel with nothing to show (camera off, no chat yet) stays off
-  stream until it does.
-- **Runs on your PC.** No account, no cloud, no subscription. Your data stays in one file.
-
 ## Presets
+
+Note:  These are planned integrations, they may not work and may result in the sudden loss of DKP
 
 <table>
   <tr>
