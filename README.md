@@ -166,6 +166,8 @@ server/open.mjs            opens setup pages in the default browser (fixed list 
 server/clips.mjs           saves and serves clips; server/hotkey.mjs watches the clip key
 src/clips/                 instant replay: the encoder worker, its store, the clip keys
 src/events.ts              the page's one live connection to /api/events
+native/UncboxShell/        spike: full-screen Windows app where you play the game in the panel
+                           (see native/README.md); src/native.ts is the page's side
 src/panels/catalog.ts      every panel type: title, sidebar hint, default and minimum size
 src/panels/index.tsx       which component draws each panel type
 src/presets.ts             presets: titles, default layouts, starting data

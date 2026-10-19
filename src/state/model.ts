@@ -40,7 +40,8 @@ export interface GridItem {
   h: number;
 }
 
-export type VideoSource = 'none' | 'device' | 'window' | 'chroma';
+/** 'native' is the game's own window placed in the panel, in the native shell (src/native.ts). */
+export type VideoSource = 'none' | 'device' | 'window' | 'chroma' | 'native';
 export type VideoFit = 'contain' | 'cover' | 'stretch';
 
 export interface Crop {

@@ -2,17 +2,21 @@ import { useState } from 'react';
 import { useWowLink } from '../../integrations/wow/useWowLink';
 import { useReplayBuffer } from '../clips/replay';
 import { useDeviceStream, useVideoDevices, useWindowStream } from '../media';
+import { shell } from '../native';
 import type { ClipSettings, GameSettings, PresetData, VideoFit, VideoSource } from '../state/model';
 import type { MutatePreset } from '../state/useAppState';
 import { useBoard } from './Board';
 import { CropEditor } from './CropEditor';
 import { CroppedVideo } from './CroppedVideo';
 import { Icon, type IconName } from './Icon';
+import { NativeGame, useNativeGame } from './NativeGame';
 
 const SOURCES: { id: VideoSource; label: string; icon: IconName; hint: string }[] = [
   { id: 'device', label: 'Capture card', icon: 'video', hint: 'A console plugged into this PC' },
   { id: 'window', label: 'Window', icon: 'monitor', hint: 'An emulator or PC game' },
   { id: 'chroma', label: 'Green screen', icon: 'droplet', hint: 'Keep your game capture in OBS' },
+  // Only in the native shell, which can move a game's own window into the panel.
+  ...(shell ? [{ id: 'native' as const, label: 'Play here', icon: 'play' as const, hint: 'Your game itself, played right in Uncbox' }] : []),
 ];
 
 const FITS: { id: VideoFit; label: string }[] = [
@@ -36,6 +40,7 @@ export function GamePanel({ game, wow, clips, mutatePreset }: Props) {
   const devices = useVideoDevices(device.stream);
   const [cropOpen, setCropOpen] = useState(false);
   const [aspect, setAspect] = useState(0);
+  const native = useNativeGame(game.source === 'native');
 
   const stream = game.source === 'device' ? device.stream : game.source === 'window' ? win.stream : null;
   const error = game.source === 'device' ? device.error : game.source === 'window' ? win.error : null;
@@ -54,10 +59,12 @@ export function GamePanel({ game, wow, clips, mutatePreset }: Props) {
 
   return (
     <section
-      className={`panel panel--game ${game.source === 'chroma' ? 'is-chroma' : ''} ${!stream && game.source !== 'chroma' ? 'is-empty' : ''}`}
+      className={`panel panel--game ${game.source === 'chroma' ? 'is-chroma' : ''} ${game.source === 'native' ? 'is-native' : ''} ${!stream && game.source !== 'chroma' && !(game.source === 'native' && native.attached) ? 'is-empty' : ''}`}
       style={game.source === 'chroma' ? { background: game.chroma } : undefined}
     >
-      {stream ? (
+      {game.source === 'native' ? (
+        <NativeGame game={native} editing={editing} />
+      ) : stream ? (
         <CroppedVideo
           stream={stream}
           fit={game.fit}
@@ -137,6 +144,23 @@ export function GamePanel({ game, wow, clips, mutatePreset }: Props) {
             <button className="btn" onClick={() => void win.pick()}>
               Choose window
             </button>
+          )}
+          {game.source === 'native' && native.attached && !native.picking && (
+            <>
+              <button className="btn" title="Hand the keyboard and controller to the game" onClick={native.play}>
+                <Icon name="play" /> Play
+              </button>
+              <button
+                className="btn"
+                title="The game gets the whole screen at its own resolution. Ctrl+Shift+F12 brings Uncbox back."
+                onClick={native.fullScreen}
+              >
+                <Icon name="fit" /> Full screen
+              </button>
+              <button className="btn" onClick={native.pick}>
+                Change game
+              </button>
+            </>
           )}
           {game.source === 'chroma' && (
             <label className="inline" title="Key this color out in OBS">

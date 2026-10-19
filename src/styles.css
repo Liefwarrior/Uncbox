@@ -1406,6 +1406,61 @@ kbd {
   cursor: grab;
 }
 
+/* Play here (native shell): the game's own window shows through this box, so nothing may be
+   drawn over it. While editing, the toolbar stays up in its own row and the game goes below it. */
+.game-hole {
+  position: absolute;
+  inset: 0;
+}
+.is-editing .panel--game.is-native {
+  display: flex;
+  flex-direction: column;
+}
+.is-editing .panel--game.is-native .game-toolbar {
+  position: relative;
+  inset: auto;
+  margin: 12px 12px 8px;
+  opacity: 1;
+  transform: none;
+}
+.is-editing .panel--game.is-native .game-hole {
+  position: relative;
+  flex: 1;
+  order: 1;
+}
+.window-list {
+  display: grid;
+  gap: 4px;
+  width: min(420px, 100%);
+  max-height: 50%;
+  margin: 4px 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+.window-list__item {
+  display: grid;
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--panel-2);
+  text-align: left;
+  cursor: pointer;
+}
+.window-list__item:hover {
+  border-color: var(--accent);
+}
+.window-list__item strong {
+  overflow: hidden;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.window-list__item small {
+  color: var(--muted);
+}
+
 .crop-editor {
   position: absolute;
   top: 64px;
