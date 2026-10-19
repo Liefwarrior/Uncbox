@@ -3,14 +3,19 @@
 //
 //   node server/index.mjs          serve the built app from dist/
 //   node server/index.mjs --dev    serve through Vite with hot reload
+//
+// Always on http://localhost:5170. Once `npm run setup-domain` has made a certificate, the built
+// app is also served at https://unc.box (dev mode stays on localhost, where hot reload works).
 
 import http from 'node:http';
+import https from 'node:https';
 import { createReadStream } from 'node:fs';
 import { mkdir, readFile, rename, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createDiscordBridge } from './discord.mjs';
 import { openInBrowser, pageFor } from './open.mjs';
+import { DOMAIN, loadTls } from './tls.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const distDir = path.join(root, 'dist');
@@ -24,6 +29,10 @@ const port = Number(portArg?.slice(7) || process.env.PORT) || 5170;
 // Loopback only by default. Set HOST=0.0.0.0 to reach it from a phone or second PC on your LAN
 // (there is no auth, so only do that on a network you trust).
 const host = process.env.HOST || '127.0.0.1';
+const numArg = (name, fallback) => Number(process.argv.find((a) => a.startsWith(`--${name}=`))?.split('=')[1]) || fallback;
+// The hosts file points unc.box at 127.0.0.1, so these only ever listen there.
+const httpsPort = numArg('https-port', 443);
+const redirectPort = numArg('redirect-port', 80);
 const MAX_BODY = 5 * 1024 * 1024;
 
 const MIME = {
@@ -235,7 +244,7 @@ if (isDev) {
   });
 }
 
-server.on('request', async (req, res) => {
+async function handleRequest(req, res) {
   const url = new URL(req.url || '/', `http://${req.headers.host || 'localhost'}`);
   try {
     if (url.pathname.startsWith('/api/')) return await handleApi(req, res, url);
@@ -246,7 +255,9 @@ server.on('request', async (req, res) => {
     if (!res.headersSent) sendJson(res, 500, { error: 'Internal error' });
     else res.end();
   }
-});
+}
+
+server.on('request', handleRequest);
 
 discord.start().catch((err) => console.error('Discord bridge:', err.message));
 
@@ -254,3 +265,31 @@ server.listen(port, host, () => {
   const shown = host === '0.0.0.0' ? 'localhost' : host;
   console.log(`Uncbox ${isDev ? '(dev) ' : ''}running at http://${shown}:${port}`);
 });
+
+/** Listens on a loopback port, reporting why not (port taken, not allowed) instead of crashing. */
+function listenLocal(srv, p, onReady) {
+  srv.once('error', (err) => {
+    const why = err.code === 'EADDRINUSE' ? `another program is using port ${p}` : err.message;
+    console.warn(`Uncbox: can't serve ${DOMAIN} on port ${p}: ${why}.`);
+  });
+  srv.listen(p, '127.0.0.1', onReady);
+}
+
+const tls = isDev ? null : await loadTls(dataDir).catch((err) => console.warn(`Uncbox: can't read the ${DOMAIN} certificate: ${err.message}`));
+let secure = null;
+try {
+  if (tls) secure = https.createServer(tls, handleRequest);
+} catch (err) {
+  // A damaged or unreadable certificate only costs the unc.box address, never the whole app.
+  console.warn(`Uncbox: the ${DOMAIN} certificate didn't load (${err.message}). Run npm run setup-domain again.`);
+}
+if (secure) {
+  const origin = `https://${DOMAIN}${httpsPort === 443 ? '' : `:${httpsPort}`}`;
+  listenLocal(secure, httpsPort, () => console.log(`Uncbox running at ${origin}`));
+  // Typing plain "unc.box" may try http first; send it to the secure address.
+  const redirect = http.createServer((req, res) => {
+    res.writeHead(301, { Location: `${origin}${req.url || '/'}` });
+    res.end();
+  });
+  listenLocal(redirect, redirectPort);
+}
