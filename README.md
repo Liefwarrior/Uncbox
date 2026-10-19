@@ -4,7 +4,6 @@
 
 
 [![Buy Me a Coffee](https://img.shields.io/badge/Buy_me_a_coffee-FFDD00?style=for-the-badge&logo=buymeacoffee&logoColor=black)](https://www.buymeacoffee.com/liefwarrior)
-<!-- TODO(Liefwarrior): replace YOUR_HANDLE above (and in Support below) with your Buy Me a Coffee page. -->
 
 
 </div>
@@ -37,7 +36,10 @@ npm install
 npm start
 ```
 
-Open <http://localhost:5170>. The **Get set up** list in the sidebar walks you through the rest:
+Open <http://localhost:5170>. Want it at <https://unc.box> instead? Run `npm run setup-domain`
+once (Windows asks for permission), then restart Uncbox. `npm run remove-domain` undoes it.
+
+The **Get set up** list in the sidebar walks you through the rest:
 
 <img src="docs/screenshots/editing.webp" alt="Editing view: the sidebar with game presets, the setup list and the panels on screen" width="100%">
 
@@ -172,7 +174,7 @@ TypeScript flags any step you miss, and the sidebar lists the new panel on its o
 ## Support
 
 Uncbox is free. If it makes your stream better, you can
-[buy me a coffee](https://www.buymeacoffee.com/YOUR_HANDLE).
+[buy me a coffee](https://www.buymeacoffee.com/liefwarrior).
 
 Made by [Liefwarrior](https://github.com/Liefwarrior). Third-party licenses are in
 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md); run `npm run notices` after changing

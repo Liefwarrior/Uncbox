@@ -12,7 +12,9 @@
     "typecheck": "tsc --noEmit",
     "notices": "node scripts/notices.mjs",
     "test": "vitest run",
-    "check": "node scripts/check.mjs"
+    "check": "node scripts/check.mjs",
+    "setup-domain": "node scripts/setup-domain.mjs",
+    "remove-domain": "node scripts/setup-domain.mjs --remove"
   },
   "engines": {
     "node": ">=20"
