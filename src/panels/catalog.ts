@@ -31,6 +31,7 @@ export const PANEL_INFO: Record<PanelId, PanelInfo> = {
   quests: { title: 'Quest log', hint: 'Your quests, live from WoW', w: 5, h: 8, minW: 4, minH: 4 },
   steam: { title: 'Steam', hint: 'What you’re playing on Steam, live', w: 7, h: 9, minW: 4, minH: 4 },
   hud: { title: 'Stats', hint: 'Numbers read live off your game’s screen', w: 5, h: 7, minW: 3, minH: 3 },
+  teams: { title: 'Teams', hint: 'Both teams’ gods, live from SMITE 2', w: 7, h: 7, minW: 4, minH: 4 },
 };
 
 const WINDOW_SIZE = { w: 7, h: 8, minW: 3, minH: 3 };
