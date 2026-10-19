@@ -1,10 +1,57 @@
-# Uncbox app (spike)
+# Uncbox app
 
-A full-screen Windows app for Uncbox where you **play the game inside the dashboard**: the game
-panel holds the game's real window, so mouse, keyboard and controller go straight to it, at its
-own resolution and frame rate.
+Uncbox as a Windows app: full screen, in the tray when minimized, and with the option to **play
+the game inside the dashboard**. In Play here, the game panel holds the game's real window, so
+mouse, keyboard and controller go straight to it, at its own resolution and frame rate.
 
-This is a spike: it works end to end, but it's rough at the edges (see [What's next](#whats-next)).
+Everything else is the same Uncbox as in the browser (presets, panels, chat, Discord, clips, the
+WoW link, stream mode), because the app shows the same page.
+
+## Start it
+
+```bash
+npm run app
+```
+
+That builds the app the first time (it needs the [.NET 10 SDK](https://dotnet.microsoft.com/download))
+and starts it. The app starts the Uncbox server itself, building the page first if needed, and
+stops it again when you quit. If a server is already running (`npm start` in a terminal), it uses
+that one. Starting the app again while it runs brings the running one back.
+
+- **Minimize** (Win+Down, or **Minimize to the tray** in the sidebar) and Uncbox goes to the tray.
+  Click the tray icon or press **Ctrl+Shift+F12** to bring it back.
+- The tray icon's menu has **Monitor**, to move Uncbox to another screen, and **Quit Uncbox**.
+  Alt+F4 quits too.
+- Options, after `npm run app --`: `--screen=1` for another monitor, `--windowed` for a
+  1280 × 720 window to try things out, an address (`http://localhost:5172/`), `--data=<folder>`
+  for the server it starts, and `--root=<folder>` if the app lives outside the Uncbox folder.
+
+## Play here
+
+1. Run your game in **windowed** or **borderless** mode. Exclusive full screen can't be moved into
+   a panel.
+2. In the game panel's toolbar, choose **Play here**, then pick the game's window.
+3. Click into the panel and play.
+
+In the toolbar:
+
+- **Play** hands the keyboard and controller to the game, like clicking into it.
+- **Full screen** gives the game the whole monitor at native resolution and hides Uncbox.
+  **Ctrl+Shift+F12** brings the dashboard back.
+- **Crop** works like it does for a capture: the trimmed edges are tucked under the dashboard.
+- **Turn on clips** picks the game window once more for [clips](../README.md#clips) and the
+  [WoW link](../integrations/wow/README.md). Those read a capture of the game, which runs in the
+  background while you play.
+- **Change game** picks another window.
+
+Uncbox remembers the game. Next time, it goes back into the panel by itself as soon as the game
+is running.
+
+For OBS, use a **Display Capture** of the monitor Uncbox is on. A Window Capture of Uncbox leaves
+the game out, because the game is its own window.
+
+**WoW:** with Play here, the addon's strip sits under the dashboard, so neither you nor viewers
+see it. Turn on clips so Uncbox can read it.
 
 ## How it works
 
@@ -20,75 +67,59 @@ This is a spike: it works end to end, but it's rough at the edges (see [What's n
 └──────────────────────────────────────────────────────────────────────────────┘
 ```
 
-- **The dashboard** is the normal Uncbox page in WebView2, the Edge engine. It draws with the GPU
-  through DirectComposition, the same way Edge does. Nothing in Uncbox had to be rewritten.
-- **The game** isn't captured. When the game panel is set to **Play here**, the shell takes the
-  game's own window, removes its border and title bar, and moves it exactly onto the panel. It cuts
-  a hole in its own window there with `SetWindowRgn`, so the game shows through.
+- **The dashboard** is the Uncbox page in WebView2 (the Edge engine), drawn with the GPU through
+  DirectComposition.
+- **The game** isn't captured for display. The app removes the game window's border and title bar
+  and moves it onto the panel. It cuts a hole in its own window there (`SetWindowRgn`), so the game
+  shows through. The game window is a little bigger than the hole when there's a crop or a WoW
+  strip, and the extra sits under the dashboard.
 - **Input:** clicking in the panel clicks the game itself, which then has focus. Keyboard, mouse,
-  raw input and controllers (XInput, DirectInput, Steam Input) all work as they do outside Uncbox.
-  Nothing is forwarded or emulated.
-- **Frame rate and resolution:** the game renders and presents its own frames, so it runs at
-  whatever it can do (100, 200+ fps), one game pixel per screen pixel. In the panel, it renders at
-  the panel's size. **Full screen** gives it the whole monitor at native resolution and hides
-  Uncbox. With nothing on top of it, Windows lets the game present directly (independent flip), the
-  same as borderless full screen anywhere. **Ctrl+Shift+F12** brings the dashboard back.
-- The shell keeps the game in place (it re-checks four times a second, since games move and resize
-  themselves), and when it quits or the panel switches source, the window gets its border, size and
-  position back.
+  raw input and controllers work as they do outside Uncbox. Nothing is forwarded or emulated.
+- **Frame rate and resolution:** the game presents its own frames, so it runs as fast as it can
+  (100, 200+ fps), one game pixel per screen pixel. In the panel it renders at the panel's size.
+  With Full screen and nothing on top of it, Windows lets the game present directly (independent
+  flip), as it would for any borderless full-screen game.
+- The app re-checks the game's position four times a second, since games move and resize
+  themselves. Quitting, or choosing another source, gives the window its border, size and position
+  back.
+- The app's own dialogs (the window picker) and the clip player are drawn inside the page, so the
+  game goes behind the dashboard while one is open.
+- The server the app starts sits in a Windows job object, so it stops even if the app crashes.
 
-The page and the shell talk with small JSON messages over WebView2's `postMessage`:
-`native/UncboxShell/ShellForm.cs` lists them, and `src/native.ts` is the page's side.
+The page and the app talk with small JSON messages over WebView2's `postMessage`:
+`UncboxShell/ShellForm.cs` lists them, and `src/native.ts` is the page's side.
 
-## Try it
+| File | What it does |
+| --- | --- |
+| `UncboxShell/Program.cs` | Options, one copy at a time. |
+| `UncboxShell/ShellForm.cs` | The window, tray, WebView2, messages, the hole and Full screen. |
+| `UncboxShell/ServerHost.cs` | Finds or starts the Uncbox server. |
+| `UncboxShell/GameWindow.cs` | Restyles, places and restores the game's window. |
+| `UncboxShell/Native.cs` | The Win32 calls. |
+| `../scripts/app.mjs` | `npm run app`: builds when needed, then starts the app. |
 
-You need the [.NET 10 SDK](https://dotnet.microsoft.com/download) to build it. The WebView2 runtime
-is already part of Windows 11.
+## Tested
 
-```powershell
-npm start                                  # the Uncbox server, as usual
-dotnet run -c Release --project native/UncboxShell
-```
+Driven over WebView2's DevTools port, with a stand-in game window:
 
-Or build once with `dotnet build -c Release native/UncboxShell` and run
-`native/UncboxShell/bin/Release/net10.0-windows/Uncbox.exe`. Options: a different address
-(`Uncbox.exe http://localhost:5172/`), `--screen=1` for another monitor, and `--windowed` for a
-1280 × 720 window to try it without covering the screen.
+- The app started its own server (with `--data`), and the server stopped when the app quit. A
+  second start brought the running app back.
+- Play here placed the window to the pixel on the panel. Moving it 5 px up for the WoW strip, and
+  growing it to 840 × 396 for a 10% / 5% crop, both matched the expected numbers.
+- The game was remembered: after quitting (window given back exactly) and starting again, it went
+  straight back into the panel.
+- Minimize and Minimize to the tray hid it; starting it again brought it back. Stream mode took a
+  windowed app full screen and back. Full screen gave the game the 2560 × 1440 monitor, and
+  Ctrl+Shift+F12 returned it.
+- Turn on clips: the window picker shows above the game, and picking the game started the capture
+  and the instant-replay buffer.
 
-1. Run your game in **windowed** or **borderless** mode. Exclusive full screen can't be moved into
-   a panel.
-2. In the game panel's toolbar, choose **Play here**, then pick the game's window.
-3. Click into the panel and play. **Full screen** (in the toolbar) gives it the whole screen;
-   Ctrl+Shift+F12 comes back. Alt+F4 on Uncbox quits and gives the window back.
+**Not yet tried:** a real game with a controller, and anti-cheat. Moving and restyling another
+app's window is what tools like Borderless Gaming do, and it never touches the game's memory or
+input. Still, check competitive games one at a time.
 
-For OBS, use a **Display Capture** of that monitor. A Window Capture of Uncbox would leave the game
-out, because the game is its own window.
+## Later
 
-## What was tested
-
-With a stand-in game window (a plain WinForms window), driven through WebView2's DevTools port:
-
-- Play here lists the windows, and picking one puts it exactly on the panel's rectangle (to the
-  pixel, below the toolbar while editing), with its title bar removed and the hole cut.
-- Full screen moved it to 0,0 2560 × 1440 (the monitor), hid Uncbox, and focused the game.
-  Ctrl+Shift+F12 put it back in the panel.
-- Closing Uncbox gave the window back its title bar, size and position.
-
-**Not tried yet:** a real game, and a controller with one. Game-specific behavior (a game resizing
-its swap chain, going exclusive full screen on focus, anti-cheat) is the main unknown.
-
-## What's next
-
-- **Clips and the WoW link in Play here.** They read a capture of the game. In the shell, the
-  page can still capture the game window with `getDisplayMedia` (Windows Graphics Capture under
-  the hood) just to feed them, without showing it. Or the shell can capture it natively with WGC
-  and Direct3D 11 and hand frames over.
-- **Remember the game:** match it by process name and title, so it goes back into the panel after
-  a restart, like OBS's window matching.
 - **Mixed DPI / several monitors:** placement assumes Uncbox and the game are on the same monitor.
-- **A tray icon or menu** for quitting, choosing the monitor and the full-screen key.
-- **Packaging:** a single-file `dotnet publish`, an installer, and starting the Node server from
-  the app so it's one double-click.
-- **Anti-cheat:** moving and restyling another app's window is what tools like Borderless Gaming
-  do, and it doesn't touch the game's memory or input. Some anti-cheat systems may still not like a
-  window sitting on top of the game, so check each competitive game.
+- **Packaging:** a single-file `dotnet publish` and an installer, so the app can live outside the
+  Uncbox folder and start with Windows.

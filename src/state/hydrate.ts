@@ -103,6 +103,8 @@ function hydratePreset(id: PresetId, saved: unknown): PresetData {
   // Nullable fields have null defaults, so overlay() cannot type-check them.
   const game = isObj(s.game) ? s.game : {};
   p.game.deviceId = str(game.deviceId);
+  const ng = isObj(game.nativeGame) ? game.nativeGame : null;
+  p.game.nativeGame = ng && str(ng.process) ? { process: str(ng.process)!, title: str(ng.title) ?? '' } : null;
   const run = isObj(s.run) && isObj(s.run.timer) ? s.run.timer : {};
   p.run.timer.startedAt = typeof run.startedAt === 'number' ? run.startedAt : null;
 

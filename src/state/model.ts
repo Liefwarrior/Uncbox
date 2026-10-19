@@ -61,6 +61,8 @@ export interface GameSettings {
   crop: Crop;
   /** Solid color for the "chroma slot" source; key it out in OBS and put your capture under it. */
   chroma: string;
+  /** Play here: the game window to put back in the panel when it (or Uncbox) starts again. */
+  nativeGame: { process: string; title: string } | null;
 }
 
 export interface CameraSettings {

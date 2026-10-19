@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import type { Crop } from './state/model';
 
 // The page's side of the native shell (native/UncboxShell). Inside it the page can put a game's
 // real window in the game panel ("Play here") instead of a capture of it. See ShellForm.cs for
@@ -27,7 +28,7 @@ export interface HostWindow {
 
 export type ShellMessage =
   | { type: 'windows'; windows: HostWindow[] }
-  | { type: 'attached'; id: string; title: string }
+  | { type: 'attached'; id: string; title: string; process: string }
   | { type: 'detached' };
 
 export function send(message: { type: string; [key: string]: unknown }) {
@@ -49,9 +50,12 @@ export function useShellMessages(onMessage: (msg: ShellMessage) => void) {
 
 /**
  * Tells the shell where the game should go: el's box in device pixels, kept up to date while
- * panels move and resize. A null element takes the game back out.
+ * panels move and resize. The game window is made bigger than the box by the crop (percent per
+ * edge) and stripPx (the WoW addon's strip, in game pixels), and those parts sit under the
+ * dashboard, out of sight. A null element takes the game back out.
  */
-export function useHole(el: HTMLElement | null) {
+export function useHole(el: HTMLElement | null, crop: Crop, stripPx: number) {
+  const cropKey = `${crop.top},${crop.right},${crop.bottom},${crop.left},${stripPx}`;
   useEffect(() => {
     if (!shell) return;
     if (!el) {
@@ -67,7 +71,7 @@ export function useHole(el: HTMLElement | null) {
       const key = JSON.stringify(rect);
       if (key !== last) {
         last = key;
-        send({ type: 'rect', ...rect });
+        send({ type: 'rect', ...rect, crop, stripPx });
       }
       frame = requestAnimationFrame(report);
     };
@@ -77,7 +81,8 @@ export function useHole(el: HTMLElement | null) {
       cancelAnimationFrame(frame);
       send({ type: 'rect' });
     };
-  }, [el]);
+    // crop is read through cropKey, so a new but equal object doesn't resend.
+  }, [el, cropKey]);
 }
 
 /** The window list, asked for when the picker opens. */
@@ -90,4 +95,44 @@ export function useHostWindows(open: boolean) {
     if (open) send({ type: 'windows' });
   }, [open]);
   return windows;
+}
+
+// The app's own dialogs (the window picker) are drawn inside Uncbox, where the game's hole would
+// cut through them. While one is up, the game hides behind the dashboard.
+let covers = 0;
+const coverListeners = new Set<() => void>();
+
+export async function whileCovered<T>(work: () => Promise<T>): Promise<T> {
+  if (!shell) return work();
+  covers++;
+  coverListeners.forEach((l) => l());
+  try {
+    return await work();
+  } finally {
+    covers--;
+    coverListeners.forEach((l) => l());
+  }
+}
+
+/** Hides the game behind the dashboard while on (an overlay of Uncbox's own, like the clip player). */
+export function useCover(on: boolean) {
+  useEffect(() => {
+    if (!on || !shell) return;
+    covers++;
+    coverListeners.forEach((l) => l());
+    return () => {
+      covers--;
+      coverListeners.forEach((l) => l());
+    };
+  }, [on]);
+}
+
+export function useCovered(): boolean {
+  return useSyncExternalStore(
+    (l) => {
+      coverListeners.add(l);
+      return () => coverListeners.delete(l);
+    },
+    () => covers > 0,
+  );
 }

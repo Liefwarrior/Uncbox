@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { keyLabel, isClipKey } from '../clips/keys';
 import { CLIP_SECONDS, clipUrl, revealClip, saveClip, useClips, watchClip } from '../clips/replay';
+import { useCover } from '../native';
 import type { ClipSettings } from '../state/model';
 import type { Mutate } from '../state/useAppState';
 import { Icon } from './Icon';
@@ -146,6 +147,7 @@ export function ClipToast() {
 /** Plays a saved clip over the dashboard. */
 export function ClipPlayer() {
   const { playing } = useClips();
+  useCover(Boolean(playing));
   useEffect(() => {
     if (!playing) return;
     const onKey = (e: KeyboardEvent) => {

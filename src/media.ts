@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { whileCovered } from './native';
 
 function describe(err: unknown): string {
   const name = err instanceof DOMException ? err.name : '';
@@ -106,11 +107,13 @@ export function useWindowStream(enabled: boolean) {
   const pick = useCallback(async () => {
     setError(null);
     try {
-      const s = await navigator.mediaDevices.getDisplayMedia({
-        // Chrome captures windows at 30 fps unless a maximum is asked for; ideal alone isn't enough.
-        video: { frameRate: { ideal: 60, max: 60 } },
-        audio: false,
-      });
+      const s = await whileCovered(() =>
+        navigator.mediaDevices.getDisplayMedia({
+          // Chrome captures windows at 30 fps unless a maximum is asked for; ideal alone isn't enough.
+          video: { frameRate: { ideal: 60, max: 60 } },
+          audio: false,
+        }),
+      );
       // Fires when the user clicks the browser's "Stop sharing" bar or closes the window.
       s.getVideoTracks()[0]?.addEventListener('ended', () => {
         if (current.current === s) replace(null);

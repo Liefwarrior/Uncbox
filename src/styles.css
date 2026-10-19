@@ -1428,6 +1428,12 @@ kbd {
   flex: 1;
   order: 1;
 }
+/* Nothing can draw over the game, so the crop controls get their own row too. */
+.is-editing .panel--game.is-native .crop-editor {
+  position: relative;
+  inset: auto;
+  margin: 0 12px 8px;
+}
 .window-list {
   display: grid;
   gap: 4px;

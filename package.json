@@ -14,7 +14,8 @@
     "test": "vitest run",
     "check": "node scripts/check.mjs",
     "setup-domain": "node scripts/setup-domain.mjs",
-    "remove-domain": "node scripts/setup-domain.mjs --remove"
+    "remove-domain": "node scripts/setup-domain.mjs --remove",
+    "app": "node scripts/app.mjs"
   },
   "engines": {
     "node": ">=20"

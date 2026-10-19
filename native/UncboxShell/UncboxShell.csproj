@@ -8,6 +8,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
     <AssemblyName>Uncbox</AssemblyName>
+    <ApplicationIcon>uncbox.ico</ApplicationIcon>
     <RootNamespace>UncboxShell</RootNamespace>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <!-- WebView2 also ships a WPF control this app does not use; its WindowsBase version clash is harmless. -->

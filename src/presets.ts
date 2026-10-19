@@ -44,6 +44,7 @@ const baseData = (): Omit<PresetData, 'layout'> => ({
     pixelated: false,
     crop: { top: 0, right: 0, bottom: 0, left: 0 },
     chroma: '#00b140',
+    nativeGame: null,
   },
   run: { title: '', subtitle: '', timer: timer() },
   slots: Array.from({ length: 6 }, emptySlot),
