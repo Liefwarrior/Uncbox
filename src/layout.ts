@@ -1,13 +1,13 @@
 import { sizeOf } from './panels/catalog';
-import { type BoardId, GRID_COLS, GRID_ROWS, type GridItem } from './state/model';
+import { type BoardId, GRID_COLS, GRID_ROWS, type GridItem, type Widget } from './state/model';
 
 function overlaps(a: { x: number; y: number; w: number; h: number }, b: GridItem) {
   return a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
 }
 
 /** Top-left-most free spot for a w × h panel, trying smaller sizes before giving up. */
-export function placePanel(layout: GridItem[], id: BoardId): GridItem {
-  const { w, h, minW, minH } = sizeOf(id);
+export function placePanel(layout: GridItem[], id: BoardId, widgets: Widget[] = []): GridItem {
+  const { w, h, minW, minH } = sizeOf(id, widgets);
   for (const [tw, th] of [
     [w, h],
     [Math.max(minW, Math.ceil(w / 2)), h],

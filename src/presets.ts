@@ -69,6 +69,7 @@ const baseData = (): Omit<PresetData, 'layout'> => ({
   quests: [],
   wowLinkAt: 0,
   windows: [],
+  widgets: [],
 });
 
 // Layouts are on a 24 × 24 grid sized to fill the window. At 1920 × 1080 a 17 × 17 game

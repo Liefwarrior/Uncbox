@@ -1,5 +1,6 @@
 import { isBackgroundId } from '../backgrounds';
 import { DEFAULT_CLIP_KEY, isClipKey } from '../clips/keys';
+import { defaultWidgetSettings } from '../widgets/catalog';
 import { sizeOf } from '../panels/catalog';
 import { PRESETS } from '../presets';
 import {
@@ -20,8 +21,11 @@ import {
   type QuestState,
   SMITE_ROLES,
   emptySlot,
+  isWidgetId,
   isWindowId,
   uid,
+  type Widget,
+  WIDGET_TYPES,
 } from './model';
 
 export function defaultPresetData(id: PresetId): PresetData {
@@ -71,16 +75,20 @@ const objects = (v: unknown[]) => v.filter(isObj);
 const str = (v: unknown) => (typeof v === 'string' ? v : null);
 const int = (v: unknown, fallback = 0) => (typeof v === 'number' && Number.isFinite(v) ? Math.round(v) : fallback);
 
-function cleanLayout(saved: unknown, fallback: GridItem[], windows: AppWindow[]): GridItem[] {
+function cleanLayout(saved: unknown, fallback: GridItem[], windows: AppWindow[], widgets: Widget[]): GridItem[] {
   if (!Array.isArray(saved)) return fallback;
   const seen = new Set<string>();
   const items: GridItem[] = [];
   for (const raw of objects(saved)) {
     const i = raw.i as BoardId;
-    const known = isWindowId(i) ? windows.some((w) => w.id === i) : PANEL_IDS.includes(i);
+    const known = isWindowId(i)
+      ? windows.some((w) => w.id === i)
+      : isWidgetId(i)
+        ? widgets.some((w) => w.id === i)
+        : PANEL_IDS.includes(i);
     if (!known || seen.has(i)) continue;
     seen.add(i);
-    const { minW, minH } = sizeOf(i);
+    const { minW, minH } = sizeOf(i, widgets);
     const w = Math.min(GRID_COLS, Math.max(minW, int(raw.w, minW)));
     items.push({
       i,
@@ -111,7 +119,15 @@ function hydratePreset(id: PresetId, saved: unknown): PresetData {
   p.windows = objects(p.windows)
     .map((w) => overlay<AppWindow>({ id: `win-${uid()}`, title: 'App window', fit: 'contain', crop: { ...base.game.crop } }, w))
     .filter((w) => isWindowId(w.id));
-  p.layout = cleanLayout(s.layout, base.layout, p.windows);
+  p.widgets = objects(p.widgets)
+    .filter((w) => typeof w.id === 'string' && isWidgetId(w.id) && WIDGET_TYPES.includes(w.type as never))
+    .map((w) => ({
+      id: w.id as Widget['id'],
+      type: w.type as Widget['type'],
+      title: str(w.title) ?? '',
+      settings: overlay(defaultWidgetSettings(), w.settings),
+    }));
+  p.layout = cleanLayout(s.layout, base.layout, p.windows, p.widgets);
   p.slots = objects(p.slots).map((m) => overlay(emptySlot(), m)).slice(0, MAX_SLOTS);
   p.counters = objects(p.counters).map((c) => overlay({ id: uid(), label: 'Counter', value: 0 }, c));
   p.notes = objects(p.notes).map((n) => overlay({ id: uid(), text: '', done: false }, n));

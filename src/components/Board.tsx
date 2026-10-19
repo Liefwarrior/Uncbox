@@ -3,7 +3,8 @@ import ReactGridLayout, { type Layout, verticalCompactor } from 'react-grid-layo
 import 'react-grid-layout/css/styles.css';
 import 'react-resizable/css/styles.css';
 import { sizeOf } from '../panels/catalog';
-import { type AppWindow, type BoardId, GRID_COLS, GRID_ROWS, type GridItem, isWindowId } from '../state/model';
+import { type AppWindow, type BoardId, GRID_COLS, GRID_ROWS, type GridItem, isWidgetId, isWindowId, type Widget } from '../state/model';
+import { WIDGET_INFO } from '../widgets/catalog';
 import type { MutatePreset } from '../state/useAppState';
 import { offerUndo } from '../undo';
 
@@ -46,6 +47,7 @@ const sameLayout = (a: GridItem[], b: readonly { i: string; x: number; y: number
 
 interface Props {
   layout: GridItem[];
+  widgets: Widget[];
   editing: boolean;
   mutatePreset: MutatePreset;
   renderPanel: (id: BoardId) => ReactNode;
@@ -55,13 +57,13 @@ interface Props {
  * The stage: a 24 × 24 grid stretched to fill the window, so a layout looks the same at any
  * resolution. Panels drag by their header and resize from the edges while editing.
  */
-export function Board({ layout, editing, mutatePreset, renderPanel }: Props) {
+export function Board({ layout, widgets, editing, mutatePreset, renderPanel }: Props) {
   const { ref, w, h } = useElementSize<HTMLDivElement>();
   const rowHeight = Math.max(4, (h - MARGIN * (GRID_ROWS + 1)) / GRID_ROWS);
   const colWidth = Math.max(4, (w - MARGIN * (GRID_COLS + 1)) / GRID_COLS);
 
   const gridLayout = useMemo<Layout>(
-    () => layout.map((item) => ({ ...item, minW: sizeOf(item.i).minW, minH: sizeOf(item.i).minH })),
+    () => layout.map((item) => ({ ...item, minW: sizeOf(item.i, widgets).minW, minH: sizeOf(item.i, widgets).minH })),
     [layout],
   );
 
@@ -83,15 +85,20 @@ export function Board({ layout, editing, mutatePreset, renderPanel }: Props) {
       hide: (id, name) => {
         let item: GridItem | undefined;
         let win: AppWindow | undefined;
+        let widget: Widget | undefined;
         mutatePreset((d) => {
           item = d.layout.find((it) => it.i === id) ?? item;
           win = d.windows.find((w) => w.id === id) ?? win;
+          widget = d.widgets.find((w) => w.id === id) ?? widget;
           d.layout = d.layout.filter((it) => it.i !== id);
           if (isWindowId(id)) d.windows = d.windows.filter((w) => w.id !== id);
+          if (isWidgetId(id)) d.widgets = d.widgets.filter((w) => w.id !== id);
         });
-        offerUndo(`${name || win?.title || 'Panel'} hidden`, () =>
+        const widgetName = widget && (widget.title || WIDGET_INFO[widget.type].name);
+        offerUndo(`${name || win?.title || widgetName || 'Panel'} hidden`, () =>
           mutatePreset((d) => {
             if (win && !d.windows.some((w) => w.id === id)) d.windows.push(win);
+            if (widget && !d.widgets.some((w) => w.id === id)) d.widgets.push(widget);
             if (item && !d.layout.some((it) => it.i === id)) d.layout.push(item);
           }),
         );
@@ -102,7 +109,7 @@ export function Board({ layout, editing, mutatePreset, renderPanel }: Props) {
           if (!item || !Number.isFinite(aspect) || aspect <= 0) return;
           const pxHeight = item.h * rowHeight + (item.h - 1) * MARGIN;
           const cols = Math.round((pxHeight * aspect + MARGIN) / (colWidth + MARGIN));
-          item.w = Math.min(GRID_COLS - item.x, Math.max(sizeOf(id).minW, cols));
+          item.w = Math.min(GRID_COLS - item.x, Math.max(sizeOf(id, d.widgets).minW, cols));
         }),
     }),
     [editing, mutatePreset, rowHeight, colWidth],

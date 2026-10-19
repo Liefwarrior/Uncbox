@@ -25,10 +25,48 @@ export type PanelId = (typeof PANEL_IDS)[number];
 
 /** App window panels can be added any number of times, so each gets its own id. */
 export type WindowId = `win-${string}`;
-export type BoardId = PanelId | WindowId;
+/** So can widgets (a clock, the weather…); see src/widgets. */
+export type WidgetId = `wdg-${string}`;
+export type BoardId = PanelId | WindowId | WidgetId;
 
 export function isWindowId(id: string): id is WindowId {
   return id.startsWith('win-');
+}
+
+export function isWidgetId(id: string): id is WidgetId {
+  return id.startsWith('wdg-');
+}
+
+export const WIDGET_TYPES = ['clock', 'weather', 'media', 'notifications', 'system', 'countdown', 'text'] as const;
+export type WidgetType = (typeof WIDGET_TYPES)[number];
+
+/** Every widget type's settings in one shape; each type reads only its own. */
+export interface WidgetSettings {
+  /** Clock: an IANA time zone ("Europe/London"), or '' for this PC's. */
+  timeZone: string;
+  hour12: boolean;
+  seconds: boolean;
+  /** Weather: the place as found, and where it is. */
+  place: string;
+  lat: number;
+  lon: number;
+  celsius: boolean;
+  /** Notifications: only these apps (comma-separated, as listed), or '' for all. */
+  apps: string;
+  /** Notifications: show the message itself, not just who it's from. Off by default: it's on stream. */
+  showBody: boolean;
+  /** Countdown: when it ends (ms since 1970), or 0 if not set. */
+  target: number;
+  /** Text: what it says. Countdown: what's coming. */
+  text: string;
+}
+
+export interface Widget {
+  id: WidgetId;
+  type: WidgetType;
+  /** Shown as the panel's title; '' uses the type's name. */
+  title: string;
+  settings: WidgetSettings;
 }
 
 /** Position on the board grid, in cells. */
@@ -186,6 +224,7 @@ export interface PresetData {
   /** When the WoW addon last sent something new; 0 if it never has. */
   wowLinkAt: number;
   windows: AppWindow[];
+  widgets: Widget[];
 }
 
 export interface PinnedChannel {

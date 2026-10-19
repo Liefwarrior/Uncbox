@@ -13,7 +13,8 @@ import { RunPanel } from '../components/RunPanel';
 import { SlotsPanel } from '../components/SlotsPanel';
 import { WindowPanel } from '../components/WindowPanel';
 import { panelTitle, type PresetDef } from '../presets';
-import { type AppState, type BoardId, isWindowId, type PanelId, type PresetData } from '../state/model';
+import { type AppState, type BoardId, isWidgetId, isWindowId, type PanelId, type PresetData } from '../state/model';
+import { WidgetPanel } from '../widgets/WidgetPanel';
 import type { Mutate, MutatePreset } from '../state/useAppState';
 
 export interface PanelContext {
@@ -48,6 +49,10 @@ export function renderPanel(id: BoardId, c: Omit<PanelContext, 'title'>): ReactN
   if (isWindowId(id)) {
     const win = c.data.windows.find((w) => w.id === id);
     return win ? <WindowPanel win={win} mutatePreset={c.mutatePreset} /> : null;
+  }
+  if (isWidgetId(id)) {
+    const widget = c.data.widgets.find((w) => w.id === id);
+    return widget ? <WidgetPanel widget={widget} mutatePreset={c.mutatePreset} /> : null;
   }
   return RENDER[id]({ ...c, title: panelTitle(c.def, id) });
 }

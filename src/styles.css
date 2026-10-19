@@ -967,6 +967,255 @@ input[type='color'] {
   background: color-mix(in srgb, var(--accent) 14%, transparent);
 }
 
+/* ---------- widgets ---------- */
+
+.widget-library summary {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 6px;
+  border-radius: var(--radius-sm);
+  color: var(--accent);
+  font-size: 16px;
+}
+.widget-library summary::before,
+.widget-library[open] summary::before {
+  content: none;
+}
+.widget-library summary:hover {
+  background: var(--panel);
+}
+.widget-library__list {
+  display: grid;
+  gap: 2px;
+  margin: 2px 0 6px 20px;
+  padding: 0;
+  list-style: none;
+}
+.widget-library__item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 6px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text);
+  font-size: 15px;
+  text-align: left;
+  cursor: pointer;
+}
+.widget-library__item:hover {
+  background: var(--panel);
+}
+.widget-library__item svg {
+  flex: none;
+  color: var(--accent);
+}
+
+.panel--widget .panel__body {
+  container-type: size;
+}
+.widget-clock,
+.widget-countdown {
+  display: grid;
+  align-content: safe center;
+  justify-items: center;
+  height: 100%;
+  text-align: center;
+}
+.widget-clock strong,
+.widget-countdown strong {
+  font-family: var(--font-num);
+  font-size: clamp(22px, min(22cqw, 46cqh), 96px);
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  line-height: 1.05;
+}
+.widget-clock span,
+.widget-countdown span {
+  color: var(--muted);
+  font-size: clamp(12px, 7cqw, 18px);
+}
+.widget-weather {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  height: 100%;
+}
+.widget-weather__symbol {
+  font-size: clamp(32px, min(28cqw, 60cqh), 88px);
+  line-height: 1;
+}
+.widget-weather div {
+  display: grid;
+  min-width: 0;
+}
+.widget-weather strong {
+  font-family: var(--font-num);
+  font-size: clamp(24px, min(20cqw, 40cqh), 72px);
+  line-height: 1;
+}
+.widget-weather span {
+  font-size: 15px;
+}
+.widget-weather small,
+.widget-media small {
+  color: var(--muted);
+  font-size: 13px;
+}
+.widget-media {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  height: 100%;
+  min-width: 0;
+}
+.widget-media img,
+.widget-media__art {
+  display: grid;
+  flex: none;
+  place-items: center;
+  height: min(100%, 96px);
+  aspect-ratio: 1;
+  border-radius: var(--radius-sm);
+  background: var(--panel-2);
+  color: var(--muted);
+  object-fit: cover;
+}
+.widget-media div {
+  display: grid;
+  min-width: 0;
+}
+.widget-media strong,
+.widget-media span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.widget-media strong {
+  font-size: 17px;
+}
+.widget-media span {
+  color: var(--muted);
+  font-size: 14px;
+}
+.widget-media:not(.is-playing) img {
+  opacity: 0.6;
+}
+.widget-toasts {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.widget-toasts li {
+  display: grid;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--panel-2);
+  animation: rise 0.4s var(--ease-out);
+}
+.widget-toasts__app {
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 650;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.widget-toasts strong {
+  font-size: 15px;
+}
+.widget-toasts p {
+  margin: 2px 0 0;
+  color: var(--muted);
+  font-size: 14px;
+}
+.widget-system {
+  display: grid;
+  /* Centered when there's room; from the top when there isn't, so the first line never hides. */
+  align-content: safe center;
+  gap: 8px;
+  height: 100%;
+  overflow: auto;
+  scrollbar-width: none;
+}
+.meter {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 3px 8px;
+}
+.meter__label {
+  font-size: 14px;
+  font-weight: 600;
+}
+.meter__value {
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+}
+.meter__bar {
+  grid-column: 1 / -1;
+  height: 6px;
+  border-radius: 3px;
+  background: linear-gradient(90deg, var(--accent) var(--v), var(--panel-2) var(--v));
+  transition: background 0.6s;
+}
+.meter small {
+  grid-column: 1 / -1;
+  color: var(--muted);
+  font-size: 12px;
+}
+.meter small:empty {
+  display: none;
+}
+.widget-text {
+  display: grid;
+  place-items: center;
+  height: 100%;
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: clamp(16px, min(9cqw, 30cqh), 48px);
+  text-align: center;
+  white-space: pre-wrap;
+}
+.widget-settings {
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  font-size: 14px;
+}
+.widget-settings label {
+  display: grid;
+  gap: 4px;
+}
+.widget-settings label.inline {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.widget-settings input:not([type='checkbox']),
+.widget-settings select,
+.widget-settings textarea {
+  width: 100%;
+  min-width: 0;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--panel-2);
+  color: var(--text);
+  font: inherit;
+}
+.widget-settings .row {
+  display: flex;
+  gap: 6px;
+}
+.widget-settings > .btn {
+  justify-self: start;
+}
+
 /* ---------- clips ---------- */
 
 /* Above the undo toast when both are up. */

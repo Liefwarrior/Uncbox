@@ -14,6 +14,8 @@ export function callOut(id: BoardId) {
       void cell.offsetWidth; // restart the animation if it is already running
       cell.classList.add('is-called');
       cell.addEventListener('animationend', () => cell.classList.remove('is-called'), { once: true });
+      // A panel added to a full board goes underneath it, out of sight; bring it into view.
+      cell.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
       cell.querySelector<HTMLElement>('[data-setup]')?.focus({ preventScroll: true });
     }),
   );

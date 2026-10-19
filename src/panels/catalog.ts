@@ -1,4 +1,5 @@
-import { type BoardId, isWindowId, type PanelId } from '../state/model';
+import { type BoardId, isWidgetId, isWindowId, type PanelId, type Widget } from '../state/model';
+import { WIDGET_INFO } from '../widgets/catalog';
 
 // What every panel type is called, what it is for, and how big it starts. The sidebar, the board
 // and state loading all read this, so a new panel type is added here and in ./index.tsx only.
@@ -32,6 +33,12 @@ export const PANEL_INFO: Record<PanelId, PanelInfo> = {
 
 const WINDOW_SIZE = { w: 7, h: 8, minW: 3, minH: 3 };
 
-export function sizeOf(id: BoardId) {
-  return isWindowId(id) ? WINDOW_SIZE : PANEL_INFO[id];
+/** A widget's size depends on its type, so pass the widgets when id may be one. */
+export function sizeOf(id: BoardId, widgets: Widget[] = []) {
+  if (isWindowId(id)) return WINDOW_SIZE;
+  if (isWidgetId(id)) {
+    const w = widgets.find((x) => x.id === id);
+    return w ? WIDGET_INFO[w.type] : { w: 4, h: 3, minW: 2, minH: 2 };
+  }
+  return PANEL_INFO[id];
 }

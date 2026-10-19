@@ -17,6 +17,7 @@ import { findInstalls, install as installWowAddon, reveal as revealWowAddon } fr
 import { createClips } from './clips.mjs';
 import { createDiscordBridge } from './discord.mjs';
 import { openInBrowser, pageFor } from './open.mjs';
+import { createWidgets } from './widgets.mjs';
 import { DOMAIN, loadTls } from './tls.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -155,6 +156,8 @@ const clips = createClips({
   readJson,
 });
 
+const widgets = createWidgets({ broadcastEvent, isLocal, sendJson });
+
 async function handleWow(req, res, url) {
   if (!isLocal(req)) return sendJson(res, 403, { error: 'Run this on the PC WoW is on.' });
   try {
@@ -176,6 +179,7 @@ async function handleApi(req, res, url) {
   if (url.pathname === '/api/discord' || url.pathname.startsWith('/api/discord/')) return handleDiscord(req, res, url);
   if (url.pathname.startsWith('/api/wow/')) return handleWow(req, res, url);
   if (url.pathname === '/api/clips' || url.pathname.startsWith('/api/clips/')) return clips.handle(req, res, url);
+  if (['/api/system', '/api/media', '/api/notifications'].includes(url.pathname)) return widgets(req, res, url);
 
   if (url.pathname === '/api/open' && req.method === 'POST') {
     if (!isLocal(req)) return sendJson(res, 403, { error: 'Local only' });

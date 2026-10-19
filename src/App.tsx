@@ -83,6 +83,7 @@ export function App() {
         <Board
           key={state.preset}
           layout={data.layout}
+          widgets={data.widgets}
           editing={!streamMode}
           mutatePreset={mutatePreset}
           renderPanel={render}
