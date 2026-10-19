@@ -1,3 +1,4 @@
+import { isBackgroundId } from '../backgrounds';
 import { sizeOf } from '../panels/catalog';
 import { PRESETS } from '../presets';
 import {
@@ -110,6 +111,7 @@ function hydratePreset(id: PresetId, saved: unknown): PresetData {
     .map((m) => overlay({ id: uid(), name: '', done: false }, m))
     .slice(0, MAX_MILESTONES);
   if (!SMITE_ROLES.includes(p.match.role as never)) p.match.role = '';
+  if (!isBackgroundId(p.background)) p.background = base.background;
   p.record.history = objects(p.record.history)
     .map((r) => overlay({ id: uid(), god: '', role: '' as const, k: 0, d: 0, a: 0, win: false, at: 0 }, r))
     .slice(0, MAX_HISTORY);

@@ -65,6 +65,23 @@ describe('hydrate', () => {
     expect(state.discord.pinned).toEqual([]);
   });
 
+  it('keeps a chosen background and drops one that no longer exists', () => {
+    const saved = JSON.parse(JSON.stringify(defaultState()));
+    saved.presets.smite2.background = 'stars';
+    saved.presets.wow.background = 'lava-lamp';
+    const state = hydrate(saved);
+    expect(state.presets.smite2.background).toBe('stars');
+    expect(state.presets.wow.background).toBe('plain');
+  });
+
+  it('adds presets that a save from before them does not have', () => {
+    const saved = JSON.parse(JSON.stringify(defaultState()));
+    delete saved.presets.terminal;
+    const state = hydrate(saved);
+    expect(state.presets.terminal.background).toBe('plain');
+    expect(state.presets.terminal.layout.length).toBeGreaterThan(0);
+  });
+
   it('moves a version 1 (PokéStream) save into the Pokémon preset', () => {
     const v1 = {
       game: { source: 'window', fit: 'cover', pixelated: true },

@@ -1,8 +1,10 @@
+import type { BackgroundId } from '../backgrounds';
+
 // Everything the dashboard remembers. Saved to data/state.json by the local server and shared
 // live between every open window, so a phone or second monitor can drive the streamed one.
 // Each game preset keeps its own layout and data; Twitch and camera settings are shared.
 
-export const PRESET_IDS = ['pokemon', 'smite2', 'wow'] as const;
+export const PRESET_IDS = ['pokemon', 'smite2', 'wow', 'terminal'] as const;
 export type PresetId = (typeof PRESET_IDS)[number];
 
 export const PANEL_IDS = [
@@ -149,6 +151,8 @@ export interface CharacterState {
 
 export interface PresetData {
   layout: GridItem[];
+  /** What fills the space behind the panels; see src/backgrounds.ts. */
+  background: BackgroundId;
   game: GameSettings;
   run: {
     title: string;

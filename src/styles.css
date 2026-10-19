@@ -110,6 +110,38 @@
     0 14px 34px rgba(0, 0, 0, 0.45);
 }
 
+/* Terminal: PowerShell in Windows Terminal. Its black, Campbell's gray text, green and red, a
+   lavender accent like the terminal's own selection highlight, Cascadia Mono on its own
+   character grid, square panes and flat 1px rules: no shadow, glow or rounding. */
+.theme-terminal {
+  --bg: #080808;
+  --glow-1: transparent;
+  --glow-2: transparent;
+  --panel: rgba(12, 12, 12, 0.97);
+  --panel-top: rgba(12, 12, 12, 0.97);
+  --panel-2: #1b1b1f;
+  --border: #313136;
+  --text: #cccccc;
+  --muted: #8a8a8a;
+  --accent: #a9a4ff;
+  --accent-2: #61d6d6;
+  --accent-ink: #0c0c0c;
+  --good: #16c60c;
+  --bad: #e74856;
+  --font-display: 'Cascadia Mono Variable', Consolas, monospace;
+  --font-ui: 'Cascadia Mono Variable', Consolas, monospace;
+  --font-num: 'Cascadia Mono Variable', Consolas, monospace;
+  --title-case: lowercase;
+  --title-tracking: 0;
+  --title-size: 14px;
+  --title-weight: 500;
+  --digit-w: 1ch;
+  --radius: 0;
+  --radius-sm: 2px;
+  --art-radius: 2px;
+  --panel-shadow: none;
+}
+
 /* ---------- base ---------- */
 
 *,
@@ -473,6 +505,11 @@ input[type='color'] {
   font-family: 'Marcellus', serif;
   color: #f2b443;
 }
+.preset-card--terminal strong {
+  font-family: 'Cascadia Mono Variable', Consolas, monospace;
+  font-weight: 500;
+  color: #a9a4ff;
+}
 .preset-card.on {
   border-color: var(--accent);
 }
@@ -674,6 +711,70 @@ input[type='color'] {
   box-shadow: 0 0 8px var(--bad);
 }
 
+/* ---------- background picker ---------- */
+
+.bg-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+}
+.bg-tile {
+  display: grid;
+  gap: 4px;
+  padding: 4px 4px 6px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--panel);
+  cursor: pointer;
+  transition: border-color 0.2s;
+}
+.bg-tile:hover {
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+}
+.bg-tile.on {
+  border-color: var(--accent);
+}
+.bg-tile__preview {
+  position: relative;
+  display: block;
+  height: 36px;
+  overflow: hidden;
+  border-radius: calc(var(--radius-sm) - 2px);
+  background: var(--bg);
+}
+.bg-tile__preview svg {
+  width: 100%;
+  height: 100%;
+  fill: var(--accent);
+  stroke: var(--accent);
+  stroke-width: 0.8;
+}
+.bg-tile__preview svg path {
+  fill: none;
+  opacity: 0.6;
+}
+.bg-tile__preview svg .fill-text {
+  fill: var(--text);
+  stroke: none;
+}
+.bg-tile__preview svg .soft {
+  stroke: none;
+  opacity: 0.35;
+}
+.bg-tile__preview svg .line {
+  opacity: 0.9;
+}
+.bg-tile__pattern {
+  position: absolute;
+  inset: 0;
+  background: var(--accent);
+  opacity: 0.45;
+}
+.bg-tile__name {
+  font-size: 13px;
+  text-align: center;
+}
+
 /* ---------- stage and grid ---------- */
 
 .stage {
@@ -685,7 +786,30 @@ input[type='color'] {
 }
 .board {
   position: relative;
+  z-index: 1;
   height: 100%;
+}
+/* Behind the panels, over the theme's glow. Faint on purpose: it is texture, not content. */
+.backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+}
+.backdrop--pattern {
+  background: var(--accent);
+  opacity: 0.07;
+}
+/* Thinner line work needs a little more strength to read at the same weight. */
+.backdrop--waves {
+  opacity: 0.13;
+}
+.backdrop--hexagons,
+.backdrop--grid {
+  opacity: 0.09;
+}
+.backdrop--particles {
+  opacity: 0.8;
 }
 
 .react-grid-item {
@@ -1617,7 +1741,8 @@ input[type='color'] {
   transition: border-color 0.25s, color 0.25s, background 0.3s;
 }
 .theme-smite2 .chip,
-.theme-wow .chip {
+.theme-wow .chip,
+.theme-terminal .chip {
   border-radius: var(--radius-sm);
 }
 .chip__mark {
@@ -1659,6 +1784,7 @@ input[type='color'] {
 .counter__value {
   font-family: var(--font-num);
   min-width: 40px;
+  justify-content: flex-end;
   font-size: 20px;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
@@ -2649,4 +2775,92 @@ p.chat-empty {
 .panel--bleed .panel__body,
 .panel--window .panel__body {
   overflow: hidden;
+}
+
+/* ---------- Terminal ---------- */
+
+/* The title bar reads like a prompt, one character cell apart: "PS> chat liefwarrior". */
+.theme-terminal .panel__head {
+  min-height: 40px;
+  padding-top: 8px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+  background: var(--panel-top);
+}
+.theme-terminal .panel--bleed .panel__head {
+  border-bottom: 0;
+}
+.theme-terminal .panel__head h2 {
+  gap: 1ch;
+}
+.theme-terminal .panel__head h2::before {
+  content: 'PS>';
+  flex: none;
+  color: var(--muted);
+  text-transform: none;
+}
+.theme-terminal .panel__body {
+  padding-top: 10px;
+}
+.theme-terminal ::selection {
+  background: color-mix(in srgb, var(--accent) 35%, transparent);
+  color: inherit;
+}
+
+/* Numbers stay on Cascadia's own grid: every character one cell wide, colons included. */
+.theme-terminal .digits__s {
+  padding: 0;
+}
+.theme-terminal .timer__digits {
+  letter-spacing: 0;
+}
+.theme-terminal .counter__value,
+.theme-terminal .chat__name {
+  font-weight: 600;
+}
+
+/* Lists are plain text, not widgets: a mark and a word, no pills around them. */
+.theme-terminal .pip {
+  border-radius: 0;
+}
+.theme-terminal .pip.on {
+  animation: none;
+}
+.theme-terminal .chip {
+  gap: 1ch;
+  padding: 0 1ch 0 0;
+  border: 0;
+  background: none;
+}
+.theme-terminal .chip.on {
+  background: none;
+  color: var(--text);
+}
+.theme-terminal .chip.on::after {
+  display: none;
+}
+.theme-terminal .chip__mark {
+  border-width: 1px;
+  border-radius: 0;
+}
+/* Open items get a green bullet; done ones fade back with their struck-through text. */
+.theme-terminal.is-stream .check:not(.on) {
+  width: 6px;
+  height: 6px;
+  border-radius: 0;
+  background: var(--good);
+}
+.theme-terminal .check.on {
+  border: 1px solid var(--muted);
+  background: none;
+  color: var(--muted);
+  transform: none;
+}
+
+/* No glow anywhere: the speaker's name lights up, and the live dot is just a dot. */
+.theme-terminal .member.is-speaking .member__avatar {
+  box-shadow: none;
+}
+.theme-terminal .live-dot--connected {
+  box-shadow: none;
 }
