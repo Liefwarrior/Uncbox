@@ -6,11 +6,14 @@
 //   GET /api/steam/avatar             your Steam picture
 //   GET /api/steam/art/<appid>/<file> a game's art (header.jpg, library_hero.jpg, library_600x900.jpg,
 //                                     logo.png) from Steam's cache, or Steam's CDN if it isn't cached
+//   POST /api/steam/open              { view: 'bigpicture' | 'library' } opens that Steam view (starting
+//                                     Steam if it isn't running), for the game panel to take in
 
 import { execFile } from 'node:child_process';
 import { createReadStream } from 'node:fs';
 import { readFile, stat } from 'node:fs/promises';
 import path from 'node:path';
+import { openInBrowser } from './open.mjs';
 
 const POLL_MS = 3000;
 const RECENT = 8;
@@ -121,7 +124,13 @@ function reg(key, value) {
   });
 }
 
-export function createSteam({ broadcastEvent, sendJson }) {
+/** Steam's own links for its two views. The library one leaves Big Picture first. */
+const VIEWS = {
+  bigpicture: ['steam://open/bigpicture'],
+  library: ['steam://close/bigpicture', 'steam://open/games'],
+};
+
+export function createSteam({ broadcastEvent, sendJson, isLocal, readJson }) {
   let root = null;
   let names = new Map();
   let user = null;
@@ -259,6 +268,14 @@ export function createSteam({ broadcastEvent, sendJson }) {
         polling = setInterval(poll, POLL_MS);
       }
       if (url.pathname === '/api/steam') return sendJson(res, 200, snap);
+      if (url.pathname === '/api/steam/open' && req.method === 'POST') {
+        if (!isLocal(req)) return sendJson(res, 403, { error: 'This PC only' });
+        const links = VIEWS[(await readJson(req).catch(() => ({}))).view];
+        if (!links) return sendJson(res, 400, { error: 'Unknown Steam view' });
+        // One after another: Big Picture takes a moment to close before the library opens.
+        links.forEach((link, i) => setTimeout(() => openInBrowser(link), i * 1500));
+        return sendJson(res, 200, { ok: true });
+      }
       if (url.pathname === '/api/steam/avatar') {
         if (root && user && (await sendFile(res, path.join(root, 'config', 'avatarcache', `${user.id64}.png`), 'image/png'))) return;
         return sendJson(res, 404, { error: 'No picture' });

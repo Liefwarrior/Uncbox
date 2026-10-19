@@ -16,7 +16,7 @@ namespace UncboxShell;
 ///
 /// The page and the app talk with small JSON messages (src/native.ts is the page's side):
 ///   page → app  { type: "windows" }                       list windows to pick from
-///               { type: "attach", id } | { type: "attach", match: { process, title } }
+///               { type: "attach", id } | { type: "attach", match: { process, title, exact? } }
 ///               { type: "detach" }                        give the game window back
 ///               { type: "rect", x, y, w, h, crop, stripPx } | { type: "rect" }
 ///                    where the panel's hole is, in device pixels; crop (percent per edge) and
@@ -136,9 +136,22 @@ internal sealed class ShellForm : Form
 
         if (!await StartServer()) return;
 
+        // Each Uncbox server gets its own WebView2 profile, so two copies of the app (one per server)
+        // never share one; the usual address keeps the plain folder it always had.
         string data = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Uncbox", "WebView2");
-        var env = await CoreWebView2Environment.CreateAsync(userDataFolder: data);
-        await _web.EnsureCoreWebView2Async(env);
+        if (_options.Url.Host != "localhost" || _options.Url.Port != 5170) data += $".{_options.Url.Host}.{_options.Url.Port}";
+        try
+        {
+            var env = await CoreWebView2Environment.CreateAsync(userDataFolder: data);
+            await _web.EnsureCoreWebView2Async(env);
+        }
+        catch (Exception err) when (err is COMException or WebView2RuntimeNotFoundException)
+        {
+            _splash.Text = err is WebView2RuntimeNotFoundException
+                ? "Uncbox needs the Microsoft Edge WebView2 runtime: https://go.microsoft.com/fwlink/p/?LinkId=2124703"
+                : $"Uncbox couldn’t start its page ({err.Message}). Close other copies of Uncbox and try again.";
+            return;
+        }
         var core = _web.CoreWebView2;
         core.Settings.IsStatusBarEnabled = false;
         core.Settings.IsZoomControlEnabled = false;
@@ -291,7 +304,7 @@ internal sealed class ShellForm : Form
                 Attach(new IntPtr(id));
                 break;
             case "attach" when msg["match"] is JsonObject match:
-                var found = Find((string?)match["process"] ?? "", (string?)match["title"] ?? "");
+                var found = Find((string?)match["process"] ?? "", (string?)match["title"] ?? "", (bool?)match["exact"] ?? false);
                 if (found != IntPtr.Zero) Attach(found);
                 break;
             case "detach":
@@ -314,15 +327,16 @@ internal sealed class ShellForm : Form
 
     /// <summary>
     /// The window a game saved from last time is in now: same program and title, or the program's
-    /// only window (titles often change, "World of Warcraft" vs a loading screen).
+    /// only window (titles often change, "World of Warcraft" vs a loading screen). With exact, the
+    /// title must match: Steam's library and Big Picture are both steamwebhelper windows.
     /// </summary>
-    private IntPtr Find(string process, string title)
+    private IntPtr Find(string process, string title, bool exact)
     {
         if (process.Length == 0) return IntPtr.Zero;
         var same = Native.AppWindows(Handle).Where(w => w.Process.Equals(process, StringComparison.OrdinalIgnoreCase)).ToList();
-        var exact = same.FirstOrDefault(w => w.Title == title);
-        if (exact.Hwnd != IntPtr.Zero) return exact.Hwnd;
-        return same.Count == 1 ? same[0].Hwnd : IntPtr.Zero;
+        var hit = same.FirstOrDefault(w => w.Title == title);
+        if (hit.Hwnd != IntPtr.Zero) return hit.Hwnd;
+        return !exact && same.Count == 1 ? same[0].Hwnd : IntPtr.Zero;
     }
 
     private void Attach(IntPtr hwnd)
@@ -422,8 +436,9 @@ internal sealed class ShellForm : Form
             _game.Place(new Native.RECT { Left = s.Left, Top = s.Top, Right = s.Right, Bottom = s.Bottom });
             return;
         }
-        // In the tray, the game stays where it is.
-        if (_game is not null && Visible && _gameRect is { Width: > 0, Height: > 0 } rect)
+        // In the tray, the game stays where it is. A window its app has hidden (Steam hides its
+        // library for Big Picture) is left hidden rather than shown again.
+        if (_game is not null && Visible && _game.Shown && _gameRect is { Width: > 0, Height: > 0 } rect)
         {
             if (_game.HasFrame) _game.MakeBorderless();
             _game.Place(rect);

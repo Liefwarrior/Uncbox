@@ -47,6 +47,12 @@ export function useNativeGame(on: boolean, saved: GameSettings['nativeGame'], re
       setPicking(false);
     },
     pick: () => setPicking(true),
+    /** Gives back what's in the panel and waits for this window instead (Steam's views). */
+    switchTo: (match: NonNullable<GameSettings['nativeGame']>) => {
+      send({ type: 'detach' });
+      setPicking(false);
+      remember(match);
+    },
     cancelPick: () => setPicking(false),
     refresh: () => send({ type: 'windows' }),
     play: () => send({ type: 'play' }),

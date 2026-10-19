@@ -13,7 +13,13 @@ import { createReadStream } from 'node:fs';
 import { mkdir, readFile, rename, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { findInstalls, install as installWowAddon, reveal as revealWowAddon } from '../integrations/wow/install.mjs';
+import {
+  findInstalls,
+  install as installWowAddon,
+  reveal as revealWowAddon,
+  status as wowAddonStatus,
+  uninstall as uninstallWowAddon,
+} from '../integrations/wow/install.mjs';
 import { createClips } from './clips.mjs';
 import { createDiscordBridge } from './discord.mjs';
 import { openInBrowser, pageFor } from './open.mjs';
@@ -171,7 +177,7 @@ const clips = createClips({
 });
 
 const widgets = createWidgets({ broadcastEvent, isLocal, sendJson });
-const steam = createSteam({ broadcastEvent, sendJson });
+const steam = createSteam({ broadcastEvent, sendJson, isLocal, readJson });
 const ocr = createOcr({ isLocal, sendJson, readBody });
 const gameSettings = createGameSettings({ isLocal, sendJson, readJson });
 
@@ -179,8 +185,13 @@ async function handleWow(req, res, url) {
   if (!isLocal(req)) return sendJson(res, 403, { error: 'Run this on the PC WoW is on.' });
   try {
     if (url.pathname === '/api/wow/installs' && req.method === 'GET') return sendJson(res, 200, { installs: await findInstalls() });
+    if (url.pathname === '/api/wow/status' && req.method === 'GET') return sendJson(res, 200, await wowAddonStatus());
+    // Without a path, these act on every WoW install found.
     if (url.pathname === '/api/wow/install' && req.method === 'POST') {
-      return sendJson(res, 200, { ok: true, path: await installWowAddon((await readJson(req)).path) });
+      return sendJson(res, 200, { ok: true, paths: await installWowAddon((await readJson(req)).path) });
+    }
+    if (url.pathname === '/api/wow/uninstall' && req.method === 'POST') {
+      return sendJson(res, 200, { ok: true, paths: await uninstallWowAddon((await readJson(req)).path) });
     }
     if (url.pathname === '/api/wow/reveal' && req.method === 'POST') {
       revealWowAddon();

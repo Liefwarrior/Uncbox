@@ -1285,6 +1285,20 @@ input[type='color'] {
   justify-self: start;
 }
 
+/* ---------- WoW addon controls ---------- */
+
+.addon-message {
+  margin: 0 0 8px;
+  color: var(--muted);
+  font-size: 13px;
+}
+.addon-message.error {
+  color: var(--bad);
+}
+button.addon-message {
+  color: var(--accent);
+}
+
 /* ---------- Steam ---------- */
 
 .steam-now {

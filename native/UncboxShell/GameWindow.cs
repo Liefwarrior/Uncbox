@@ -14,6 +14,7 @@ internal sealed class GameWindow(IntPtr hwnd)
     public IntPtr Handle { get; } = hwnd;
     public string Title => Native.TitleOf(Handle);
     public bool Alive => Native.IsWindow(Handle);
+    public bool Shown => Native.IsWindowVisible(Handle);
 
     /// <summary>
     /// The title bar or sizing border is back. Games (Unreal ones especially) restyle their own

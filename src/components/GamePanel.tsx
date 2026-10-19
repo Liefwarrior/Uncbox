@@ -21,6 +21,24 @@ const SOURCES: { id: VideoSource; label: string; icon: IconName; hint: string }[
   ...(shell ? [{ id: 'native' as const, label: 'Play here', icon: 'play' as const, hint: 'Your game itself, played right in Uncbox' }] : []),
 ];
 
+/** Steam's two views, which the app opens and puts in the panel (Steam Big Picture preset). */
+const STEAM_VIEWS = [
+  {
+    id: 'bigpicture',
+    label: 'Big Picture',
+    icon: 'gamepad' as const,
+    hint: 'Steam on the TV-style screen, played right here',
+    match: { process: 'steamwebhelper', title: 'Steam Big Picture Mode', exact: true },
+  },
+  {
+    id: 'library',
+    label: 'Steam library',
+    icon: 'list' as const,
+    hint: 'The regular Steam window, right here',
+    match: { process: 'steamwebhelper', title: 'Steam', exact: true },
+  },
+];
+
 const FITS: { id: VideoFit; label: string }[] = [
   { id: 'contain', label: 'Fit' },
   { id: 'cover', label: 'Fill' },
@@ -72,7 +90,24 @@ export function GamePanel({ game, preset, wow, clips, mutatePreset }: Props) {
   }, [stream]);
   // Playing WoW here without a capture, the strip's place is known anyway: the top few pixels.
   const stripPx = wow && game.source === 'native' && !stripPct ? ROWS * BLOCK + 1 : 0;
+  const steamViews = shell && preset === 'steam' ? STEAM_VIEWS : [];
+  const steamView = game.source === 'native' ? steamViews.find((v) => v.match.title === game.nativeGame?.title) : undefined;
+  const openSteam = (view: (typeof STEAM_VIEWS)[number]) => {
+    native.switchTo(view.match);
+    set({ source: 'native', nativeGame: view.match });
+    void fetch('/api/steam/open', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ view: view.id }),
+    }).catch(() => {});
+  };
   const choose = (source: VideoSource) => {
+    // From a Steam view, Play here means picking some other window.
+    if (source === 'native' && steamView) {
+      set({ nativeGame: null });
+      native.pick();
+      return;
+    }
     set({ source });
     // The window picker needs this click's user activation, so open it right away.
     if (source === 'window') void win.pick();
@@ -111,6 +146,13 @@ export function GamePanel({ game, preset, wow, clips, mutatePreset }: Props) {
                     <span>{s.hint}</span>
                   </button>
                 ))}
+                {steamViews.map((v) => (
+                  <button key={v.id} className="source-card" onClick={() => openSteam(v)}>
+                    <Icon name={v.icon} size={22} />
+                    <strong>{v.label}</strong>
+                    <span>{v.hint}</span>
+                  </button>
+                ))}
               </div>
             </>
           )}
@@ -145,8 +187,13 @@ export function GamePanel({ game, preset, wow, clips, mutatePreset }: Props) {
           </span>
           <div className="seg">
             {[{ id: 'none' as const, label: 'None' }, ...SOURCES].map((s) => (
-              <button key={s.id} className={game.source === s.id ? 'on' : ''} onClick={() => choose(s.id)}>
+              <button key={s.id} className={game.source === s.id && !steamView ? 'on' : ''} onClick={() => choose(s.id)}>
                 {s.label}
+              </button>
+            ))}
+            {steamViews.map((v) => (
+              <button key={v.id} className={steamView === v ? 'on' : ''} title={v.hint} onClick={() => openSteam(v)}>
+                {v.label}
               </button>
             ))}
           </div>
