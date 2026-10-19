@@ -67,3 +67,13 @@ describe('notifications', () => {
     expect(appName('Spotify.exe')).toBe('Spotify');
   });
 });
+
+describe('game settings', () => {
+  it('switches an Unreal game to windowed fullscreen and leaves the rest', async () => {
+    const { windowedFullscreen } = await import('./gamesettings.mjs');
+    const ini = '[/Script/Engine.GameUserSettings]\nbUseVSync=False\nFullscreenMode=0\nLastConfirmedFullscreenMode=2\nPreferredFullscreenMode=0\nVersion=5\n';
+    expect(windowedFullscreen(ini, ['FullscreenMode', 'LastConfirmedFullscreenMode', 'PreferredFullscreenMode'])).toBe(
+      '[/Script/Engine.GameUserSettings]\nbUseVSync=False\nFullscreenMode=1\nLastConfirmedFullscreenMode=1\nPreferredFullscreenMode=1\nVersion=5\n',
+    );
+  });
+});

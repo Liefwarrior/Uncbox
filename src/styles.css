@@ -612,6 +612,8 @@ input[type='color'] {
   list-style: none;
 }
 .toggles label {
+  /* Holds the hidden checkbox in place; otherwise focusing it scrolls the whole page. */
+  position: relative;
   display: flex;
   align-items: center;
   gap: 12px;

@@ -15,6 +15,12 @@ internal sealed class GameWindow(IntPtr hwnd)
     public string Title => Native.TitleOf(Handle);
     public bool Alive => Native.IsWindow(Handle);
 
+    /// <summary>
+    /// The title bar or sizing border is back. Games (Unreal ones especially) restyle their own
+    /// window on load or a settings change, so the app checks this every time it re-places it.
+    /// </summary>
+    public bool HasFrame => (Native.GetWindowLongPtr(Handle, Native.GWL_STYLE) & (Native.WS_CAPTION | Native.WS_THICKFRAME)) != 0;
+
     public void MakeBorderless()
     {
         if (Native.IsIconic(Handle)) Native.ShowWindow(Handle, Native.SW_RESTORE);

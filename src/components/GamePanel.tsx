@@ -5,7 +5,7 @@ import { useReplayBuffer } from '../clips/replay';
 import { shareGameStream } from '../hud/reader';
 import { useDeviceStream, useVideoDevices, useWindowStream } from '../media';
 import { shell } from '../native';
-import type { ClipSettings, GameSettings, PresetData, VideoFit, VideoSource } from '../state/model';
+import type { ClipSettings, GameSettings, PresetData, PresetId, VideoFit, VideoSource } from '../state/model';
 import type { MutatePreset } from '../state/useAppState';
 import { useBoard } from './Board';
 import { CropEditor } from './CropEditor';
@@ -29,13 +29,14 @@ const FITS: { id: VideoFit; label: string }[] = [
 
 interface Props {
   game: GameSettings;
+  preset: PresetId;
   /** The WoW preset's data, to fill in from the addon strip in the video; null in other games. */
   wow: PresetData | null;
   clips: ClipSettings;
   mutatePreset: MutatePreset;
 }
 
-export function GamePanel({ game, wow, clips, mutatePreset }: Props) {
+export function GamePanel({ game, preset, wow, clips, mutatePreset }: Props) {
   const { editing, hide, fitWidthToAspect } = useBoard();
   const device = useDeviceStream(game.source === 'device', game.deviceId);
   // Play here shows the game itself, but clips and the WoW link still read a capture of it.
@@ -54,6 +55,16 @@ export function GamePanel({ game, wow, clips, mutatePreset }: Props) {
   const crop = stripPct > game.crop.top ? { ...game.crop, top: stripPct } : game.crop;
   // Clips get the same crop, so they never show the strip either.
   useReplayBuffer(stream, crop, clips.enabled);
+  // Play here can't move exclusive full screen, so games Uncbox knows are switched to windowed
+  // fullscreen in their own settings (only while they're closed; it takes effect next start).
+  useEffect(() => {
+    if (game.source !== 'native') return;
+    void fetch('/api/game-settings', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ preset }),
+    }).catch(() => {});
+  }, [game.source, preset]);
   // The Stats panel reads numbers off the game picture.
   useEffect(() => {
     shareGameStream(stream);

@@ -26,6 +26,21 @@ describe('placePanel', () => {
     expect(overlaps(placed, layout[0])).toBe(false);
   });
 
+  it('takes room from the biggest panel on a full board, never the game', () => {
+    const layout: GridItem[] = [
+      { i: 'game', x: 0, y: 0, w: 17, h: 24 },
+      { i: 'camera', x: 17, y: 0, w: 7, h: 7 },
+      { i: 'chat', x: 17, y: 7, w: 7, h: 17 },
+    ];
+    const placed = placePanel(layout, 'steam');
+    expect(placed).toMatchObject({ x: 17, w: 7 });
+    expect(layout[0]).toEqual({ i: 'game', x: 0, y: 0, w: 17, h: 24 });
+    expect(layout[2].h).toBeGreaterThanOrEqual(PANEL_INFO.chat.minH);
+    expect(placed.y).toBe(7 + layout[2].h);
+    expect(placed.y + placed.h).toBe(24);
+    for (const item of layout) expect(overlaps(placed, item)).toBe(false);
+  });
+
   it('drops the panel below a full board', () => {
     const layout: GridItem[] = [{ i: 'game', x: 0, y: 0, w: GRID_COLS, h: 24 }];
     expect(placePanel(layout, 'chat')).toMatchObject({ x: 0, y: 24 });

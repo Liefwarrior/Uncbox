@@ -417,12 +417,17 @@ internal sealed class ShellForm : Form
         }
         if (_game is not null && _gameFullScreen)
         {
+            if (_game.HasFrame) _game.MakeBorderless();
             var s = Screen.FromHandle(_game.Handle).Bounds;
             _game.Place(new Native.RECT { Left = s.Left, Top = s.Top, Right = s.Right, Bottom = s.Bottom });
             return;
         }
         // In the tray, the game stays where it is.
-        if (_game is not null && Visible && _gameRect is { Width: > 0, Height: > 0 } rect) _game.Place(rect);
+        if (_game is not null && Visible && _gameRect is { Width: > 0, Height: > 0 } rect)
+        {
+            if (_game.HasFrame) _game.MakeBorderless();
+            _game.Place(rect);
+        }
         ApplyRegion();
     }
 

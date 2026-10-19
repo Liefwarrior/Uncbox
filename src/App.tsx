@@ -58,6 +58,17 @@ export function App() {
   }, [enterStream, exitStream]);
 
   useClipKeyInPage(state.clips);
+
+  // The page itself never scrolls: everything fits the window. If something focused off screen
+  // nudges it anyway, put it straight back, or the whole layout stays shifted.
+  useEffect(() => {
+    const back = () => {
+      if (window.scrollX || window.scrollY) window.scrollTo(0, 0);
+    };
+    back();
+    window.addEventListener('scroll', back);
+    return () => window.removeEventListener('scroll', back);
+  }, []);
   useGameDetect(PRESETS[state.preset].detect, mutatePreset);
 
   // An undo restores into the active preset, so it must not outlive a switch to another one.
