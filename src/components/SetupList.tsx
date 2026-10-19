@@ -21,13 +21,15 @@ export function SetupList({ state, mutatePreset }: Props) {
   const data = state.presets[state.preset];
   const shown = new Set(data.layout.map((item) => item.i));
 
-  const steps: { id: PanelId; label: string; done: boolean }[] = [
+  // "always" lines show even when their panel is hidden; clicking one adds the panel back.
+  const steps: { id: PanelId; label: string; done: boolean; always?: boolean }[] = [
     { id: 'game', label: 'Show your game', done: data.game.source !== 'none' },
     { id: 'camera', label: 'Turn on your camera', done: state.camera.enabled },
     { id: 'chat', label: 'Add your Twitch chat', done: normalizeChannel(state.twitch.channel) !== '' },
     { id: 'discord', label: 'Connect Discord', done: discord.status === 'ready' },
   ];
-  const mine = steps.filter((s) => shown.has(s.id));
+  if (state.preset === 'wow') steps.push({ id: 'quests', label: 'Connect WoW', done: data.wowLinkAt > 0, always: true });
+  const mine = steps.filter((s) => s.always || shown.has(s.id));
   const left = mine.filter((s) => !s.done).length;
   if (left === 0) return null;
 

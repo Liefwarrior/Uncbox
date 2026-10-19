@@ -9,12 +9,14 @@ import {
   GRID_COLS,
   MAX_HISTORY,
   MAX_MILESTONES,
+  MAX_QUESTS,
   MAX_SLOTS,
   PANEL_IDS,
   type PanelId,
   PRESET_IDS,
   type PresetData,
   type PresetId,
+  type QuestState,
   SMITE_ROLES,
   emptySlot,
   isWindowId,
@@ -89,6 +91,8 @@ function cleanLayout(saved: unknown, fallback: GridItem[], windows: AppWindow[])
   return items;
 }
 
+const QUEST_STATES: QuestState[] = ['open', 'complete', 'failed'];
+
 function hydratePreset(id: PresetId, saved: unknown): PresetData {
   const base = defaultPresetData(id);
   const p = overlay(base, saved);
@@ -115,6 +119,13 @@ function hydratePreset(id: PresetId, saved: unknown): PresetData {
   p.record.history = objects(p.record.history)
     .map((r) => overlay({ id: uid(), god: '', role: '' as const, k: 0, d: 0, a: 0, win: false, at: 0 }, r))
     .slice(0, MAX_HISTORY);
+  p.quests = objects(p.quests)
+    .map((q) => ({
+      ...overlay({ title: '', level: 0, state: 'open' as QuestState }, q),
+      objectives: (Array.isArray(q.objectives) ? objects(q.objectives) : []).map((o) => overlay({ text: '', done: false }, o)),
+    }))
+    .filter((q) => q.title && QUEST_STATES.includes(q.state))
+    .slice(0, MAX_QUESTS);
   return p;
 }
 

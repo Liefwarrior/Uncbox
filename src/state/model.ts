@@ -19,6 +19,7 @@ export const PANEL_IDS = [
   'record',
   'character',
   'discord',
+  'quests',
 ] as const;
 export type PanelId = (typeof PANEL_IDS)[number];
 
@@ -149,6 +150,16 @@ export interface CharacterState {
   hardcore: boolean;
 }
 
+export type QuestState = 'open' | 'complete' | 'failed';
+
+/** A quest from the WoW addon. The objective text carries its own progress ("Kobolds slain: 4/10"). */
+export interface Quest {
+  title: string;
+  level: number;
+  state: QuestState;
+  objectives: { text: string; done: boolean }[];
+}
+
 export interface PresetData {
   layout: GridItem[];
   /** What fills the space behind the panels; see src/backgrounds.ts. */
@@ -167,6 +178,10 @@ export interface PresetData {
   match: MatchState;
   record: RecordState;
   character: CharacterState;
+  /** The WoW quest log, filled in by the addon (integrations/wow). */
+  quests: Quest[];
+  /** When the WoW addon last sent something new; 0 if it never has. */
+  wowLinkAt: number;
   windows: AppWindow[];
 }
 
@@ -192,6 +207,7 @@ export const GRID_ROWS = 24;
 export const MAX_SLOTS = 12;
 export const MAX_MILESTONES = 24;
 export const MAX_HISTORY = 30;
+export const MAX_QUESTS = 50;
 
 export function uid(): string {
   return Math.random().toString(36).slice(2, 10);

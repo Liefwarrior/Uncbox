@@ -1,6 +1,7 @@
 import { useState } from 'react';
+import { useWowLink } from '../../integrations/wow/useWowLink';
 import { useDeviceStream, useVideoDevices, useWindowStream } from '../media';
-import type { GameSettings, VideoFit, VideoSource } from '../state/model';
+import type { GameSettings, PresetData, VideoFit, VideoSource } from '../state/model';
 import type { MutatePreset } from '../state/useAppState';
 import { useBoard } from './Board';
 import { CropEditor } from './CropEditor';
@@ -21,10 +22,12 @@ const FITS: { id: VideoFit; label: string }[] = [
 
 interface Props {
   game: GameSettings;
+  /** The WoW preset's data, to fill in from the addon strip in the video; null in other games. */
+  wow: PresetData | null;
   mutatePreset: MutatePreset;
 }
 
-export function GamePanel({ game, mutatePreset }: Props) {
+export function GamePanel({ game, wow, mutatePreset }: Props) {
   const { editing, hide, fitWidthToAspect } = useBoard();
   const device = useDeviceStream(game.source === 'device', game.deviceId);
   const win = useWindowStream(game.source === 'window');
@@ -35,6 +38,9 @@ export function GamePanel({ game, mutatePreset }: Props) {
   const stream = game.source === 'device' ? device.stream : game.source === 'window' ? win.stream : null;
   const error = game.source === 'device' ? device.error : game.source === 'window' ? win.error : null;
   const capturing = game.source === 'device' || game.source === 'window';
+  const stripPct = useWowLink(stream, wow, mutatePreset);
+  // Viewers never see the addon's strip: crop at least down to its bottom edge.
+  const crop = stripPct > game.crop.top ? { ...game.crop, top: stripPct } : game.crop;
   const set = (patch: Partial<GameSettings>) => mutatePreset((d) => void Object.assign(d.game, patch));
   const choose = (source: VideoSource) => {
     set({ source });
@@ -51,7 +57,7 @@ export function GamePanel({ game, mutatePreset }: Props) {
         <CroppedVideo
           stream={stream}
           fit={game.fit}
-          crop={game.crop}
+          crop={crop}
           pixelated={game.pixelated}
           onAspect={setAspect}
         />

@@ -1,0 +1,9 @@
+## Interface: 11507, 11508, 11509, 11510, 11600
+## Title: Uncbox
+## Notes: Shows your character and quest log on your Uncbox stream dashboard.
+## Author: Liefwarrior
+## Version: 1.0.0
+## SavedVariables: UncboxDB
+
+Codec.lua
+Uncbox.lua

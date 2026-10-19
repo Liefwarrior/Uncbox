@@ -27,6 +27,7 @@ export const PANEL_INFO: Record<PanelId, PanelInfo> = {
   record: { title: 'Session', hint: 'Wins, losses and streak', w: 5, h: 7, minW: 4, minH: 5 },
   character: { title: 'Character', hint: 'Level, XP, zone and gold', w: 7, h: 8, minW: 5, minH: 6 },
   discord: { title: 'Discord', hint: 'Who is talking in voice', w: 4, h: 7, minW: 3, minH: 3 },
+  quests: { title: 'Quest log', hint: 'Your quests, live from WoW', w: 5, h: 8, minW: 4, minH: 4 },
 };
 
 const WINDOW_SIZE = { w: 7, h: 8, minW: 3, minH: 3 };

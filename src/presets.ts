@@ -56,6 +56,8 @@ const baseData = (): Omit<PresetData, 'layout'> => ({
     gold: '',
     hardcore: false,
   },
+  quests: [],
+  wowLinkAt: 0,
   windows: [],
 });
 
@@ -122,8 +124,8 @@ export const PRESETS: Record<PresetId, PresetDef> = {
     id: 'wow',
     name: 'WoW Forever',
     blurb: 'Leveling, raids',
-    titles: { run: '/played', notes: 'Quest log' },
-    featured: ['game', 'camera', 'character', 'chat', 'discord', 'progress', 'notes', 'run'],
+    titles: { run: '/played' },
+    featured: ['game', 'camera', 'character', 'quests', 'chat', 'discord', 'progress', 'run'],
     slots: { variant: 'list', name: 'Name', detail: 'Class', showDown: true },
     layout: [
       { i: 'game', x: 0, y: 0, w: 17, h: 17 },
@@ -131,7 +133,7 @@ export const PRESETS: Record<PresetId, PresetDef> = {
       { i: 'character', x: 17, y: 7, w: 7, h: 8 },
       { i: 'chat', x: 17, y: 15, w: 7, h: 9 },
       { i: 'progress', x: 0, y: 17, w: 5, h: 7 },
-      { i: 'notes', x: 5, y: 17, w: 4, h: 7 },
+      { i: 'quests', x: 5, y: 17, w: 4, h: 7 },
       { i: 'discord', x: 9, y: 17, w: 4, h: 7 },
       { i: 'run', x: 13, y: 17, w: 4, h: 7 },
     ],

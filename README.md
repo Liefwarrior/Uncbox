@@ -22,7 +22,7 @@ Note:  These are planned integrations, they may not work and may result in the s
   <tr>
     <td><b>Pokémon</b><br>Party with fainted markers, 8 badges, deaths and resets, run timer.</td>
     <td><b>SMITE 2</b><br>Live K/D/A, session record with win rate and streak, item build.</td>
-    <td><b>WoW Forever</b><br>Character sheet with class color, level and XP, raids, /played.</td>
+    <td><b>WoW Forever</b><br>Character sheet with class color, level and XP, a live <a href="integrations/wow/README.md">quest log</a>, raids, /played.</td>
     <td><b>Terminal</b><br>Any game, dressed as PowerShell in Windows Terminal.</td>
   </tr>
 </table>
