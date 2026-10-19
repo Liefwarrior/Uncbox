@@ -129,8 +129,9 @@ const SIZES = [3, 2, 4, 1.5];
  */
 export function locate(img: Rgba): StripSpot | null {
   for (const block of SIZES) {
-    for (let y = 0; y <= 100; y++) {
-      for (let x = 0; x <= 60; x++) {
+    // Starting just off the edge, so a strip flush with the frame's corner still lands mid-block.
+    for (let y = -2; y <= 100; y++) {
+      for (let x = -2; x <= 60; x++) {
         if (!syncAt(img, { x, y, block })) continue;
         // Several offsets match the same blocks; take the middle one so samples land mid-block.
         let x2 = x;
