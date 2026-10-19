@@ -63,8 +63,9 @@ options when it starts, so Uncbox restarts it (back into Big Picture if you were
 while a game is running.
 
 **Steam.** In the Steam Big Picture preset, **Big Picture** and **Steam library** put Steam itself
-in the panel. A game you start from there takes the panel while it runs (Uncbox finds it by its
-install folder), and Steam comes back when you quit it.
+in the panel. A game you start from there takes the panel the moment its window appears (Windows
+tells Uncbox about new windows, and Uncbox takes any from your Steam game folders), and Steam comes
+back as soon as you quit it.
 
 For OBS, use a **Display Capture** of the monitor Uncbox is on. A Window Capture of Uncbox leaves
 the game out, because the game is its own window.

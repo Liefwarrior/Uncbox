@@ -11,7 +11,3 @@ Things to build next, newest first. Move an item out when it ships.
   (`%LOCALAPPDATA%\SMITE2Alpha\Saved\Logs\PEX_Timeline_*.csv`, one row a second: frame time, GPU
   time, ping, packets). A widget could show live ping and frame rate from it, and from other games'
   equivalents where they exist.
-- **Instant Steam handoff.** When a game starts from Big Picture inside Uncbox, the app should
-  catch the game's window the moment Windows creates it (a WinEvent hook on new windows from
-  programs in the Steam game folders) instead of polling Steam every 3 s and windows every 2 s.
-  Same on the way back to Big Picture.

@@ -10,14 +10,14 @@ const LOOK_EVERY_MS = 2000;
  * becomes a hole the game shows through, so mouse, keyboard and controller go straight to it.
  * The game is remembered, so it goes back in the panel when it or Uncbox starts again.
  *
- * follow, while set, takes over from the saved window without replacing it: the game Steam
- * started from Big Picture, found by its install folder. When it's gone, the saved one comes back.
+ * A game the app took by itself (one Steam started from Big Picture) is shown the same way but
+ * isn't remembered: the saved window stays Big Picture or the library, and when the game closes
+ * the app lets go and the look-up below puts that back.
  */
 export function useNativeGame(
   on: boolean,
   saved: GameSettings['nativeGame'],
   remember: (game: GameSettings['nativeGame']) => void,
-  follow: { dir: string } | null = null,
 ) {
   const [attached, setAttached] = useState<{ id: string; title: string } | null>(null);
   const [picking, setPicking] = useState(false);
@@ -26,7 +26,7 @@ export function useNativeGame(
     if (msg.type === 'picture') setPicture(msg.on ? { launchOption: msg.launchOption } : null);
     if (msg.type === 'attached') {
       setAttached({ id: msg.id, title: msg.title });
-      if (!follow && msg.process && (saved?.process !== msg.process || saved?.title !== msg.title)) {
+      if (!msg.followed && msg.process && (saved?.process !== msg.process || saved?.title !== msg.title)) {
         remember({ process: msg.process, title: msg.title });
       }
     } else if (msg.type === 'detached') {
@@ -42,11 +42,10 @@ export function useNativeGame(
     return () => send({ type: 'detach' });
   }, [on]);
 
-  // What belongs in the panel: the followed game, or the saved window.
-  const target = follow ?? saved;
-  const targetKey = follow ? `dir\n${follow.dir}` : saved ? `${saved.process}\n${saved.title}` : '';
+  // What belongs in the panel: the saved window.
+  const targetKey = saved ? `${saved.process}\n${saved.title}` : '';
 
-  // When that changes (a game started or closed), give back what's there now.
+  // When that changes, give back what's there now.
   const lastTarget = useRef(targetKey);
   useEffect(() => {
     if (lastTarget.current === targetKey) return;
@@ -56,8 +55,8 @@ export function useNativeGame(
 
   // Until it's in the panel, keep looking for it: it may not be running yet.
   useEffect(() => {
-    if (!on || !shell || !target || attached || picking) return;
-    const look = () => send({ type: 'attach', match: target });
+    if (!on || !shell || !saved || attached || picking) return;
+    const look = () => send({ type: 'attach', match: saved });
     look();
     const t = setInterval(look, LOOK_EVERY_MS);
     return () => clearInterval(t);

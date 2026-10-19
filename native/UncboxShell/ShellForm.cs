@@ -17,7 +17,9 @@ namespace UncboxShell;
 /// The page and the app talk with small JSON messages (src/native.ts is the page's side):
 ///   page → app  { type: "windows" }                       list windows to pick from
 ///               { type: "attach", id } | { type: "attach", match: { process, title, exact? } }
-///               | { type: "attach", match: { dir } }  a window of a program in that folder (a Steam game)
+///               { type: "follow", folders: [...] }        take any window of a program in these folders
+///                    the moment it appears (the Steam library folders, while Steam is in the panel);
+///                    [] stops. A game taken this way goes back to Steam when it closes
 ///               { type: "detach" }                        give the game window back
 ///               { type: "rect", x, y, w, h, crop, stripPx } | { type: "rect" }
 ///                    where the panel's hole is, in device pixels; crop (percent per edge) and
@@ -26,7 +28,8 @@ namespace UncboxShell;
 ///               { type: "fullscreen" }                    the game gets the whole screen until Ctrl+Shift+F12
 ///               { type: "minimize" }                      to the tray
 ///   app → page  { type: "windows", windows: [{ id, title, process }] }
-///               { type: "attached", id, title, process } | { type: "detached" }
+///               { type: "attached", id, title, process, followed } | { type: "detached" }
+///                    followed: the app took it by itself (see follow), so it isn't the saved game
 ///               { type: "picture", on, launchOption }  the game won't be resized, so it's shown as a
 ///                    live picture; launchOption, if known, is what makes it resizable
 /// </summary>
@@ -63,6 +66,15 @@ internal sealed class ShellForm : Form
     private bool _trayHinted;
 
     private GameWindow? _game;
+    /// <summary>The game was taken by the follow folders, not picked or looked up by the page.</summary>
+    private bool _gameFollowed;
+    /// <summary>Folders (with a trailing separator) whose programs' windows take the panel as they appear.</summary>
+    private string[] _follow = [];
+    /// <summary>A followed game the page handed back (Steam's views): it isn't taken again while it lives.</summary>
+    private IntPtr _released;
+    /// <summary>The window event hooks, and their callback, kept in a field so it isn't collected.</summary>
+    private readonly List<IntPtr> _hooks = [];
+    private Native.WinEventProc? _onWinEvent;
     private Native.RECT? _hole;
     private Native.RECT? _gameRect;
     private Native.RECT? _applied;
@@ -146,6 +158,7 @@ internal sealed class ShellForm : Form
         RegisterHotKey(Handle, HOTKEY_ID, MOD_CONTROL | MOD_SHIFT | MOD_NOREPEAT, (uint)Keys.F12);
         // A second start of Uncbox.exe signals this one to come back instead.
         _wakeWait = ThreadPool.RegisterWaitForSingleObject(_options.Wake, (_, _) => BeginInvoke(RestoreFromTray), null, -1, false);
+        HookWindowEvents();
 
         if (!await StartServer()) return;
 
@@ -284,6 +297,8 @@ internal sealed class ShellForm : Form
         _keepPlaced.Stop();
         UnregisterHotKey(Handle, HOTKEY_ID);
         _wakeWait?.Unregister(null);
+        foreach (var hook in _hooks) Native.UnhookWinEvent(hook);
+        _hooks.Clear();
         _game?.Restore();
         _tray.Visible = false;
         _tray.Dispose();
@@ -316,13 +331,12 @@ internal sealed class ShellForm : Form
             case "attach" when long.TryParse((string?)msg["id"], out long id):
                 Attach(new IntPtr(id));
                 break;
-            case "attach" when msg["match"] is JsonObject match && (string?)match["dir"] is { Length: > 0 } dir:
-                var inDir = FindInFolder(dir);
-                if (inDir != IntPtr.Zero) Attach(inDir);
-                break;
             case "attach" when msg["match"] is JsonObject match:
                 var found = Find((string?)match["process"] ?? "", (string?)match["title"] ?? "", (bool?)match["exact"] ?? false);
                 if (found != IntPtr.Zero) Attach(found);
+                break;
+            case "follow":
+                Follow(msg["folders"] as JsonArray);
                 break;
             case "detach":
                 Detach();
@@ -357,21 +371,73 @@ internal sealed class ShellForm : Form
     }
 
     /// <summary>
-    /// A window of a program installed in this folder: the game Steam just started, which can be any
-    /// exe in its folder, with any title. Its biggest window that isn't minimized wins.
+    /// The page's folders to follow (Steam's game folders), or none. Whatever of theirs is already
+    /// open is taken right away; anything that opens later is taken by the window event hooks.
     /// </summary>
-    private IntPtr FindInFolder(string dir)
+    private void Follow(JsonArray? folders)
     {
-        string prefix = Path.GetFullPath(dir).TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
-        return Native.AppWindows(Handle)
-            .Where(w => Native.ProcessPathOf(w.Hwnd).StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
-            .OrderBy(w => Native.IsIconic(w.Hwnd))
-            .ThenByDescending(w => Native.GetWindowRect(w.Hwnd, out var r) ? (long)r.Width * r.Height : 0)
-            .Select(w => w.Hwnd)
+        _follow = (folders ?? [])
+            .Select(f => (string?)f)
+            .Where(f => !string.IsNullOrWhiteSpace(f))
+            .Select(f => Path.GetFullPath(f!).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) + Path.DirectorySeparatorChar)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        if (_follow.Length == 0) _released = IntPtr.Zero;
+        if (_game is { Alive: true } && _gameFollowed) return;
+        var open = FindInFolders();
+        if (open != IntPtr.Zero) Attach(open, followed: true);
+    }
+
+    /// <summary>
+    /// A window of a program installed under one of the follow folders: the game Steam just started,
+    /// which can be any exe in its folder, with any title. Its biggest window that isn't minimized wins.
+    /// </summary>
+    private IntPtr FindInFolders()
+    {
+        if (_follow.Length == 0) return IntPtr.Zero;
+        return Native.TopLevelWindows(Handle)
+            .Where(h => h != _game?.Handle && h != _released && InFollowFolders(h))
+            .OrderBy(h => Native.IsIconic(h))
+            .ThenByDescending(h => Native.GetWindowRect(h, out var r) ? (long)r.Width * r.Height : 0)
             .FirstOrDefault();
     }
 
-    private void Attach(IntPtr hwnd)
+    private bool InFollowFolders(IntPtr hwnd)
+    {
+        string path = Native.ProcessPathOf(hwnd);
+        return path.Length > 0 && _follow.Any(f => path.StartsWith(f, StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
+    /// Windows tells us when a window is shown, renamed or comes to the front, so a game that Steam
+    /// starts takes the panel the moment its window opens, not on the page's next look. Three
+    /// separate hooks rather than one range, which would include the very frequent location changes.
+    /// Out of context, the events arrive through this thread's message loop, so the callback runs
+    /// on the UI thread.
+    /// </summary>
+    private void HookWindowEvents()
+    {
+        _onWinEvent = OnWindowEvent;
+        foreach (uint ev in new[] { Native.EVENT_OBJECT_SHOW, Native.EVENT_OBJECT_NAMECHANGE, Native.EVENT_SYSTEM_FOREGROUND })
+        {
+            var hook = Native.SetWinEventHook(ev, ev, IntPtr.Zero, _onWinEvent, 0, 0, Native.WINEVENT_OUTOFCONTEXT | Native.WINEVENT_SKIPOWNPROCESS);
+            if (hook != IntPtr.Zero) _hooks.Add(hook);
+        }
+    }
+
+    private void OnWindowEvent(IntPtr hook, uint eventType, IntPtr hwnd, int idObject, int idChild, uint thread, uint time)
+    {
+        // Cheapest checks first: this runs for every window event on the PC. The program's path
+        // is looked up last.
+        if (_follow.Length == 0 || idObject != 0 || idChild != 0 || hwnd == IntPtr.Zero) return;
+        if (hwnd == Handle || hwnd == _game?.Handle || hwnd == _released) return;
+        // A followed game that's still up keeps the panel; if it goes, KeepPlaced picks the next window.
+        if (_gameFollowed && _game is { Alive: true, Shown: true }) return;
+        if (!Native.IsAppWindow(hwnd) || !InFollowFolders(hwnd)) return;
+        Attach(hwnd, followed: true);
+    }
+
+    private void Attach(IntPtr hwnd, bool followed = false)
     {
         if (!Native.IsWindow(hwnd) || hwnd == Handle) return;
         if (_game?.Handle != hwnd)
@@ -381,8 +447,9 @@ internal sealed class ShellForm : Form
             _game = new GameWindow(hwnd);
             _game.MakeBorderless();
         }
+        _gameFollowed = followed;
         KeepPlaced();
-        Send(new { type = "attached", id = hwnd.ToString(), title = _game.Title, process = Native.ProcessNameOf(hwnd) });
+        Send(new { type = "attached", id = hwnd.ToString(), title = _game.Title, process = Native.ProcessNameOf(hwnd), followed });
     }
 
     private void Detach()
@@ -390,7 +457,11 @@ internal sealed class ShellForm : Form
         if (_gameFullScreen) LeaveGameFullScreen();
         StopPicture();
         _game?.Restore();
+        // The page handing a followed game back (to Steam's library, say) means it stays out of
+        // the panel, rather than being taken again the next time it comes to the front.
+        if (_gameFollowed && _game is not null) _released = _game.Handle;
         _game = null;
+        _gameFollowed = false;
         ApplyRegion();
         Send(new { type = "detached" });
     }
@@ -453,10 +524,20 @@ internal sealed class ShellForm : Form
     /// </summary>
     private void KeepPlaced()
     {
+        if (_released != IntPtr.Zero && !Native.IsWindow(_released)) _released = IntPtr.Zero;
         if (_game is { Alive: false })
         {
+            bool followed = _gameFollowed;
             StopPicture();
             _game = null;
+            _gameFollowed = false;
+            // Games often swap a splash window for the main one: look for that before giving up.
+            var next = followed ? FindInFolders() : IntPtr.Zero;
+            if (next != IntPtr.Zero)
+            {
+                Attach(next, followed: true);
+                return;
+            }
             Send(new { type = "detached" });
             if (_gameFullScreen)
             {

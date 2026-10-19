@@ -1,6 +1,8 @@
 // Steam, read from the Steam client's own files on this PC: no account, key or sign-in. What's
 // running (the registry value Steam keeps current), your name and picture, playtime, recent games,
-// and achievements for the game you're playing. Pushed as a "steam" event when it changes.
+// and achievements for the game you're playing, and the steamapps\common folder of every Steam
+// library (where games live, so the app can catch a game's window the moment it opens). Pushed as
+// a "steam" event when it changes.
 //
 //   GET /api/steam                    the snapshot below
 //   GET /api/steam/avatar             your Steam picture
@@ -280,6 +282,7 @@ export function createSteam({ broadcastEvent, sendJson, isLocal, readJson, dataD
         ? { ...game(appid), since: running.since, dir: await installDir(appid), achievements: await loadAchievements(appid) }
         : null,
       recent,
+      commons: (await libraries()).map((lib) => path.join(path.normalize(lib), 'steamapps', 'common')),
     };
   }
 

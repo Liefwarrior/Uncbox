@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { listen } from './events';
 
 // Steam, live from the Steam client on this PC (server/steam.mjs): what you're playing and your
-// recent games. Shared by the Steam panel and the game panel, which follows a game Steam starts.
+// recent games. Shared by the Steam panel and the game panel, which hands the panel to a game Steam starts.
 
 export interface SteamGame {
   appid: number;
@@ -28,6 +28,8 @@ export interface SteamSnapshot {
       })
     | null;
   recent?: SteamGame[];
+  /** The steamapps\common folder of every Steam library: where installed games live. */
+  commons?: string[];
 }
 
 /** The latest Steam snapshot, or null before it arrives (or while off). */

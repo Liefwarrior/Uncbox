@@ -4,7 +4,7 @@ import { useWowLink } from '../../integrations/wow/useWowLink';
 import { useReplayBuffer } from '../clips/replay';
 import { shareGameStream } from '../hud/reader';
 import { useDeviceStream, useVideoDevices, useWindowStream } from '../media';
-import { shell } from '../native';
+import { send, shell } from '../native';
 import { useSteam } from '../steam';
 import type { ClipSettings, GameSettings, PresetData, PresetId, VideoFit, VideoSource } from '../state/model';
 import type { MutatePreset } from '../state/useAppState';
@@ -68,8 +68,16 @@ export function GamePanel({ game, preset, wow, clips, mutatePreset }: Props) {
   const steamViews = shell && preset === 'steam' ? STEAM_VIEWS : [];
   const steamView = game.source === 'native' ? steamViews.find((v) => v.match.title === game.nativeGame?.title) : undefined;
   const steamNow = useSteam(Boolean(steamView));
-  const follow = steamView && steamNow?.playing?.dir ? { dir: steamNow.playing.dir } : null;
-  const native = useNativeGame(game.source === 'native', game.nativeGame, (nativeGame) => set({ nativeGame }), follow);
+  // The app does the switching itself, the moment the game's window opens: it's told where Steam's
+  // games live and takes any new window from there.
+  const commons = steamView ? (steamNow?.commons ?? []) : [];
+  const commonsKey = JSON.stringify(commons);
+  useEffect(() => {
+    if (!shell) return;
+    send({ type: 'follow', folders: JSON.parse(commonsKey) });
+    return () => send({ type: 'follow', folders: [] });
+  }, [commonsKey]);
+  const native = useNativeGame(game.source === 'native', game.nativeGame, (nativeGame) => set({ nativeGame }));
 
   const stream = game.source === 'device' ? device.stream : game.source === 'window' || game.source === 'native' ? win.stream : null;
   const error = game.source === 'device' ? device.error : game.source === 'window' || game.source === 'native' ? win.error : null;
