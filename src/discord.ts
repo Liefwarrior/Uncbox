@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { listen, onConnection } from './events';
 
 // Client side of server/discord.mjs. The server owns the Discord connection and the secret;
 // the page only sees this snapshot, pushed live as a named "discord" event on /api/events.
@@ -70,16 +71,15 @@ export function useDiscord() {
           setReachable(true);
         })
         .catch(() => alive && setReachable(false));
-    const events = new EventSource('/api/events');
     // Pushed updates only arrive on change, so re-read the snapshot every time the stream
     // (re)connects: after a server restart the page would otherwise keep a stale state forever.
-    events.onopen = () => void load();
-    events.onerror = () => setReachable(false);
-    events.addEventListener('discord', (e) => setSnap(JSON.parse((e as MessageEvent).data)));
+    const stopWatching = onConnection(() => void load(), () => setReachable(false));
+    const stopListening = listen('discord', (data) => setSnap(JSON.parse(data)));
     void load();
     return () => {
       alive = false;
-      events.close();
+      stopWatching();
+      stopListening();
     };
   }, []);
   return { ...snap, reachable };

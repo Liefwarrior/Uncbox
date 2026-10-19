@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { listen, onConnection } from '../events';
 import { defaultState, hydrate } from './hydrate';
 import type { AppState, PresetData } from './model';
 
@@ -38,18 +39,20 @@ export function useAppState() {
         setStatus('offline');
       });
 
-    const events = new EventSource('/api/events');
-    events.onmessage = (e) => {
-      const msg = JSON.parse(e.data) as { clientId: string; state: unknown };
+    const stopListening = listen('message', (data) => {
+      const msg = JSON.parse(data) as { clientId: string; state: unknown };
       if (msg.clientId === clientId) return;
       fromRemote.current = true;
       setState(hydrate(msg.state));
-    };
-    events.onerror = () => setStatus('offline');
-    events.onopen = () => setStatus((s) => (s === 'offline' ? 'synced' : s));
+    });
+    const stopWatching = onConnection(
+      () => setStatus((s) => (s === 'offline' ? 'synced' : s)),
+      () => setStatus('offline'),
+    );
     return () => {
       cancelled = true;
-      events.close();
+      stopListening();
+      stopWatching();
     };
   }, []);
 

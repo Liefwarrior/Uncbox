@@ -967,6 +967,105 @@ input[type='color'] {
   background: color-mix(in srgb, var(--accent) 14%, transparent);
 }
 
+/* ---------- clips ---------- */
+
+/* Above the undo toast when both are up. */
+.toast + .toast--clip {
+  bottom: 76px;
+}
+kbd {
+  display: inline-block;
+  min-width: 1.6em;
+  padding: 0 5px;
+  border: 1px solid var(--border);
+  border-bottom-width: 2px;
+  border-radius: 5px;
+  background: var(--panel-2);
+  color: var(--text);
+  font-family: var(--font-body);
+  font-size: 0.92em;
+  font-weight: 650;
+  line-height: 1.45;
+  text-align: center;
+}
+.clips__status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 2px 6px 6px;
+  color: var(--muted);
+  font-size: 13px;
+}
+.clips__dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--border);
+}
+.clips__status.is-on .clips__dot {
+  background: var(--bad);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--bad) 25%, transparent);
+}
+.clips__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0 6px 4px;
+}
+.clips__list {
+  display: grid;
+  margin: 4px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.clips__list .side-link {
+  width: 100%;
+  font-size: 14px;
+  color: var(--text);
+}
+.clips__list .side-link small {
+  margin-left: auto;
+  color: var(--muted);
+  font-size: 12px;
+}
+.clip-player {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: grid;
+  place-items: center;
+  padding: 32px;
+  background: rgba(0, 0, 0, 0.72);
+  animation: rise 0.25s var(--ease-out);
+}
+.is-stream .clip-player {
+  display: none;
+}
+.clip-player__box {
+  display: grid;
+  gap: 10px;
+  width: min(1280px, 100%);
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--panel-2);
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.6);
+}
+.clip-player video {
+  width: 100%;
+  max-height: calc(100vh - 140px);
+  border-radius: calc(var(--radius-sm) - 4px);
+  background: #000;
+}
+.clip-player__bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 14px;
+}
+
 .menu {
   position: fixed;
   z-index: 50;
@@ -1463,6 +1562,11 @@ input[type='color'] {
 }
 .slot.is-empty .slot__art {
   opacity: 0.45;
+}
+/* WoW: party names and initials in their class color. */
+.slot[style*='--tint'] .slot__name,
+.slot[style*='--tint'] .slot__initial {
+  color: var(--tint);
 }
 .slot.is-down {
   opacity: 0.72;

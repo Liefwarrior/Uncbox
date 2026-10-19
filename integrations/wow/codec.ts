@@ -4,13 +4,14 @@
 //
 // Block colors: 4 is red, 2 is green, 1 is blue, so 7 is white and 0 is black.
 
-export const BLOCK = 3;
-export const COLS = 160;
-export const ROWS = 4;
+export const BLOCK = 2;
+export const COLS = 256;
+export const ROWS = 2;
 export const SYNC = [7, 0, 4, 2, 1, 0, 7, 0];
 export const MAGIC = 0x55;
 export const KIND_CHARACTER = 1;
 export const KIND_QUESTS = 2;
+export const KIND_PARTY = 3;
 export const PAGE_BYTES = Math.floor(((COLS * ROWS - SYNC.length) * 3) / 8);
 export const PAYLOAD = PAGE_BYTES - 8;
 
@@ -120,8 +121,8 @@ function syncAt(img: Rgba, spot: StripSpot): boolean {
   return SYNC.every((v, i) => colorAt(img, ...center(spot, i, 0), true) === v);
 }
 
-/** Block sizes tried, most likely first: the addon draws 3 px blocks, but captures can be scaled. */
-const SIZES = [3, 2, 4, 1.5];
+/** Block sizes tried, most likely first: the addon draws 2 px blocks, but captures can be scaled. */
+const SIZES = [2, 1.5, 3, 4, 1];
 
 /**
  * Finds the sync pattern near the top-left corner. Window captures can include the title bar

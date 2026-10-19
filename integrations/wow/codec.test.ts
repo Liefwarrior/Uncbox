@@ -1,13 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { Assembler, COLS, fromBlocks, KIND_QUESTS, locate, paginate, readBlocks, toBlocks } from './codec';
-import { formatMoney, parseCharacter, parseQuests } from './parse';
+import { formatMoney, parseCharacter, parseParty, parseQuests, partySlots } from './parse';
 
 const utf8 = (s: string) => new TextEncoder().encode(s);
 const quests = Array.from({ length: 12 }, (_, i) => `Quest ${i} — Ténèbres\x1f12\x1f0\x1f0\x1fKobolds slain: 4/10`).join('\x1e');
 
 /** Draws blocks the way the addon does, with ±20 noise, over a gray background. */
 function render(blocks: number[], at: { x: number; y: number; block: number }) {
-  const width = 700;
+  const width = 1100;
   const height = 140;
   const data = new Uint8ClampedArray(width * height * 4).fill(90);
   const noise = () => Math.round(Math.random() * 40 - 20);
@@ -60,5 +60,22 @@ describe('parse', () => {
     expect(parseQuests('Bounty\x1f20\x1f1\x1f1\x1fHead: 1/1')).toEqual([
       { title: 'Bounty', level: 20, state: 'complete', objectives: [{ text: 'Head: 1/1', done: true }] },
     ]);
+  });
+
+  it('reads the party and keeps people in their slots', () => {
+    const text = ['LiefDRUID2301', 'BumtaWARRIOR2211', 'GhostMAGE2100'].join('');
+    const party = parseParty(text);
+    expect(party[1]).toEqual({ name: 'Bumta', cls: 'Warrior', level: 22, dead: true, online: true });
+    const first = partySlots(party, []);
+    expect(first).toHaveLength(5);
+    expect(first[2]).toMatchObject({ name: 'Ghost', detail: 'Level 21 Mage · Offline', down: false });
+    expect(first[1].down).toBe(true);
+    // Same group again: nothing changes, so nothing is saved.
+    expect(partySlots(party, first)).toEqual(first);
+    // Bumta leaves: Ghost keeps the slot (and picture) they had.
+    first[2].image = 'data:ghost';
+    const after = partySlots([party[0], party[2]], first);
+    expect(after[1]).toMatchObject({ id: first[2].id, name: 'Ghost', image: 'data:ghost' });
+    expect(after.slice(2).every((s) => !s.name)).toBe(true);
   });
 });

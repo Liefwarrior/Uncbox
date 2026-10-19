@@ -1,10 +1,16 @@
 # WoW live link
 
-In the WoW Forever preset, the Character panel and the Quest log fill themselves in from the game.
+In the WoW Forever preset, the Character panel, the Quest log and the Party panel fill themselves
+in from the game.
 
-WoW addons can't save files or go online while you play, so the Uncbox addon draws a thin strip
-of colored blocks in the top-left corner of your screen. Uncbox already captures the WoW window
-for the game panel, so it reads the strip from that video and crops it out. Viewers never see it.
+WoW addons can't save files or go online while you play: the only files they write are saved when
+you log out or `/reload`, and there's no network or clipboard access. So the Uncbox addon draws a
+thin strip of colored blocks, 512 × 4 pixels, along the top-left edge of your screen. Uncbox
+already captures the WoW window for the game panel, so it reads the strip from that video and crops
+it out. Viewers never see it.
+
+The strip only shows while there's something to send: for a moment after your character, quest
+log or party changes, and briefly once a minute so a dashboard opened later catches up.
 
 ## Set it up
 
@@ -21,9 +27,15 @@ Hardcore stays a manual switch in the Character panel's ⋯ menu.
 ## Good to know
 
 - It's made for WoW Forever (Interface 16001) and also loads in Classic Era.
-- `/uncbox` hides or shows the strip. While it's hidden, the dashboard stops updating.
-- The strip has to be visible on screen: keep other windows and addon frames off the top-left
-  corner. Alt+Z doesn't hide it.
+- `/uncbox` turns the strip off or on. While it's off, the dashboard stops updating.
+  `/uncbox sync` sends everything right away.
+- The strip has to be visible on screen when it shows: keep other windows and addon frames off the
+  top-left edge. Alt+Z doesn't hide it.
+- The Party panel lists you and up to four others (your raid group, in a raid), with level, class
+  and who's dead or offline. You can still type into it by hand; the addon rewrites it when your
+  group changes.
+- Updating from an older version? Install the addon again and `/reload`: the strip's layout
+  changed, so an old addon and a new Uncbox can't read each other.
 - Quests under a collapsed header in your quest log may be skipped.
 - It works through a capture card too, as long as the picture isn't scaled down too far.
 
@@ -33,9 +45,10 @@ Hardcore stays a manual switch in the Character panel's ⋯ menu.
 | --- | --- |
 | `addon/Uncbox/` | The addon. `Codec.lua` turns text into blocks, `Uncbox.lua` collects the data and draws them. |
 | `codec.ts` | The same codec in TypeScript, plus finding and reading the strip in a video frame. |
-| `parse.ts` | Turns the addon's text into character and quest log data. |
-| `useWowLink.ts` | Reads the game video about 10 times a second and updates the dashboard. |
+| `parse.ts` | Turns the addon's text into character, quest log and party data. |
+| `useWowLink.ts` | Reads every frame of the game video (up to 60 a second) and updates the dashboard. |
 | `install.mjs` | Finds WoW and installs the addon, for the Install addon button. |
 
-Each page of the strip is 160 × 4 blocks of 3 × 3 pixels, so it's 480 × 12 pixels: a sync
-pattern, then up to 229 bytes of text with a checksum. The addon shows about 8 pages a second.
+Each page of the strip is 256 × 2 blocks of 2 × 2 pixels, so it's 512 × 4 pixels: a sync
+pattern, then up to 181 bytes of text with a checksum. While it shows, the addon draws 20 pages a
+second and sends each change three times over, in case a captured frame misses a page.

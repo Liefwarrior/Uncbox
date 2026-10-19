@@ -119,7 +119,9 @@ function Setup() {
         </button>
       )}
       {message && <p className={message.error ? 'error' : 'muted'}>{message.text}</p>}
-      <p className="hint">The addon draws a thin strip in the game’s corner. Uncbox reads it and crops it out.</p>
+      <p className="hint">
+        The addon flashes a thin strip along the game’s top edge when something changes. Uncbox reads it and crops it out.
+      </p>
     </div>
   );
 }

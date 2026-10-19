@@ -1,13 +1,19 @@
 -- Shows your character and quest log on your Uncbox dashboard. Addons can't write files or talk
--- to the network while you play, so this draws them as a thin strip of colored blocks in the
--- top-left corner of the screen. Uncbox reads the strip from its capture of the game window and
--- crops it out, so viewers never see it. /uncbox hides or shows the strip.
+-- to the network while you play, so this draws them as a thin strip of colored blocks along the
+-- top-left edge of the screen. Uncbox reads the strip from its capture of the game window and
+-- crops it out, so viewers never see it.
+--
+-- The strip only shows while there's something to send: for a moment after your character or
+-- quest log changes, and once a minute so a dashboard opened later catches up. The rest of the
+-- time it's hidden. /uncbox turns it off or on, /uncbox sync sends everything now.
 
 local C = UncboxCodec
 local band = bit.band
 
 local FIELD, RECORD = "\31", "\30"
-local TICK = 0.125 -- 8 pages a second: a character page every other tick, quest pages between
+local TICK = 0.05 -- 20 pages a second while the strip shows
+local REPEATS = 3 -- each change is sent this many times over, in case a captured frame misses a page
+local HEARTBEAT = 60 -- seconds between catch-up sends while nothing changes
 
 -- Plain text only: no control characters (they separate fields) and no |c color codes.
 local function clean(s)
@@ -95,10 +101,31 @@ local function questsText()
   return table.concat(out, RECORD)
 end
 
--- Each channel resends its pages in turn; seq changes only when its text does.
+-- One record per group member, you first: name, class token, level, dead (1 or 0), online (1 or 0).
+-- In a raid, party1-4 are the others in your raid group.
+local function partyText()
+  local out = {}
+  for _, unit in ipairs({ "player", "party1", "party2", "party3", "party4" }) do
+    if UnitExists(unit) then
+      local _, classToken = UnitClass(unit)
+      out[#out + 1] = table.concat({
+        clean(UnitName(unit)),
+        clean(classToken),
+        UnitLevel(unit) or 0,
+        UnitIsDeadOrGhost(unit) and "1" or "0",
+        UnitIsConnected(unit) and "1" or "0",
+      }, FIELD)
+    end
+  end
+  return table.concat(out, RECORD)
+end
+
+-- Each channel sends its pages in turn while it has rounds left; seq changes only when its text
+-- does, so a catch-up send of unchanged text never makes Uncbox redo anything.
 local channels = {
-  { kind = C.KIND_CHARACTER, read = characterText, every = 1, pages = {}, next = 1 },
-  { kind = C.KIND_QUESTS, read = questsText, every = 2, pages = {}, next = 1 },
+  { kind = C.KIND_CHARACTER, read = characterText, every = 1, pages = {}, next = 1, rounds = 0 },
+  { kind = C.KIND_QUESTS, read = questsText, every = 2, pages = {}, next = 1, rounds = 0 },
+  { kind = C.KIND_PARTY, read = partyText, every = 1, pages = {}, next = 1, rounds = 0 },
 }
 
 local function refresh(ch)
@@ -111,6 +138,13 @@ local function refresh(ch)
   ch.seq = ch.seq and (ch.seq + 1) % 256 or math.random(0, 255)
   ch.pages = C.paginate(ch.kind, ch.seq, text)
   ch.next = 1
+  ch.rounds = REPEATS
+end
+
+local function sendAll(rounds)
+  for _, ch in ipairs(channels) do
+    ch.rounds = math.max(ch.rounds, rounds)
+  end
 end
 
 local strip, cells, shown = nil, {}, {}
@@ -158,22 +192,35 @@ local function draw(bytes)
   end
 end
 
-local ticks = 0
+local function pending(ch)
+  return ch.rounds > 0 and #ch.pages > 0
+end
+
+local turn = 0
 local function tick()
-  ticks = ticks + 1
-  -- Odd ticks show the character, even ones the quest log (or the character if it has none).
-  local ch = channels[ticks % 2 == 1 and 1 or 2]
-  if #ch.pages == 0 then
-    ch = channels[1]
-  end
-  if #ch.pages == 0 then
+  if UncboxDB.hidden then
     return
   end
-  if ch.next > #ch.pages then
-    ch.next = 1
+  -- Channels with something to send take turns, a page each; with nothing left, the strip hides.
+  local ch
+  for _ = 1, #channels do
+    turn = turn % #channels + 1
+    if pending(channels[turn]) then
+      ch = channels[turn]
+      break
+    end
+  end
+  if not ch then
+    strip:Hide()
+    return
   end
   draw(ch.pages[ch.next])
+  strip:Show()
   ch.next = ch.next + 1
+  if ch.next > #ch.pages then
+    ch.next = 1
+    ch.rounds = ch.rounds - 1
+  end
 end
 
 local events = CreateFrame("Frame")
@@ -189,23 +236,35 @@ events:SetScript("OnEvent", function(_, event)
   end
   UncboxDB = UncboxDB or {}
   buildStrip()
-  strip:SetShown(not UncboxDB.hidden)
+  strip:Hide()
   for _, ch in ipairs(channels) do
     refresh(ch)
     C_Timer.NewTicker(ch.every, function()
       refresh(ch)
     end)
   end
+  C_Timer.NewTicker(HEARTBEAT, function()
+    sendAll(1)
+  end)
   C_Timer.NewTicker(TICK, tick)
 end)
 
 SLASH_UNCBOX1 = "/uncbox"
-SlashCmdList.UNCBOX = function()
+SlashCmdList.UNCBOX = function(msg)
   if not strip then
     return
   end
-  UncboxDB.hidden = strip:IsShown()
-  strip:SetShown(not UncboxDB.hidden)
-  print(UncboxDB.hidden and "Uncbox: strip hidden. Your dashboard stops updating until you type /uncbox again."
-    or "Uncbox: strip shown.")
+  if strtrim(msg or ""):lower() == "sync" then
+    sendAll(REPEATS)
+    print("Uncbox: sending your character, quest log and party.")
+    return
+  end
+  UncboxDB.hidden = not UncboxDB.hidden
+  if UncboxDB.hidden then
+    strip:Hide()
+  else
+    sendAll(REPEATS)
+  end
+  print(UncboxDB.hidden and "Uncbox: off. Your dashboard stops updating until you type /uncbox again."
+    or "Uncbox: on.")
 end

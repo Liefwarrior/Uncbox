@@ -19,7 +19,16 @@ export interface PresetDef {
   titles: Partial<Record<PanelId, string>>;
   /** Panels listed first in the sidebar; the rest are still available. */
   featured: PanelId[];
-  slots: { variant: 'list' | 'tiles'; name: string; detail: string; showDown: boolean };
+  slots: {
+    variant: 'list' | 'tiles';
+    name: string;
+    detail: string;
+    showDown: boolean;
+    /** What a downed slot is called: "Fainted" unless set. */
+    down?: string;
+    /** A color for a slot's name and initial, e.g. from the WoW class in its detail. */
+    tint?: (detail: string) => string | undefined;
+  };
   layout: GridItem[];
   data: () => Omit<PresetData, 'layout'>;
 }
@@ -125,8 +134,9 @@ export const PRESETS: Record<PresetId, PresetDef> = {
     name: 'WoW Forever',
     blurb: 'Leveling, raids',
     titles: { run: '/played' },
-    featured: ['game', 'camera', 'character', 'quests', 'chat', 'discord', 'progress', 'run'],
-    slots: { variant: 'list', name: 'Name', detail: 'Class', showDown: true },
+    featured: ['game', 'camera', 'character', 'quests', 'slots', 'chat', 'discord', 'progress', 'run'],
+    // The addon fills these in with your group; they can still be typed in by hand.
+    slots: { variant: 'list', name: 'Name', detail: 'Level and class', showDown: true, down: 'Dead', tint: wowClassColor },
     layout: [
       { i: 'game', x: 0, y: 0, w: 17, h: 17 },
       { i: 'camera', x: 17, y: 0, w: 7, h: 7 },
@@ -198,7 +208,13 @@ export function panelTitle(def: PresetDef, id: PanelId): string {
 
 export const WOW_RACES = ['Human', 'Dwarf', 'Night Elf', 'Gnome', 'Orc', 'Undead', 'Tauren', 'Troll', 'Skyborne'];
 
-/** Official class colors, used to tint the character name. */
+/** The class color for text that names a class ("Level 23 Druid"), if it does. */
+export function wowClassColor(text: string): string | undefined {
+  const cls = Object.keys(WOW_CLASSES).find((c) => new RegExp(`\\b${c}\\b`, 'i').test(text));
+  return cls && WOW_CLASSES[cls];
+}
+
+/** Official class colors, used to tint the character name and party. */
 export const WOW_CLASSES: Record<string, string> = {
   Druid: '#FF7C0A',
   Hunter: '#AAD372',

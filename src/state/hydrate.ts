@@ -1,4 +1,5 @@
 import { isBackgroundId } from '../backgrounds';
+import { DEFAULT_CLIP_KEY, isClipKey } from '../clips/keys';
 import { sizeOf } from '../panels/catalog';
 import { PRESETS } from '../presets';
 import {
@@ -37,6 +38,7 @@ export function defaultState(): AppState {
     version: 2,
     preset: 'pokemon',
     twitch: { channel: '', hideBots: true },
+    clips: { enabled: true, key: DEFAULT_CLIP_KEY },
     discord: { pinned: [] },
     camera: { enabled: false, deviceId: null, mirrored: true },
     presets: eachPreset(defaultPresetData),
@@ -164,10 +166,13 @@ export function hydrate(saved: unknown): AppState {
   const base = defaultState();
   const presets = isObj(saved.presets) ? saved.presets : {};
   const camera = isObj(saved.camera) ? saved.camera : {};
+  const clips = overlay(base.clips, saved.clips);
+  if (!isClipKey(clips.key)) clips.key = DEFAULT_CLIP_KEY;
   return {
     version: 2,
     preset: PRESET_IDS.includes(saved.preset as PresetId) ? (saved.preset as PresetId) : base.preset,
     twitch: overlay(base.twitch, saved.twitch),
+    clips,
     discord: {
       pinned: (isObj(saved.discord) && Array.isArray(saved.discord.pinned) ? objects(saved.discord.pinned) : [])
         .map((c) => overlay({ id: '', name: '', guildId: '', guildName: '' }, c))

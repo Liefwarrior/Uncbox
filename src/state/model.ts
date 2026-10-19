@@ -192,10 +192,18 @@ export interface PinnedChannel {
   guildName: string;
 }
 
+/** Instant replay: the last 60 seconds of the game, saved with a key press (see src/clips). */
+export interface ClipSettings {
+  enabled: boolean;
+  /** The clip key, as a KeyboardEvent.code ("Equal" is =). */
+  key: string;
+}
+
 export interface AppState {
   version: 2;
   preset: PresetId;
   twitch: { channel: string; hideBots: boolean };
+  clips: ClipSettings;
   /** Voice channels pinned to the Discord panel for one-click joining. Shared by every preset. */
   discord: { pinned: PinnedChannel[] };
   camera: CameraSettings;

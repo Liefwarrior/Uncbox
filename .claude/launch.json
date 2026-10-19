@@ -10,7 +10,7 @@
     {
       "name": "uncbox-check",
       "runtimeExecutable": "node",
-      "runtimeArgs": ["C:/repositories/Uncbox/server/index.mjs", "--dev", "--port=5172", "--data=C:/repositories/Uncbox/data/test"],
+      "runtimeArgs": ["C:/repositories/Uncbox/server/index.mjs", "--dev", "--port=5172", "--data=C:/repositories/Uncbox/data/test", "--clips=C:/repositories/Uncbox/data/test/clips"],
       "port": 5172
     }
   ]

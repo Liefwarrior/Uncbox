@@ -114,12 +114,14 @@ function Slot({ index, item, hinted, def, highlighted, onEdit, onClear, onDragOv
   const file = useRef<HTMLInputElement>(null);
   const empty = !item.name && !item.detail && !item.image;
   const down = def.showDown && item.down;
+  const downLabel = def.down ?? 'Fainted';
+  const tint = def.tint?.(item.detail);
 
   return (
     <li
       ref={row}
       className={`slot ${down ? 'is-down' : ''} ${empty ? 'is-empty' : ''} ${highlighted ? 'is-target' : ''}`}
-      style={{ '--n': index } as CSSProperties}
+      style={{ '--n': index, ...(tint ? { '--tint': tint } : {}) } as CSSProperties}
       onDragOver={onDragOver}
       onDragLeave={onDragLeave}
       onDrop={onDrop}
@@ -181,12 +183,12 @@ function Slot({ index, item, hinted, def, highlighted, onEdit, onClear, onDragOv
         )}
       </div>
 
-      {down && <span className="slot__ko">Fainted</span>}
+      {down && <span className="slot__ko">{downLabel}</span>}
       <div className="slot__ctl ctl">
         {def.showDown && !empty && (
           <button
             className={`icon-btn ${item.down ? 'on' : ''}`}
-            title={item.down ? 'Revive' : 'Mark fainted'}
+            title={item.down ? 'Revive' : `Mark ${downLabel.toLowerCase()}`}
             onClick={() => onEdit({ down: !item.down })}
           >
             <Icon name="skull" size={15} />

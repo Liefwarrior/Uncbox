@@ -1,7 +1,7 @@
 // Turns the addon's texts into dashboard state. Fields are split by \x1f, quest records by \x1e;
 // see addon/Uncbox/Uncbox.lua for what each field is.
 
-import type { CharacterState, Quest, QuestState } from '../../src/state/model';
+import { type CharacterState, emptySlot, type Quest, type QuestState, type SlotItem } from '../../src/state/model';
 
 const FIELD = '\x1f';
 const RECORD = '\x1e';
@@ -62,4 +62,45 @@ export function parseQuests(text: string): Quest[] {
     for (let i = 0; i + 1 < rest.length; i += 2) objectives.push({ done: rest[i] === '1', text: rest[i + 1] });
     return { title, level: num(level), state: STATES[num(state)] ?? 'open', objectives };
   });
+}
+
+export interface PartyMember {
+  name: string;
+  /** "Druid", like the character sheet. */
+  cls: string;
+  level: number;
+  dead: boolean;
+  online: boolean;
+}
+
+/** Your group, you first. */
+export function parseParty(text: string): PartyMember[] {
+  if (!text) return [];
+  return text
+    .split(RECORD)
+    .map((record) => {
+      const [name = '', cls = '', level, dead, online] = record.split(FIELD);
+      return { name, cls: cls ? className(cls) : '', level: num(level), dead: dead === '1', online: online !== '0' };
+    })
+    .filter((m) => m.name);
+}
+
+/** A group fills five slots, the most a party has. */
+const PARTY_SLOTS = 5;
+
+/**
+ * The party panel's slots for this group. Someone already in a slot keeps it (and any picture
+ * added to it), so a change to one member doesn't redraw everyone, and nothing changes at all
+ * when the group is the same.
+ */
+export function partySlots(party: PartyMember[], current: SlotItem[]): SlotItem[] {
+  const free = current.filter((s) => !party.some((m) => m.name === s.name));
+  const take = () => free.shift() ?? emptySlot();
+  const slots = party.slice(0, PARTY_SLOTS).map((m): SlotItem => {
+    const had = current.find((s) => s.name === m.name) ?? take();
+    const detail = [m.level > 0 ? `Level ${m.level}` : '', m.cls].filter(Boolean).join(' ') + (m.online ? '' : ' · Offline');
+    return { ...had, name: m.name, detail, down: m.dead, image: had.name === m.name ? had.image : '' };
+  });
+  while (slots.length < PARTY_SLOTS) slots.push({ ...take(), name: '', detail: '', image: '', down: false });
+  return slots;
 }
