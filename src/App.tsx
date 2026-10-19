@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { Backdrop } from './components/Backdrop';
 import { Board } from './components/Board';
 import { Sidebar } from './components/Sidebar';
 import { UndoToast } from './components/UndoToast';
@@ -74,6 +75,7 @@ export function App() {
         onStreamMode={enterStream}
       />
       <main className="stage">
+        <Backdrop id={data.background} preset={state.preset} />
         <Board
           key={state.preset}
           layout={data.layout}

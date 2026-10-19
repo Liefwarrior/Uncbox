@@ -14,18 +14,21 @@ Note:  These are planned integrations, they may not work and may result in the s
 
 <table>
   <tr>
-    <td width="33%"><img src="docs/screenshots/pokemon.webp" alt="Pokémon preset"></td>
-    <td width="33%"><img src="docs/screenshots/smite2.webp" alt="SMITE 2 preset"></td>
-    <td width="33%"><img src="docs/screenshots/wow.webp" alt="WoW Forever preset"></td>
+    <td width="25%"><img src="docs/screenshots/pokemon.webp" alt="Pokémon preset"></td>
+    <td width="25%"><img src="docs/screenshots/smite2.webp" alt="SMITE 2 preset"></td>
+    <td width="25%"><img src="docs/screenshots/wow.webp" alt="WoW Forever preset"></td>
+    <td width="25%"><img src="docs/screenshots/terminal.webp" alt="Terminal preset"></td>
   </tr>
   <tr>
     <td><b>Pokémon</b><br>Party with fainted markers, 8 badges, deaths and resets, run timer.</td>
     <td><b>SMITE 2</b><br>Live K/D/A, session record with win rate and streak, item build.</td>
     <td><b>WoW Forever</b><br>Character sheet with class color, level and XP, raids, /played.</td>
+    <td><b>Terminal</b><br>Any game, dressed as PowerShell in Windows Terminal.</td>
   </tr>
 </table>
 
-Every panel works in every preset, so any game can borrow from the others.
+Every panel works in every preset, so any game can borrow from the others. Each preset also picks
+its own background in the sidebar: animated shapes or a pattern, drawn in the preset's colors.
 
 ## Get started
 

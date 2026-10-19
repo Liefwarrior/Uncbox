@@ -27,6 +27,7 @@ export interface PresetDef {
 const timer = () => ({ startedAt: null, elapsedMs: 0 });
 
 const baseData = (): Omit<PresetData, 'layout'> => ({
+  background: 'plain',
   game: {
     source: 'none',
     deviceId: null,
@@ -158,6 +159,32 @@ export const PRESETS: Record<PresetId, PresetDef> = {
         gold: '0g',
         hardcore: false,
       };
+      return d;
+    },
+  },
+
+  terminal: {
+    id: 'terminal',
+    name: 'Terminal',
+    blurb: 'PowerShell look, any game',
+    titles: { slots: 'Loadout', run: 'Session', progress: 'Goals', notes: 'Todo' },
+    featured: ['game', 'camera', 'chat', 'discord', 'run', 'progress', 'notes', 'slots'],
+    slots: { variant: 'list', name: 'Item', detail: 'Note', showDown: false },
+    layout: [
+      { i: 'game', x: 0, y: 0, w: 17, h: 17 },
+      { i: 'camera', x: 17, y: 0, w: 7, h: 7 },
+      { i: 'chat', x: 17, y: 7, w: 7, h: 17 },
+      { i: 'run', x: 0, y: 17, w: 4, h: 7 },
+      { i: 'progress', x: 4, y: 17, w: 5, h: 7 },
+      { i: 'notes', x: 9, y: 17, w: 4, h: 7 },
+      { i: 'discord', x: 13, y: 17, w: 4, h: 7 },
+    ],
+    data: () => {
+      const d = baseData();
+      d.run = { title: 'Session', subtitle: '', timer: timer() };
+      d.counters = [counter('Deaths')];
+      d.milestones = { label: 'Goals', items: Array.from({ length: 5 }, () => milestone()) };
+      d.notes = [note('Check audio levels'), note('Say hi to chat')];
       return d;
     },
   },
