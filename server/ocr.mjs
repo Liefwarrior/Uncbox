@@ -2,7 +2,9 @@
 // boxes on the game screen. A PowerShell helper starts on first use and stays up: about a quarter
 // second to start, then a few milliseconds a picture.
 //
-//   POST /api/ocr   { images: [base64 PNG, …] } → { texts: [string, …] }, this PC only
+//   POST /api/ocr   { images: [base64 PNG or JPEG, …], words? } → { texts: [string, …] }, this PC only
+//                   With words: true, also { lines: [[{ text, words: [[text, x, y, w, h], …] }, …], …] }
+//                   per picture, positions in the picture's pixels: for reading tables and screens.
 
 import { spawn } from 'node:child_process';
 import { createInterface } from 'node:readline';
@@ -18,16 +20,26 @@ function Await($op, [Type]$t) { $task = $asTask.MakeGenericMethod($t).Invoke($nu
 [Windows.Graphics.Imaging.BitmapDecoder, Windows.Foundation, ContentType = WindowsRuntime] | Out-Null
 $engine = [Windows.Media.Ocr.OcrEngine]::TryCreateFromUserProfileLanguages()
 [Console]::Out.WriteLine('ready'); [Console]::Out.Flush()
+# Each request is "T <base64>" for the text, or "W <base64>" for lines and words with positions (JSON).
 while ($null -ne ($line = [Console]::In.ReadLine())) {
-  $text = ''
+  $out = ''
+  $words = $line.StartsWith('W ')
   try {
-    $ms = New-Object System.IO.MemoryStream(,[Convert]::FromBase64String($line))
+    $ms = New-Object System.IO.MemoryStream(,[Convert]::FromBase64String($line.Substring(2)))
     $ras = [System.IO.WindowsRuntimeStreamExtensions]::AsRandomAccessStream($ms)
     $dec = Await ([Windows.Graphics.Imaging.BitmapDecoder]::CreateAsync($ras)) ([Windows.Graphics.Imaging.BitmapDecoder])
     $bmp = Await ($dec.GetSoftwareBitmapAsync()) ([Windows.Graphics.Imaging.SoftwareBitmap])
-    $text = (Await ($engine.RecognizeAsync($bmp)) ([Windows.Media.Ocr.OcrResult])).Text -replace '\\s+', ' '
-  } catch { }
-  [Console]::Out.WriteLine($text); [Console]::Out.Flush()
+    $result = Await ($engine.RecognizeAsync($bmp)) ([Windows.Media.Ocr.OcrResult])
+    if ($words) {
+      $lines = @($result.Lines | ForEach-Object {
+        @{ text = $_.Text; words = @($_.Words | ForEach-Object { ,@($_.Text, [int]$_.BoundingRect.X, [int]$_.BoundingRect.Y, [int]$_.BoundingRect.Width, [int]$_.BoundingRect.Height) }) }
+      })
+      $out = ConvertTo-Json -InputObject $lines -Compress -Depth 5
+    } else {
+      $out = $result.Text -replace '\\s+', ' '
+    }
+  } catch { if ($words) { $out = '[]' } }
+  [Console]::Out.WriteLine($out); [Console]::Out.Flush()
 }
 `;
 
@@ -59,11 +71,11 @@ export function createOcr({ isLocal, sendJson, readBody }) {
     return child;
   }
 
-  function read(image) {
+  function read(image, words) {
     helper ??= start();
     return new Promise((resolve) => {
       waiting.push(resolve);
-      helper.stdin.write(`${image}\n`);
+      helper.stdin.write(`${words ? 'W' : 'T'} ${image}\n`);
     });
   }
 
@@ -81,8 +93,22 @@ export function createOcr({ isLocal, sendJson, readBody }) {
     if (!images.every((i) => typeof i === 'string' && i.length < MAX_IMAGE_CHARS && /^[A-Za-z0-9+/=]*$/.test(i))) {
       return sendJson(res, 400, { error: 'Images must be base64 PNGs' });
     }
-    const texts = [];
-    for (const image of images) texts.push(await read(image));
-    return sendJson(res, 200, { texts });
+    if (!body.words) {
+      const texts = [];
+      for (const image of images) texts.push(await read(image, false));
+      return sendJson(res, 200, { texts });
+    }
+    const lines = [];
+    for (const image of images) {
+      let parsed = [];
+      try {
+        parsed = JSON.parse((await read(image, true)) || '[]');
+      } catch {
+        // A picture Windows couldn't read gives no lines.
+      }
+      // PowerShell turns a one-item list into the item itself.
+      lines.push((Array.isArray(parsed) ? parsed : [parsed]).map((l) => ({ ...l, words: Array.isArray(l.words?.[0]) ? l.words : [l.words].filter(Boolean) })));
+    }
+    return sendJson(res, 200, { texts: lines.map((ls) => ls.map((l) => l.text).join(' ')), lines });
   };
 }
