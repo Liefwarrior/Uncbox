@@ -17,15 +17,19 @@ if (process.platform !== 'win32') {
   process.exit(1);
 }
 
-/** dotnet on PATH, or the per-user install the dotnet-install script makes. */
+/**
+ * A dotnet with an SDK: the one on PATH, or the per-user install the dotnet-install script makes.
+ * Windows often has a dotnet on PATH with only runtimes, which lists no SDKs but doesn't fail.
+ */
 function findDotnet() {
-  const local = path.join(os.homedir(), '.dotnet', 'dotnet.exe');
-  try {
-    execFileSync('dotnet', ['--list-sdks'], { stdio: 'pipe' });
-    return 'dotnet';
-  } catch {
-    return existsSync(local) ? local : null;
-  }
+  const hasSdk = (dotnet) => {
+    try {
+      return /^10\./m.test(execFileSync(dotnet, ['--list-sdks'], { stdio: 'pipe', encoding: 'utf8' }));
+    } catch {
+      return false;
+    }
+  };
+  return ['dotnet', path.join(os.homedir(), '.dotnet', 'dotnet.exe')].find(hasSdk) ?? null;
 }
 
 const newestSource = () =>
