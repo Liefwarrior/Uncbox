@@ -77,3 +77,58 @@ describe('game settings', () => {
     );
   });
 });
+
+describe('start games windowed', () => {
+  const vdf = [
+    '"UserLocalConfigStore"',
+    '{',
+    '\t"Software"',
+    '\t{',
+    '\t\t"Valve"',
+    '\t\t{',
+    '\t\t\t"Steam"',
+    '\t\t\t{',
+    '\t\t\t\t"apps"',
+    '\t\t\t\t{',
+    '\t\t\t\t\t"220"',
+    '\t\t\t\t\t{',
+    '\t\t\t\t\t\t"LastPlayed"\t\t"1468965923"',
+    '\t\t\t\t\t}',
+    '\t\t\t\t\t"440"',
+    '\t\t\t\t\t{',
+    '\t\t\t\t\t\t"LaunchOptions"\t\t"-dx11"',
+    '\t\t\t\t\t}',
+    '\t\t\t\t}',
+    '\t\t\t}',
+    '\t\t}',
+    '\t}',
+    '}',
+    '',
+  ].join('\n');
+
+  it('adds, keeps and removes launch options without touching the rest', async () => {
+    const { launchOptions, withLaunchOptions } = await import('./steamwindowed.mjs');
+    expect(launchOptions(vdf)).toEqual(new Map([['440', '-dx11']]));
+    const on = withLaunchOptions(vdf, new Map([['220', '-screen-fullscreen 0 -popupwindow'], ['999', '--windowed']]));
+    expect(launchOptions(on)).toEqual(
+      new Map([['220', '-screen-fullscreen 0 -popupwindow'], ['440', '-dx11'], ['999', '--windowed']]),
+    );
+    expect(on).toContain('\t\t\t\t\t"220"\n\t\t\t\t\t{\n\t\t\t\t\t\t"LastPlayed"\t\t"1468965923"\n\t\t\t\t\t\t"LaunchOptions"\t\t"-screen-fullscreen 0 -popupwindow"\n\t\t\t\t\t}');
+    const off = withLaunchOptions(on, new Map([['220', null], ['999', null]]));
+    expect(launchOptions(off)).toEqual(new Map([['440', '-dx11']]));
+    // The empty block for the never-played game stays; Steam doesn't mind it.
+    expect(off.replace('\t\t\t\t\t"999"\n\t\t\t\t\t{\n\t\t\t\t\t}\n', '')).toBe(vdf);
+  });
+
+  it('knows a Unity game by its files', async () => {
+    const { engineOption } = await import('./steamwindowed.mjs');
+    const { mkdtemp, writeFile, rm } = await import('node:fs/promises');
+    const os = await import('node:os');
+    const path = await import('node:path');
+    const dir = await mkdtemp(path.join(os.tmpdir(), 'uncbox-game-'));
+    expect(await engineOption(dir)).toBe('');
+    await writeFile(path.join(dir, 'UnityPlayer.dll'), '');
+    expect(await engineOption(dir)).toBe('-screen-fullscreen 0 -popupwindow');
+    await rm(dir, { recursive: true, force: true });
+  });
+});

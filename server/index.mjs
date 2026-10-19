@@ -177,7 +177,7 @@ const clips = createClips({
 });
 
 const widgets = createWidgets({ broadcastEvent, isLocal, sendJson });
-const steam = createSteam({ broadcastEvent, sendJson, isLocal, readJson });
+const steam = createSteam({ broadcastEvent, sendJson, isLocal, readJson, dataDir });
 const ocr = createOcr({ isLocal, sendJson, readBody });
 const gameSettings = createGameSettings({ isLocal, sendJson, readJson });
 

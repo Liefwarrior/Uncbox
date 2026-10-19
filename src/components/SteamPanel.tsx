@@ -31,15 +31,81 @@ function Art({ src, className }: { src: string; className: string }) {
   return <img className={className} src={src} alt="" onError={() => setFailed(true)} />;
 }
 
+/**
+ * "Start games windowed" (server/steamwindowed.mjs): Steam's launch options set so games start in
+ * a window Play here can size. Steam restarts to take it, so the switch says what's happening.
+ */
+function useWindowedGames() {
+  const [on, setOn] = useState<boolean | null>(null);
+  const [message, setMessage] = useState<{ text: string; error?: boolean } | null>(null);
+  const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    fetch('/api/steam/windowed')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((s) => s && setOn(s.on))
+      .catch(() => {});
+  }, []);
+  useEffect(() => {
+    if (!message || busy) return;
+    const t = setTimeout(() => setMessage(null), 10_000);
+    return () => clearTimeout(t);
+  }, [message, busy]);
+
+  const toggle = async () => {
+    const next = !on;
+    setBusy(true);
+    setMessage({ text: 'Restarting Steam to change its launch options…' });
+    try {
+      const r = await fetch('/api/steam/windowed', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ on: next }),
+      });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || 'Couldn’t change Steam’s launch options.');
+      setOn(d.on);
+      setMessage({
+        text: d.on
+          ? `${d.games} games will start windowed, ready for Play here. Games with your own launch options are unchanged.`
+          : 'Games start the way they did before.',
+      });
+    } catch (err) {
+      setMessage({ text: err instanceof Error ? err.message : String(err), error: true });
+    } finally {
+      setBusy(false);
+    }
+  };
+  return { on, busy, message, toggle };
+}
+
 export function SteamPanel({ title }: { title: string }) {
   const steam = useSteam();
+  const windowed = useWindowedGames();
   const playing = steam?.playing ?? null;
   useTick(Boolean(playing));
   const recentAt = playing?.achievements?.latest?.at ?? 0;
   const fresh = recentAt > 0 && Date.now() - recentAt < 5 * 60_000;
 
   return (
-    <Panel id="steam" title={title} bleed={Boolean(playing)} empty={!steam?.available}>
+    <Panel
+      id="steam"
+      title={title}
+      bleed={Boolean(playing)}
+      empty={!steam?.available}
+      menu={
+        steam?.available
+          ? [
+              {
+                label: 'Start games windowed',
+                checked: Boolean(windowed.on),
+                disabled: windowed.busy || windowed.on === null,
+                onSelect: () => void windowed.toggle(),
+              },
+            ]
+          : undefined
+      }
+    >
+      {windowed.message && <p className={`addon-message steam-message ${windowed.message.error ? 'error' : ''}`}>{windowed.message.text}</p>}
       {!steam ? null : !steam.available ? (
         <p className="muted">Steam wasn’t found on this PC. Uncbox reads it from the Steam app, so start Steam here.</p>
       ) : playing ? (

@@ -37,7 +37,8 @@ internal sealed class GameWindow(IntPtr hwnd)
         string exe = Native.ProcessPathOf(Handle);
         string? dir = exe.Length > 0 ? Path.GetDirectoryName(exe) : null;
         if (dir is null) return "";
-        if (File.Exists(Path.Combine(dir, "UnityPlayer.dll"))) return "-window-mode borderless";
+        // Windowed without a border; -window-mode borderless would still be full screen.
+        if (File.Exists(Path.Combine(dir, "UnityPlayer.dll"))) return "-screen-fullscreen 0 -popupwindow";
         // Unreal games keep their exe in <game>/Binaries/Win64 with the Engine folder at the top.
         for (var d = new DirectoryInfo(dir); d is not null && d.Parent is not null; d = d.Parent)
         {

@@ -55,6 +55,13 @@ elsewhere. The mouse can't reach a picture, so the toolbar shows how to make tha
 for Unity and Unreal games it names the launch option to add in Steam (game, **Properties**,
 **Launch Options**), such as `-window-mode borderless` or `-windowed`.
 
+**Start games windowed.** In the Steam panel's **⋯** menu, this gives every installed Steam
+game the launch option its engine needs to start in a window (Unity, Unreal, Source and Godot
+games), so they size into the panel and the mouse works. Games you set launch options for
+yourself are left alone, and turning it off removes exactly what Uncbox added. Steam reads launch
+options when it starts, so Uncbox restarts it (back into Big Picture if you were there); it won't
+while a game is running.
+
 **Steam.** In the Steam Big Picture preset, **Big Picture** and **Steam library** put Steam itself
 in the panel. A game you start from there takes the panel while it runs (Uncbox finds it by its
 install folder), and Steam comes back when you quit it.

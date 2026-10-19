@@ -8,12 +8,14 @@
 //                                     logo.png) from Steam's cache, or Steam's CDN if it isn't cached
 //   POST /api/steam/open              { view: 'bigpicture' | 'library' } opens that Steam view (starting
 //                                     Steam if it isn't running), for the game panel to take in
+//   GET/POST /api/steam/windowed      "start games windowed": { on } (see steamwindowed.mjs)
 
 import { execFile } from 'node:child_process';
 import { createReadStream } from 'node:fs';
-import { readFile, stat } from 'node:fs/promises';
+import { readdir, readFile, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { openInBrowser } from './open.mjs';
+import { createSteamWindowed } from './steamwindowed.mjs';
 
 const POLL_MS = 3000;
 const RECENT = 8;
@@ -130,7 +132,7 @@ const VIEWS = {
   library: ['steam://close/bigpicture', 'steam://open/games'],
 };
 
-export function createSteam({ broadcastEvent, sendJson, isLocal, readJson }) {
+export function createSteam({ broadcastEvent, sendJson, isLocal, readJson, dataDir }) {
   let root = null;
   let names = new Map();
   let user = null;
@@ -164,6 +166,28 @@ export function createSteam({ broadcastEvent, sendJson, isLocal, readJson }) {
     }
     dirs.set(appid, dir);
     return dir;
+  }
+
+  /** Steam's library folders, the main one first. */
+  async function libraries() {
+    const folders = await readFile(path.join(root, 'steamapps', 'libraryfolders.vdf'), 'utf8').catch(() => '');
+    const all = [root, ...Object.values(dig(parseVdf(folders), 'libraryfolders') ?? {}).map((l) => l?.path).filter(Boolean)];
+    return [...new Set(all.map((l) => path.normalize(l).toLowerCase()))].map((l) => all.find((x) => path.normalize(x).toLowerCase() === l));
+  }
+
+  /** Every installed game: [{ appid, name, dir }]. */
+  async function installed() {
+    const games = [];
+    for (const lib of await libraries()) {
+      const apps = path.join(lib, 'steamapps');
+      for (const f of await readdir(apps).catch(() => [])) {
+        const m = /^appmanifest_(\d+)\.acf$/.exec(f);
+        if (!m) continue;
+        const state = dig(parseVdf(await readFile(path.join(apps, f), 'utf8').catch(() => '')), 'AppState');
+        if (state?.installdir) games.push({ appid: Number(m[1]), name: state.name ?? '', dir: path.join(apps, 'common', state.installdir) });
+      }
+    }
+    return games;
   }
 
   async function loadNames() {
@@ -271,6 +295,16 @@ export function createSteam({ broadcastEvent, sendJson, isLocal, readJson }) {
     }
   }
 
+  const windowed = createSteamWindowed({
+    steam: {
+      root: () => root,
+      account: () => user.account,
+      installed,
+      playing: () => running.appid,
+    },
+    record: path.join(dataDir, 'steam-windowed.json'),
+  });
+
   async function sendFile(res, file, type) {
     const info = await stat(file).catch(() => null);
     if (!info) return false;
@@ -289,6 +323,17 @@ export function createSteam({ broadcastEvent, sendJson, isLocal, readJson }) {
         polling = setInterval(poll, POLL_MS);
       }
       if (url.pathname === '/api/steam') return sendJson(res, 200, snap);
+      if (url.pathname === '/api/steam/windowed') {
+        if (!isLocal(req)) return sendJson(res, 403, { error: 'This PC only' });
+        if (!root || !user) return sendJson(res, 409, { error: 'Steam wasn’t found on this PC.' });
+        if (req.method === 'GET') return sendJson(res, 200, await windowed.status());
+        const { on } = await readJson(req).catch(() => ({}));
+        try {
+          return sendJson(res, 200, on ? await windowed.turnOn() : await windowed.turnOff());
+        } catch (err) {
+          return sendJson(res, err.status || 500, { error: err.message });
+        }
+      }
       if (url.pathname === '/api/steam/open' && req.method === 'POST') {
         if (!isLocal(req)) return sendJson(res, 403, { error: 'This PC only' });
         const links = VIEWS[(await readJson(req).catch(() => ({}))).view];

@@ -1295,6 +1295,16 @@ input[type='color'] {
 .addon-message.error {
   color: var(--bad);
 }
+.panel--bleed .steam-message {
+  position: absolute;
+  top: 44px;
+  right: 10px;
+  left: 10px;
+  z-index: 3;
+  padding: 6px 10px;
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--panel) 90%, transparent);
+}
 button.addon-message {
   color: var(--accent);
 }
