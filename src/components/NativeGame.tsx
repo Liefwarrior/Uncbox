@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { type HostWindow, send, shell, useCovered, useHole, useHostWindows, useShellMessages } from '../native';
 import type { Crop, GameSettings } from '../state/model';
 
@@ -9,15 +9,30 @@ const LOOK_EVERY_MS = 2000;
  * "Play here": the game's own window sits in the game panel, in the Uncbox app. The panel
  * becomes a hole the game shows through, so mouse, keyboard and controller go straight to it.
  * The game is remembered, so it goes back in the panel when it or Uncbox starts again.
+ *
+ * follow, while set, takes over from the saved window without replacing it: the game Steam
+ * started from Big Picture, found by its install folder. When it's gone, the saved one comes back.
  */
-export function useNativeGame(on: boolean, saved: GameSettings['nativeGame'], remember: (game: GameSettings['nativeGame']) => void) {
+export function useNativeGame(
+  on: boolean,
+  saved: GameSettings['nativeGame'],
+  remember: (game: GameSettings['nativeGame']) => void,
+  follow: { dir: string } | null = null,
+) {
   const [attached, setAttached] = useState<{ id: string; title: string } | null>(null);
   const [picking, setPicking] = useState(false);
+  const [picture, setPicture] = useState<{ launchOption: string } | null>(null);
   useShellMessages((msg) => {
+    if (msg.type === 'picture') setPicture(msg.on ? { launchOption: msg.launchOption } : null);
     if (msg.type === 'attached') {
       setAttached({ id: msg.id, title: msg.title });
-      if (msg.process && (saved?.process !== msg.process || saved?.title !== msg.title)) remember({ process: msg.process, title: msg.title });
-    } else if (msg.type === 'detached') setAttached(null);
+      if (!follow && msg.process && (saved?.process !== msg.process || saved?.title !== msg.title)) {
+        remember({ process: msg.process, title: msg.title });
+      }
+    } else if (msg.type === 'detached') {
+      setAttached(null);
+      setPicture(null);
+    }
   });
   const windows = useHostWindows(on && (picking || !attached));
 
@@ -27,18 +42,31 @@ export function useNativeGame(on: boolean, saved: GameSettings['nativeGame'], re
     return () => send({ type: 'detach' });
   }, [on]);
 
-  // Until the saved game is back in the panel, keep looking for it: it may not be running yet.
-  const savedKey = saved ? `${saved.process}\n${saved.title}` : '';
+  // What belongs in the panel: the followed game, or the saved window.
+  const target = follow ?? saved;
+  const targetKey = follow ? `dir\n${follow.dir}` : saved ? `${saved.process}\n${saved.title}` : '';
+
+  // When that changes (a game started or closed), give back what's there now.
+  const lastTarget = useRef(targetKey);
   useEffect(() => {
-    if (!on || !shell || !saved || attached || picking) return;
-    const look = () => send({ type: 'attach', match: saved });
+    if (lastTarget.current === targetKey) return;
+    lastTarget.current = targetKey;
+    if (on && shell) send({ type: 'detach' });
+  }, [on, targetKey]);
+
+  // Until it's in the panel, keep looking for it: it may not be running yet.
+  useEffect(() => {
+    if (!on || !shell || !target || attached || picking) return;
+    const look = () => send({ type: 'attach', match: target });
     look();
     const t = setInterval(look, LOOK_EVERY_MS);
     return () => clearInterval(t);
-  }, [on, savedKey, attached, picking]);
+  }, [on, targetKey, attached, picking]);
 
   return {
     attached,
+    /** Shown as a picture (the game won't be resized): no mouse, and how to fix that if known. */
+    picture,
     saved,
     picking: picking || !attached,
     windows,
@@ -83,7 +111,16 @@ export function NativeGame({ game, editing, crop, stripPx }: Props) {
       </div>
     ) : null;
   }
-  if (showing) return <div ref={setHole} className="game-hole" />;
+  if (showing) {
+    return (
+      <div
+        ref={setHole}
+        className="game-hole"
+        // Shown as a picture, a click lands on Uncbox: hand the keyboard and controller back.
+        onPointerDown={game.picture ? game.play : undefined}
+      />
+    );
+  }
   if (!editing) return null;
   return (
     <div className="game-empty">

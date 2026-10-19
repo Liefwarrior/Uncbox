@@ -5,6 +5,7 @@ import { useReplayBuffer } from '../clips/replay';
 import { shareGameStream } from '../hud/reader';
 import { useDeviceStream, useVideoDevices, useWindowStream } from '../media';
 import { shell } from '../native';
+import { useSteam } from '../steam';
 import type { ClipSettings, GameSettings, PresetData, PresetId, VideoFit, VideoSource } from '../state/model';
 import type { MutatePreset } from '../state/useAppState';
 import { useBoard } from './Board';
@@ -63,7 +64,12 @@ export function GamePanel({ game, preset, wow, clips, mutatePreset }: Props) {
   const [cropOpen, setCropOpen] = useState(false);
   const [aspect, setAspect] = useState(0);
   const set = (patch: Partial<GameSettings>) => mutatePreset((d) => void Object.assign(d.game, patch));
-  const native = useNativeGame(game.source === 'native', game.nativeGame, (nativeGame) => set({ nativeGame }));
+  // Steam's views (Steam preset, in the app): a game started from them takes the panel while it runs.
+  const steamViews = shell && preset === 'steam' ? STEAM_VIEWS : [];
+  const steamView = game.source === 'native' ? steamViews.find((v) => v.match.title === game.nativeGame?.title) : undefined;
+  const steamNow = useSteam(Boolean(steamView));
+  const follow = steamView && steamNow?.playing?.dir ? { dir: steamNow.playing.dir } : null;
+  const native = useNativeGame(game.source === 'native', game.nativeGame, (nativeGame) => set({ nativeGame }), follow);
 
   const stream = game.source === 'device' ? device.stream : game.source === 'window' || game.source === 'native' ? win.stream : null;
   const error = game.source === 'device' ? device.error : game.source === 'window' || game.source === 'native' ? win.error : null;
@@ -90,8 +96,6 @@ export function GamePanel({ game, preset, wow, clips, mutatePreset }: Props) {
   }, [stream]);
   // Playing WoW here without a capture, the strip's place is known anyway: the top few pixels.
   const stripPx = wow && game.source === 'native' && !stripPct ? ROWS * BLOCK + 1 : 0;
-  const steamViews = shell && preset === 'steam' ? STEAM_VIEWS : [];
-  const steamView = game.source === 'native' ? steamViews.find((v) => v.match.title === game.nativeGame?.title) : undefined;
   const openSteam = (view: (typeof STEAM_VIEWS)[number]) => {
     native.switchTo(view.match);
     set({ source: 'native', nativeGame: view.match });
@@ -240,6 +244,19 @@ export function GamePanel({ game, preset, wow, clips, mutatePreset }: Props) {
                 <Icon name="film" /> {win.stream ? 'Clips on' : 'Turn on clips'}
               </button>
             </>
+          )}
+          {game.source === 'native' && native.picture && (
+            <span className="game-toolbar__note" title="It keeps itself full screen, so Uncbox shows it as a picture">
+              Controller and keyboard only.
+              {native.picture.launchOption ? (
+                <>
+                  {' '}
+                  For the mouse, add <code>{native.picture.launchOption}</code> to its Steam launch options.
+                </>
+              ) : (
+                ' For the mouse, set it to windowed in its settings.'
+              )}
+            </span>
           )}
           {game.source === 'native' && error && <span className="error">{error}</span>}
           {game.source === 'native' && native.attached && !native.picking && (

@@ -47,6 +47,18 @@ In the toolbar:
 Uncbox remembers the game. Next time, it goes back into the panel by itself as soon as the game
 is running.
 
+**Games that won't resize.** Some games keep themselves at full screen size (Unity games in full
+screen mode do). After a couple of seconds of that, Uncbox stops fighting and shows the game in
+the panel as a live picture from Windows' compositor instead, with no capture and no added delay.
+Your controller and keyboard still go to the game; click the panel to hand them back if you clicked
+elsewhere. The mouse can't reach a picture, so the toolbar shows how to make that game resizable:
+for Unity and Unreal games it names the launch option to add in Steam (game, **Properties**,
+**Launch Options**), such as `-window-mode borderless` or `-windowed`.
+
+**Steam.** In the Steam Big Picture preset, **Big Picture** and **Steam library** put Steam itself
+in the panel. A game you start from there takes the panel while it runs (Uncbox finds it by its
+install folder), and Steam comes back when you quit it.
+
 For OBS, use a **Display Capture** of the monitor Uncbox is on. A Window Capture of Uncbox leaves
 the game out, because the game is its own window.
 

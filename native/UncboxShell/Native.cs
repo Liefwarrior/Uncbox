@@ -123,6 +123,63 @@ internal static partial class Native
         }
     }
 
+    [LibraryImport("kernel32.dll")]
+    public static partial IntPtr OpenProcess(uint access, [MarshalAs(UnmanagedType.Bool)] bool inherit, uint pid);
+
+    [LibraryImport("kernel32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static partial bool CloseHandle(IntPtr handle);
+
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode)]
+    public static extern bool QueryFullProcessImageName(IntPtr process, int flags, StringBuilder name, ref int size);
+
+    // ---- DWM thumbnails: a live, scaled picture of another window, drawn by the compositor ----
+
+    [StructLayout(LayoutKind.Sequential)]
+    public struct THUMBNAIL_PROPERTIES
+    {
+        public int Flags;
+        public RECT Destination;
+        public RECT Source;
+        public byte Opacity;
+        public int Visible;
+        public int SourceClientAreaOnly;
+    }
+
+    public const int TNP_RECTDESTINATION = 0x1, TNP_OPACITY = 0x4, TNP_VISIBLE = 0x8, TNP_SOURCECLIENTAREAONLY = 0x10;
+
+    [LibraryImport("dwmapi.dll")]
+    public static partial int DwmRegisterThumbnail(IntPtr destination, IntPtr source, out IntPtr thumbnail);
+
+    [LibraryImport("dwmapi.dll")]
+    public static partial int DwmUnregisterThumbnail(IntPtr thumbnail);
+
+    [DllImport("dwmapi.dll")]
+    public static extern int DwmUpdateThumbnailProperties(IntPtr thumbnail, ref THUMBNAIL_PROPERTIES properties);
+
+    [LibraryImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static partial bool GetClientRect(IntPtr hwnd, out RECT rect);
+
+    /// <summary>The full path of the program that owns a window, or "" if Windows won't say.</summary>
+    public static string ProcessPathOf(IntPtr hwnd)
+    {
+        GetWindowThreadProcessId(hwnd, out uint pid);
+        // PROCESS_QUERY_LIMITED_INFORMATION: enough for the path, and allowed for most processes.
+        IntPtr process = OpenProcess(0x1000, false, pid);
+        if (process == IntPtr.Zero) return "";
+        try
+        {
+            var name = new StringBuilder(1024);
+            int size = name.Capacity;
+            return QueryFullProcessImageName(process, 0, name, ref size) ? name.ToString() : "";
+        }
+        finally
+        {
+            CloseHandle(process);
+        }
+    }
+
     /// <summary>Visible, titled, top-level app windows other than the shell's own, like Alt+Tab shows.</summary>
     public static List<(IntPtr Hwnd, string Title, string Process)> AppWindows(IntPtr exclude)
     {

@@ -1,51 +1,10 @@
 import { useEffect, useState } from 'react';
-import { listen } from '../events';
+import { useSteam } from '../steam';
 import { Icon } from './Icon';
 import { Panel } from './Panel';
 
 // Steam, live from the Steam client on this PC (server/steam.mjs): what you're playing, for how
 // long, achievements as they pop, and your recent games when you're between games.
-
-interface Game {
-  appid: number;
-  name: string;
-  lastPlayed: number;
-  /** Minutes, as Steam counts them (it updates them when a game closes). */
-  playtime: number;
-}
-
-interface SteamSnapshot {
-  available: boolean;
-  user?: { name: string };
-  playing?:
-    | (Game & {
-        since: number;
-        achievements: {
-          unlocked: number;
-          total: number;
-          latest: { name: string; description: string; icon: string; at: number } | null;
-        } | null;
-      })
-    | null;
-  recent?: Game[];
-}
-
-function useSteam() {
-  const [snap, setSnap] = useState<SteamSnapshot | null>(null);
-  useEffect(() => {
-    let alive = true;
-    fetch('/api/steam')
-      .then((r) => r.json())
-      .then((s) => alive && setSnap(s))
-      .catch(() => {});
-    const stop = listen('steam', (data) => setSnap(JSON.parse(data)));
-    return () => {
-      alive = false;
-      stop();
-    };
-  }, []);
-  return snap;
-}
 
 function useTick(on: boolean) {
   const [, set] = useState(0);

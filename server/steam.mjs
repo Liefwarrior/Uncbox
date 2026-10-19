@@ -147,6 +147,25 @@ export function createSteam({ broadcastEvent, sendJson, isLocal, readJson }) {
   }
 
   /** Every game Steam knows the name of, from the registry (one call, refreshed for new ones). */
+  /** Where a game is installed (steamapps/common/<installdir> in whichever library has it), or ''. */
+  const dirs = new Map();
+  async function installDir(appid) {
+    if (dirs.has(appid)) return dirs.get(appid);
+    let dir = '';
+    const folders = await readFile(path.join(root, 'steamapps', 'libraryfolders.vdf'), 'utf8').catch(() => '');
+    const libraries = [root, ...Object.values(dig(parseVdf(folders), 'libraryfolders') ?? {}).map((l) => l?.path).filter(Boolean)];
+    for (const lib of libraries) {
+      const acf = await readFile(path.join(lib, 'steamapps', `appmanifest_${appid}.acf`), 'utf8').catch(() => null);
+      const name = acf && dig(parseVdf(acf), 'AppState', 'installdir');
+      if (name) {
+        dir = path.join(path.normalize(lib), 'steamapps', 'common', name);
+        break;
+      }
+    }
+    dirs.set(appid, dir);
+    return dir;
+  }
+
   async function loadNames() {
     const out = await reg('HKCU\\Software\\Valve\\Steam\\Apps');
     const map = new Map();
@@ -233,7 +252,9 @@ export function createSteam({ broadcastEvent, sendJson, isLocal, readJson }) {
     return {
       available: true,
       user: { name: user.name },
-      playing: appid ? { ...game(appid), since: running.since, achievements: await loadAchievements(appid) } : null,
+      playing: appid
+        ? { ...game(appid), since: running.since, dir: await installDir(appid), achievements: await loadAchievements(appid) }
+        : null,
       recent,
     };
   }

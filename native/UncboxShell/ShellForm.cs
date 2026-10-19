@@ -17,6 +17,7 @@ namespace UncboxShell;
 /// The page and the app talk with small JSON messages (src/native.ts is the page's side):
 ///   page → app  { type: "windows" }                       list windows to pick from
 ///               { type: "attach", id } | { type: "attach", match: { process, title, exact? } }
+///               | { type: "attach", match: { dir } }  a window of a program in that folder (a Steam game)
 ///               { type: "detach" }                        give the game window back
 ///               { type: "rect", x, y, w, h, crop, stripPx } | { type: "rect" }
 ///                    where the panel's hole is, in device pixels; crop (percent per edge) and
@@ -26,6 +27,8 @@ namespace UncboxShell;
 ///               { type: "minimize" }                      to the tray
 ///   app → page  { type: "windows", windows: [{ id, title, process }] }
 ///               { type: "attached", id, title, process } | { type: "detached" }
+///               { type: "picture", on, launchOption }  the game won't be resized, so it's shown as a
+///                    live picture; launchOption, if known, is what makes it resizable
 /// </summary>
 internal sealed class ShellForm : Form
 {
@@ -65,6 +68,16 @@ internal sealed class ShellForm : Form
     private Native.RECT? _applied;
     /// <summary>The game fills the screen and Uncbox is out of the way, until Ctrl+Shift+F12.</summary>
     private bool _gameFullScreen;
+
+    /// <summary>
+    /// Some games won't be resized (Unity games in full screen put themselves back at the monitor's
+    /// size). After a couple of seconds of that, the game is left where it is, behind Uncbox, and
+    /// shown in the panel as a live picture by the compositor: no capture and no added delay.
+    /// Keyboard and controller still reach it, since it keeps focus; the mouse can't.
+    /// </summary>
+    private IntPtr _picture;
+    private int _misfits;
+    private const int MISFITS_BEFORE_PICTURE = 8;
 
     public ShellForm(ShellOptions options)
     {
@@ -303,6 +316,10 @@ internal sealed class ShellForm : Form
             case "attach" when long.TryParse((string?)msg["id"], out long id):
                 Attach(new IntPtr(id));
                 break;
+            case "attach" when msg["match"] is JsonObject match && (string?)match["dir"] is { Length: > 0 } dir:
+                var inDir = FindInFolder(dir);
+                if (inDir != IntPtr.Zero) Attach(inDir);
+                break;
             case "attach" when msg["match"] is JsonObject match:
                 var found = Find((string?)match["process"] ?? "", (string?)match["title"] ?? "", (bool?)match["exact"] ?? false);
                 if (found != IntPtr.Zero) Attach(found);
@@ -339,11 +356,27 @@ internal sealed class ShellForm : Form
         return !exact && same.Count == 1 ? same[0].Hwnd : IntPtr.Zero;
     }
 
+    /// <summary>
+    /// A window of a program installed in this folder: the game Steam just started, which can be any
+    /// exe in its folder, with any title. Its biggest window that isn't minimized wins.
+    /// </summary>
+    private IntPtr FindInFolder(string dir)
+    {
+        string prefix = Path.GetFullPath(dir).TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
+        return Native.AppWindows(Handle)
+            .Where(w => Native.ProcessPathOf(w.Hwnd).StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+            .OrderBy(w => Native.IsIconic(w.Hwnd))
+            .ThenByDescending(w => Native.GetWindowRect(w.Hwnd, out var r) ? (long)r.Width * r.Height : 0)
+            .Select(w => w.Hwnd)
+            .FirstOrDefault();
+    }
+
     private void Attach(IntPtr hwnd)
     {
         if (!Native.IsWindow(hwnd) || hwnd == Handle) return;
         if (_game?.Handle != hwnd)
         {
+            StopPicture();
             _game?.Restore();
             _game = new GameWindow(hwnd);
             _game.MakeBorderless();
@@ -355,6 +388,7 @@ internal sealed class ShellForm : Form
     private void Detach()
     {
         if (_gameFullScreen) LeaveGameFullScreen();
+        StopPicture();
         _game?.Restore();
         _game = null;
         ApplyRegion();
@@ -421,6 +455,7 @@ internal sealed class ShellForm : Form
     {
         if (_game is { Alive: false })
         {
+            StopPicture();
             _game = null;
             Send(new { type = "detached" });
             if (_gameFullScreen)
@@ -440,16 +475,60 @@ internal sealed class ShellForm : Form
         // library for Big Picture) is left hidden rather than shown again.
         if (_game is not null && Visible && _game.Shown && _gameRect is { Width: > 0, Height: > 0 } rect)
         {
-            if (_game.HasFrame) _game.MakeBorderless();
-            _game.Place(rect);
+            if (_picture != IntPtr.Zero) ShowPicture();
+            else
+            {
+                if (_game.HasFrame) _game.MakeBorderless();
+                _game.Place(rect);
+                _misfits = _game.Fits(rect) ? 0 : _misfits + 1;
+                if (_misfits >= MISFITS_BEFORE_PICTURE) StartPicture();
+            }
         }
         ApplyRegion();
+    }
+
+    private void StartPicture()
+    {
+        if (_game is null || Native.DwmRegisterThumbnail(Handle, _game.Handle, out _picture) != 0) return;
+        ShowPicture();
+        Send(new { type = "picture", on = true, launchOption = _game.WindowedLaunchOption() });
+        Native.SetForegroundWindow(_game.Handle);
+    }
+
+    private void StopPicture()
+    {
+        _misfits = 0;
+        if (_picture == IntPtr.Zero) return;
+        Native.DwmUnregisterThumbnail(_picture);
+        _picture = IntPtr.Zero;
+        Send(new { type = "picture", on = false, launchOption = "" });
+    }
+
+    /// <summary>The picture fitted into the panel, keeping the game's shape.</summary>
+    private void ShowPicture()
+    {
+        var props = new Native.THUMBNAIL_PROPERTIES
+        {
+            Flags = Native.TNP_RECTDESTINATION | Native.TNP_VISIBLE | Native.TNP_OPACITY | Native.TNP_SOURCECLIENTAREAONLY,
+            Opacity = 255,
+            SourceClientAreaOnly = 1,
+        };
+        if (_game is not null && _hole is { Width: > 0, Height: > 0 } hole && Native.GetClientRect(_game.Handle, out var src) && src.Width > 0 && src.Height > 0)
+        {
+            double scale = Math.Min((double)hole.Width / src.Width, (double)hole.Height / src.Height);
+            int w = (int)Math.Round(src.Width * scale), h = (int)Math.Round(src.Height * scale);
+            int x = hole.Left - Left + (hole.Width - w) / 2, y = hole.Top - Top + (hole.Height - h) / 2;
+            props.Destination = new Native.RECT { Left = x, Top = y, Right = x + w, Bottom = y + h };
+            props.Visible = 1;
+        }
+        Native.DwmUpdateThumbnailProperties(_picture, ref props);
     }
 
     /// <summary>Cuts the hole the game shows through, or fills it back in with no game.</summary>
     private void ApplyRegion()
     {
-        Native.RECT? want = _game is not null && _hole is { Width: > 0, Height: > 0 } ? _hole : null;
+        // A game shown as a picture stays behind Uncbox: no hole.
+        Native.RECT? want = _game is not null && _picture == IntPtr.Zero && _hole is { Width: > 0, Height: > 0 } ? _hole : null;
         if (Nullable.Equals(want, _applied)) return;
         _applied = want;
         if (want is not { } hole)

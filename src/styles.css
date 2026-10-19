@@ -2082,6 +2082,21 @@ kbd {
   inset: auto;
   margin: 0 12px 8px;
 }
+.game-toolbar__note {
+  color: var(--muted);
+  font-size: 13px;
+}
+.game-toolbar__note code {
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: var(--panel-2);
+  color: var(--text);
+  user-select: all;
+}
+/* Shown as a picture, the panel takes the click and hands it to the game. */
+.panel--game.is-native .game-hole {
+  cursor: pointer;
+}
 .window-list {
   display: grid;
   gap: 4px;

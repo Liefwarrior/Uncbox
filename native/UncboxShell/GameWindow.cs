@@ -22,6 +22,30 @@ internal sealed class GameWindow(IntPtr hwnd)
     /// </summary>
     public bool HasFrame => (Native.GetWindowLongPtr(Handle, Native.GWL_STYLE) & (Native.WS_CAPTION | Native.WS_THICKFRAME)) != 0;
 
+    /// <summary>Whether the window is where it was put (a pixel or two either way is fine).</summary>
+    public bool Fits(Native.RECT at) =>
+        Native.GetWindowRect(Handle, out var now) &&
+        Math.Abs(now.Left - at.Left) <= 2 && Math.Abs(now.Top - at.Top) <= 2 &&
+        Math.Abs(now.Width - at.Width) <= 2 && Math.Abs(now.Height - at.Height) <= 2;
+
+    /// <summary>
+    /// The launch option that makes this game resizable, from its engine (found next to its exe),
+    /// or "" if it isn't one Uncbox knows.
+    /// </summary>
+    public string WindowedLaunchOption()
+    {
+        string exe = Native.ProcessPathOf(Handle);
+        string? dir = exe.Length > 0 ? Path.GetDirectoryName(exe) : null;
+        if (dir is null) return "";
+        if (File.Exists(Path.Combine(dir, "UnityPlayer.dll"))) return "-window-mode borderless";
+        // Unreal games keep their exe in <game>/Binaries/Win64 with the Engine folder at the top.
+        for (var d = new DirectoryInfo(dir); d is not null && d.Parent is not null; d = d.Parent)
+        {
+            if (Directory.Exists(Path.Combine(d.FullName, "Engine", "Binaries"))) return "-windowed";
+        }
+        return "";
+    }
+
     public void MakeBorderless()
     {
         if (Native.IsIconic(Handle)) Native.ShowWindow(Handle, Native.SW_RESTORE);
