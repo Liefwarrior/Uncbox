@@ -6,6 +6,7 @@ import { useArmed } from '../useArmed';
 import { placePanel } from '../layout';
 import { PANEL_INFO } from '../panels/catalog';
 import { BackgroundPicker } from './BackgroundPicker';
+import { ClipsSection } from './Clips';
 import { Icon } from './Icon';
 import { SetupList } from './SetupList';
 
@@ -90,6 +91,8 @@ export function Sidebar({ state, mutate, mutatePreset, status, onStreamMode }: P
             <Icon name="cast" /> Stream mode
           </button>
           <p className="hint">Full screen, edit controls hidden. Esc to come back.</p>
+
+          <ClipsSection settings={state.clips} mutate={mutate} />
 
           <h3>On screen</h3>
           <ul className="toggles">{def.featured.map(row)}</ul>

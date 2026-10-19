@@ -22,7 +22,7 @@ Note:  These are planned integrations, they may not work and may result in the s
   <tr>
     <td><b>Pokémon</b><br>Party with fainted markers, 8 badges, deaths and resets, run timer.</td>
     <td><b>SMITE 2</b><br>Live K/D/A, session record with win rate and streak, item build.</td>
-    <td><b>WoW Forever</b><br>Character sheet with class color, level and XP, raids, /played.</td>
+    <td><b>WoW Forever</b><br>Character sheet with class color, level and XP, a live <a href="integrations/wow/README.md">quest log</a>, raids, /played.</td>
     <td><b>Terminal</b><br>Any game, dressed as PowerShell in Windows Terminal.</td>
   </tr>
 </table>
@@ -53,6 +53,9 @@ The **Get set up** list in the sidebar walks you through the rest:
    Uncbox points at the panel that needs you. Not using one? Switch it off under **On screen**.
 4. **Press Stream mode** (or `F8`). The window goes full screen and the edit controls hide.
    `Esc` brings everything back.
+
+Something amazing just happened? Press **=** to save the last 60 seconds of your game as a clip.
+See [Clips](#clips).
 
 ## Going live with OBS
 
@@ -96,6 +99,19 @@ panel that matches the preset. Add as many as you like.
 
 They are view only: a web page can show another window but can't click or type into it, and the
 browser asks you to pick each window again after a reload.
+
+### Clips
+
+While your game is showing as a **Window** or **Capture card**, Uncbox keeps the last 60 seconds
+of it. Press **=** (in the game, or anywhere) to save them as a clip: 1080p, 60 fps, H.264 High
+profile at 30 Mbps, encoded on your graphics card. Clips go to `Videos\Uncbox`, and the newest
+show under **Clips** in the sidebar, where clicking one plays it right in Uncbox.
+
+- The key is read, not taken over: `=` still types in chat and other apps, and Shift+= (`+`)
+  doesn't clip. Change it from **Key** in the sidebar, or switch instant replay off there.
+- Clips have the same crop as the game window, so the WoW addon's strip and menu bars stay out.
+- Video only, like the rest of Uncbox. Keeping the last minute takes about 225 MB of memory.
+- `--clips=<folder>` saves them somewhere else.
 
 ### Twitch chat
 
@@ -147,6 +163,9 @@ syntax check of every server file, the tests and a production build.
 server/index.mjs           static files, /api/state, live sync over /api/events
 server/discord.mjs         Discord voice bridge over the local RPC pipe
 server/open.mjs            opens setup pages in the default browser (fixed list only)
+server/clips.mjs           saves and serves clips; server/hotkey.mjs watches the clip key
+src/clips/                 instant replay: the encoder worker, its store, the clip keys
+src/events.ts              the page's one live connection to /api/events
 src/panels/catalog.ts      every panel type: title, sidebar hint, default and minimum size
 src/panels/index.tsx       which component draws each panel type
 src/presets.ts             presets: titles, default layouts, starting data

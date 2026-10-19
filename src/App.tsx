@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Backdrop } from './components/Backdrop';
 import { Board } from './components/Board';
+import { ClipPlayer, ClipToast } from './components/Clips';
 import { Sidebar } from './components/Sidebar';
 import { UndoToast } from './components/UndoToast';
+import { useClipKeyInPage } from './clips/replay';
 import { renderPanel } from './panels';
 import { PRESETS } from './presets';
 import type { BoardId } from './state/model';
@@ -54,6 +56,8 @@ export function App() {
     };
   }, [enterStream, exitStream]);
 
+  useClipKeyInPage(state.clips);
+
   // An undo restores into the active preset, so it must not outlive a switch to another one.
   useEffect(dismissUndo, [state.preset]);
 
@@ -84,6 +88,8 @@ export function App() {
           renderPanel={render}
         />
         <UndoToast />
+        <ClipToast />
+        <ClipPlayer />
       </main>
     </div>
   );

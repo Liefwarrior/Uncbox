@@ -7,21 +7,22 @@
 --
 --   0x55, kind, seq, index, count, length, payload (length bytes), crc16 high, crc16 low
 --
--- kind 1 is the character, kind 2 the quest log. seq changes whenever the text does, and a long
+-- kind 1 is the character, kind 2 the quest log, kind 3 the party. seq changes whenever the text does, and a long
 -- text is split over several pages (index of count) that Uncbox puts back together.
 
 local band, bor, bxor, lshift, rshift = bit.band, bit.bor, bit.bxor, bit.lshift, bit.rshift
 
 local C = {
-  BLOCK = 3,
-  COLS = 160,
-  ROWS = 4,
+  BLOCK = 2,
+  COLS = 256,
+  ROWS = 2,
   SYNC = { 7, 0, 4, 2, 1, 0, 7, 0 },
   MAGIC = 0x55,
   KIND_CHARACTER = 1,
   KIND_QUESTS = 2,
+  KIND_PARTY = 3,
 }
--- 640 blocks minus the sync pattern, at 3 bits each, less the 8 bytes of header and checksum.
+-- 512 blocks minus the sync pattern, at 3 bits each, less the 8 bytes of header and checksum.
 C.PAGE_BYTES = math.floor((C.COLS * C.ROWS - #C.SYNC) * 3 / 8)
 C.PAYLOAD = C.PAGE_BYTES - 8
 

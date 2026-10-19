@@ -13,6 +13,8 @@ import { createReadStream } from 'node:fs';
 import { mkdir, readFile, rename, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { findInstalls, install as installWowAddon, reveal as revealWowAddon } from '../integrations/wow/install.mjs';
+import { createClips } from './clips.mjs';
 import { createDiscordBridge } from './discord.mjs';
 import { openInBrowser, pageFor } from './open.mjs';
 import { DOMAIN, loadTls } from './tls.mjs';
@@ -22,6 +24,7 @@ const distDir = path.join(root, 'dist');
 const dataArg = process.argv.find((a) => a.startsWith('--data='));
 const dataDir = dataArg ? path.resolve(dataArg.slice(7)) : path.join(root, 'data');
 const stateFile = path.join(dataDir, 'state.json');
+const clipsArg = process.argv.find((a) => a.startsWith('--clips='));
 
 const isDev = process.argv.includes('--dev');
 const portArg = process.argv.find((a) => a.startsWith('--port='));
@@ -140,13 +143,42 @@ async function handleDiscord(req, res, url) {
   }
 }
 
+// Only the PC Uncbox runs on may open pages or touch files on it, even when HOST exposes the
+// server to the LAN.
+const isLocal = (req) => ['127.0.0.1', '::1', '::ffff:127.0.0.1'].includes(req.socket.remoteAddress ?? '');
+
+const clips = createClips({
+  clipsDir: clipsArg ? path.resolve(clipsArg.slice(8)) : null,
+  broadcastEvent,
+  isLocal,
+  sendJson,
+  readJson,
+});
+
+async function handleWow(req, res, url) {
+  if (!isLocal(req)) return sendJson(res, 403, { error: 'Run this on the PC WoW is on.' });
+  try {
+    if (url.pathname === '/api/wow/installs' && req.method === 'GET') return sendJson(res, 200, { installs: await findInstalls() });
+    if (url.pathname === '/api/wow/install' && req.method === 'POST') {
+      return sendJson(res, 200, { ok: true, path: await installWowAddon((await readJson(req)).path) });
+    }
+    if (url.pathname === '/api/wow/reveal' && req.method === 'POST') {
+      revealWowAddon();
+      return sendJson(res, 200, { ok: true });
+    }
+    return sendJson(res, 404, { error: 'Not found' });
+  } catch (err) {
+    return sendJson(res, err.status || 500, { error: err.status ? err.message : `Couldn’t install the addon: ${err.message}` });
+  }
+}
+
 async function handleApi(req, res, url) {
   if (url.pathname === '/api/discord' || url.pathname.startsWith('/api/discord/')) return handleDiscord(req, res, url);
+  if (url.pathname.startsWith('/api/wow/')) return handleWow(req, res, url);
+  if (url.pathname === '/api/clips' || url.pathname.startsWith('/api/clips/')) return clips.handle(req, res, url);
 
   if (url.pathname === '/api/open' && req.method === 'POST') {
-    // Only the PC Uncbox runs on may open pages on it, even when HOST exposes the server to the LAN.
-    const ip = req.socket.remoteAddress ?? '';
-    if (!['127.0.0.1', '::1', '::ffff:127.0.0.1'].includes(ip)) return sendJson(res, 403, { error: 'Local only' });
+    if (!isLocal(req)) return sendJson(res, 403, { error: 'Local only' });
     let body;
     try {
       body = await readJson(req);
@@ -173,6 +205,7 @@ async function handleApi(req, res, url) {
         return sendJson(res, 400, { error: 'State must be a JSON object' });
       }
       await saveState(state);
+      clips.configure(state.clips);
       const clientId = req.headers['x-client-id'] || url.searchParams.get('client') || '';
       broadcast(state, String(clientId));
       return sendJson(res, 200, { ok: true });
@@ -260,6 +293,10 @@ async function handleRequest(req, res) {
 server.on('request', handleRequest);
 
 discord.start().catch((err) => console.error('Discord bridge:', err.message));
+// The clip key follows the saved settings; with none saved yet, the default (=) is on.
+loadState()
+  .then((s) => clips.configure(s?.clips))
+  .catch(() => clips.configure(null));
 
 server.listen(port, host, () => {
   const shown = host === '0.0.0.0' ? 'localhost' : host;

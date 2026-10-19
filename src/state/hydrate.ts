@@ -1,4 +1,5 @@
 import { isBackgroundId } from '../backgrounds';
+import { DEFAULT_CLIP_KEY, isClipKey } from '../clips/keys';
 import { sizeOf } from '../panels/catalog';
 import { PRESETS } from '../presets';
 import {
@@ -9,12 +10,14 @@ import {
   GRID_COLS,
   MAX_HISTORY,
   MAX_MILESTONES,
+  MAX_QUESTS,
   MAX_SLOTS,
   PANEL_IDS,
   type PanelId,
   PRESET_IDS,
   type PresetData,
   type PresetId,
+  type QuestState,
   SMITE_ROLES,
   emptySlot,
   isWindowId,
@@ -35,6 +38,7 @@ export function defaultState(): AppState {
     version: 2,
     preset: 'pokemon',
     twitch: { channel: '', hideBots: true },
+    clips: { enabled: true, key: DEFAULT_CLIP_KEY },
     discord: { pinned: [] },
     camera: { enabled: false, deviceId: null, mirrored: true },
     presets: eachPreset(defaultPresetData),
@@ -89,6 +93,8 @@ function cleanLayout(saved: unknown, fallback: GridItem[], windows: AppWindow[])
   return items;
 }
 
+const QUEST_STATES: QuestState[] = ['open', 'complete', 'failed'];
+
 function hydratePreset(id: PresetId, saved: unknown): PresetData {
   const base = defaultPresetData(id);
   const p = overlay(base, saved);
@@ -115,6 +121,13 @@ function hydratePreset(id: PresetId, saved: unknown): PresetData {
   p.record.history = objects(p.record.history)
     .map((r) => overlay({ id: uid(), god: '', role: '' as const, k: 0, d: 0, a: 0, win: false, at: 0 }, r))
     .slice(0, MAX_HISTORY);
+  p.quests = objects(p.quests)
+    .map((q) => ({
+      ...overlay({ title: '', level: 0, state: 'open' as QuestState }, q),
+      objectives: (Array.isArray(q.objectives) ? objects(q.objectives) : []).map((o) => overlay({ text: '', done: false }, o)),
+    }))
+    .filter((q) => q.title && QUEST_STATES.includes(q.state))
+    .slice(0, MAX_QUESTS);
   return p;
 }
 
@@ -153,10 +166,13 @@ export function hydrate(saved: unknown): AppState {
   const base = defaultState();
   const presets = isObj(saved.presets) ? saved.presets : {};
   const camera = isObj(saved.camera) ? saved.camera : {};
+  const clips = overlay(base.clips, saved.clips);
+  if (!isClipKey(clips.key)) clips.key = DEFAULT_CLIP_KEY;
   return {
     version: 2,
     preset: PRESET_IDS.includes(saved.preset as PresetId) ? (saved.preset as PresetId) : base.preset,
     twitch: overlay(base.twitch, saved.twitch),
+    clips,
     discord: {
       pinned: (isObj(saved.discord) && Array.isArray(saved.discord.pinned) ? objects(saved.discord.pinned) : [])
         .map((c) => overlay({ id: '', name: '', guildId: '', guildName: '' }, c))

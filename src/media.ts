@@ -107,7 +107,8 @@ export function useWindowStream(enabled: boolean) {
     setError(null);
     try {
       const s = await navigator.mediaDevices.getDisplayMedia({
-        video: { frameRate: { ideal: 60 } },
+        // Chrome captures windows at 30 fps unless a maximum is asked for; ideal alone isn't enough.
+        video: { frameRate: { ideal: 60, max: 60 } },
         audio: false,
       });
       // Fires when the user clicks the browser's "Stop sharing" bar or closes the window.

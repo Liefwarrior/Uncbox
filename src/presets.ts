@@ -19,7 +19,16 @@ export interface PresetDef {
   titles: Partial<Record<PanelId, string>>;
   /** Panels listed first in the sidebar; the rest are still available. */
   featured: PanelId[];
-  slots: { variant: 'list' | 'tiles'; name: string; detail: string; showDown: boolean };
+  slots: {
+    variant: 'list' | 'tiles';
+    name: string;
+    detail: string;
+    showDown: boolean;
+    /** What a downed slot is called: "Fainted" unless set. */
+    down?: string;
+    /** A color for a slot's name and initial, e.g. from the WoW class in its detail. */
+    tint?: (detail: string) => string | undefined;
+  };
   layout: GridItem[];
   data: () => Omit<PresetData, 'layout'>;
 }
@@ -56,6 +65,8 @@ const baseData = (): Omit<PresetData, 'layout'> => ({
     gold: '',
     hardcore: false,
   },
+  quests: [],
+  wowLinkAt: 0,
   windows: [],
 });
 
@@ -122,16 +133,17 @@ export const PRESETS: Record<PresetId, PresetDef> = {
     id: 'wow',
     name: 'WoW Forever',
     blurb: 'Leveling, raids',
-    titles: { run: '/played', notes: 'Quest log' },
-    featured: ['game', 'camera', 'character', 'chat', 'discord', 'progress', 'notes', 'run'],
-    slots: { variant: 'list', name: 'Name', detail: 'Class', showDown: true },
+    titles: { run: '/played' },
+    featured: ['game', 'camera', 'character', 'quests', 'slots', 'chat', 'discord', 'progress', 'run'],
+    // The addon fills these in with your group; they can still be typed in by hand.
+    slots: { variant: 'list', name: 'Name', detail: 'Level and class', showDown: true, down: 'Dead', tint: wowClassColor },
     layout: [
       { i: 'game', x: 0, y: 0, w: 17, h: 17 },
       { i: 'camera', x: 17, y: 0, w: 7, h: 7 },
       { i: 'character', x: 17, y: 7, w: 7, h: 8 },
       { i: 'chat', x: 17, y: 15, w: 7, h: 9 },
       { i: 'progress', x: 0, y: 17, w: 5, h: 7 },
-      { i: 'notes', x: 5, y: 17, w: 4, h: 7 },
+      { i: 'quests', x: 5, y: 17, w: 4, h: 7 },
       { i: 'discord', x: 9, y: 17, w: 4, h: 7 },
       { i: 'run', x: 13, y: 17, w: 4, h: 7 },
     ],
@@ -196,7 +208,13 @@ export function panelTitle(def: PresetDef, id: PanelId): string {
 
 export const WOW_RACES = ['Human', 'Dwarf', 'Night Elf', 'Gnome', 'Orc', 'Undead', 'Tauren', 'Troll', 'Skyborne'];
 
-/** Official class colors, used to tint the character name. */
+/** The class color for text that names a class ("Level 23 Druid"), if it does. */
+export function wowClassColor(text: string): string | undefined {
+  const cls = Object.keys(WOW_CLASSES).find((c) => new RegExp(`\\b${c}\\b`, 'i').test(text));
+  return cls && WOW_CLASSES[cls];
+}
+
+/** Official class colors, used to tint the character name and party. */
 export const WOW_CLASSES: Record<string, string> = {
   Druid: '#FF7C0A',
   Hunter: '#AAD372',

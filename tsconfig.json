@@ -5,7 +5,7 @@
     "module": "esnext",
     "moduleResolution": "bundler",
     "jsx": "react-jsx",
-    "types": ["vite/client"],
+    "types": ["vite/client", "dom-mediacapture-transform"],
     "strict": true,
     "noUnusedLocals": true,
     "noUnusedParameters": true,
@@ -14,5 +14,5 @@
     "skipLibCheck": true,
     "noEmit": true
   },
-  "include": ["src", "vite.config.ts"]
+  "include": ["src", "integrations", "vite.config.ts"]
 }
