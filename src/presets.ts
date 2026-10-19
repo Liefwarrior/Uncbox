@@ -1,4 +1,5 @@
 import { PANEL_INFO } from './panels/catalog';
+import { defaultWidgetSettings } from './widgets/catalog';
 import {
   type GridItem,
   type PanelId,
@@ -19,6 +20,10 @@ export interface PresetDef {
   titles: Partial<Record<PanelId, string>>;
   /** Panels listed first in the sidebar; the rest are still available. */
   featured: PanelId[];
+  /** Names the Stats panel suggests for its screen-reading boxes. */
+  hud?: string[];
+  /** The game's program ("Dungeons.exe"): the run timer starts when it does and pauses when it closes. */
+  detect?: string;
   slots: {
     variant: 'list' | 'tiles';
     name: string;
@@ -70,6 +75,7 @@ const baseData = (): Omit<PresetData, 'layout'> => ({
   wowLinkAt: 0,
   windows: [],
   widgets: [],
+  hud: [],
 });
 
 // Layouts are on a 24 × 24 grid sized to fill the window. At 1920 × 1080 a 17 × 17 game
@@ -173,6 +179,65 @@ export const PRESETS: Record<PresetId, PresetDef> = {
         gold: '0g',
         hardcore: false,
       };
+      return d;
+    },
+  },
+
+  mcd2: {
+    id: 'mcd2',
+    name: 'Minecraft Dungeons II',
+    blurb: 'Live stats, party, missions',
+    titles: { slots: 'Party', run: 'Session', progress: 'Missions', hud: 'Stats' },
+    featured: ['game', 'camera', 'hud', 'chat', 'slots', 'progress', 'discord', 'run'],
+    slots: { variant: 'list', name: 'Player', detail: 'Build', showDown: true, down: 'Down' },
+    hud: ['Emeralds', 'Level', 'Arrows', 'Gold', 'Souls', 'Health'],
+    detect: 'Dungeons.exe',
+    layout: [
+      { i: 'game', x: 0, y: 0, w: 17, h: 17 },
+      { i: 'camera', x: 17, y: 0, w: 7, h: 7 },
+      { i: 'hud', x: 17, y: 7, w: 7, h: 8 },
+      { i: 'chat', x: 17, y: 15, w: 7, h: 9 },
+      { i: 'progress', x: 0, y: 17, w: 5, h: 7 },
+      { i: 'slots', x: 5, y: 17, w: 4, h: 7 },
+      { i: 'discord', x: 9, y: 17, w: 4, h: 7 },
+      { i: 'run', x: 13, y: 17, w: 4, h: 7 },
+    ],
+    data: () => {
+      const d = baseData();
+      d.background = 'grid';
+      d.run = { title: 'Minecraft Dungeons II', subtitle: 'Session', timer: timer() };
+      d.counters = [counter('Deaths'), counter('Bosses')];
+      d.milestones = { label: 'Missions', items: Array.from({ length: 8 }, () => milestone()) };
+      d.slots = Array.from({ length: 4 }, emptySlot);
+      return d;
+    },
+  },
+
+  steam: {
+    id: 'steam',
+    name: 'Steam Big Picture',
+    blurb: 'Any Steam game, live from Steam',
+    titles: { run: 'Session' },
+    featured: ['game', 'camera', 'steam', 'chat', 'discord', 'run'],
+    slots: { variant: 'list', name: 'Name', detail: 'Note', showDown: false },
+    layout: [
+      { i: 'game', x: 0, y: 0, w: 17, h: 17 },
+      { i: 'camera', x: 17, y: 0, w: 7, h: 7 },
+      { i: 'steam', x: 17, y: 7, w: 7, h: 10 },
+      { i: 'chat', x: 17, y: 17, w: 7, h: 7 },
+      { i: 'run', x: 0, y: 17, w: 4, h: 7 },
+      { i: 'discord', x: 4, y: 17, w: 4, h: 7 },
+      { i: 'wdg-steamclock', x: 8, y: 17, w: 4, h: 7 },
+      { i: 'wdg-steamsystem', x: 12, y: 17, w: 5, h: 7 },
+    ],
+    data: () => {
+      const d = baseData();
+      d.background = 'network';
+      d.run = { title: 'Steam', subtitle: 'Session', timer: timer() };
+      d.widgets = [
+        { id: 'wdg-steamclock', type: 'clock', title: '', settings: defaultWidgetSettings() },
+        { id: 'wdg-steamsystem', type: 'system', title: '', settings: defaultWidgetSettings() },
+      ];
       return d;
     },
   },

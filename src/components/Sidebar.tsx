@@ -56,9 +56,11 @@ export function Sidebar({ state, mutate, mutatePreset, status, onStreamMode }: P
   const resetLayout = () =>
     trigger(() =>
       mutatePreset((d) => {
-        d.layout = defaultPresetData(state.preset).layout;
+        const fresh = defaultPresetData(state.preset);
+        d.layout = fresh.layout;
         d.windows = [];
-        d.widgets = [];
+        // The preset's own widgets come back with its layout; ones you added go.
+        d.widgets = fresh.widgets;
       }),
     );
   const row = (id: PanelId) => (

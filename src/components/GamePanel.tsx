@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { BLOCK, ROWS } from '../../integrations/wow/codec';
 import { useWowLink } from '../../integrations/wow/useWowLink';
 import { useReplayBuffer } from '../clips/replay';
+import { shareGameStream } from '../hud/reader';
 import { useDeviceStream, useVideoDevices, useWindowStream } from '../media';
 import { shell } from '../native';
 import type { ClipSettings, GameSettings, PresetData, VideoFit, VideoSource } from '../state/model';
@@ -53,6 +54,11 @@ export function GamePanel({ game, wow, clips, mutatePreset }: Props) {
   const crop = stripPct > game.crop.top ? { ...game.crop, top: stripPct } : game.crop;
   // Clips get the same crop, so they never show the strip either.
   useReplayBuffer(stream, crop, clips.enabled);
+  // The Stats panel reads numbers off the game picture.
+  useEffect(() => {
+    shareGameStream(stream);
+    return () => shareGameStream(null);
+  }, [stream]);
   // Playing WoW here without a capture, the strip's place is known anyway: the top few pixels.
   const stripPx = wow && game.source === 'native' && !stripPct ? ROWS * BLOCK + 1 : 0;
   const choose = (source: VideoSource) => {

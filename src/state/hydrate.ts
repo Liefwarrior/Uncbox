@@ -11,6 +11,7 @@ import {
   GRID_COLS,
   MAX_HISTORY,
   MAX_MILESTONES,
+  MAX_HUD,
   MAX_QUESTS,
   MAX_SLOTS,
   PANEL_IDS,
@@ -127,6 +128,9 @@ function hydratePreset(id: PresetId, saved: unknown): PresetData {
       title: str(w.title) ?? '',
       settings: overlay(defaultWidgetSettings(), w.settings),
     }));
+  p.hud = objects(p.hud)
+    .map((r) => overlay({ id: uid(), label: '', x: 0, y: 0, w: 10, h: 5, numeric: true, value: '', at: 0 }, r))
+    .slice(0, MAX_HUD);
   p.layout = cleanLayout(s.layout, base.layout, p.windows, p.widgets);
   p.slots = objects(p.slots).map((m) => overlay(emptySlot(), m)).slice(0, MAX_SLOTS);
   p.counters = objects(p.counters).map((c) => overlay({ id: uid(), label: 'Counter', value: 0 }, c));

@@ -10,7 +10,9 @@ import { ProgressPanel } from '../components/ProgressPanel';
 import { QuestsPanel } from '../components/QuestsPanel';
 import { RecordPanel } from '../components/RecordPanel';
 import { RunPanel } from '../components/RunPanel';
+import { HudPanel } from '../components/HudPanel';
 import { SlotsPanel } from '../components/SlotsPanel';
+import { SteamPanel } from '../components/SteamPanel';
 import { WindowPanel } from '../components/WindowPanel';
 import { panelTitle, type PresetDef } from '../presets';
 import { type AppState, type BoardId, isWidgetId, isWindowId, type PanelId, type PresetData } from '../state/model';
@@ -43,6 +45,8 @@ const RENDER: Record<PanelId, (c: PanelContext) => ReactNode> = {
   character: (c) => <CharacterPanel character={c.data.character} title={c.title} mutatePreset={c.mutatePreset} />,
   discord: (c) => <DiscordPanel pinned={c.state.discord.pinned} title={c.title} mutate={c.mutate} />,
   quests: (c) => <QuestsPanel quests={c.data.quests} linked={c.data.wowLinkAt > 0} title={c.title} />,
+  steam: (c) => <SteamPanel title={c.title} />,
+  hud: (c) => <HudPanel hud={c.data.hud} title={c.title} suggestions={c.def.hud ?? []} mutatePreset={c.mutatePreset} />,
 };
 
 export function renderPanel(id: BoardId, c: Omit<PanelContext, 'title'>): ReactNode {

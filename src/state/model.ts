@@ -4,7 +4,7 @@ import type { BackgroundId } from '../backgrounds';
 // live between every open window, so a phone or second monitor can drive the streamed one.
 // Each game preset keeps its own layout and data; Twitch and camera settings are shared.
 
-export const PRESET_IDS = ['pokemon', 'smite2', 'wow', 'terminal'] as const;
+export const PRESET_IDS = ['pokemon', 'smite2', 'wow', 'mcd2', 'steam', 'terminal'] as const;
 export type PresetId = (typeof PRESET_IDS)[number];
 
 export const PANEL_IDS = [
@@ -20,6 +20,8 @@ export const PANEL_IDS = [
   'character',
   'discord',
   'quests',
+  'steam',
+  'hud',
 ] as const;
 export type PanelId = (typeof PANEL_IDS)[number];
 
@@ -201,6 +203,24 @@ export interface Quest {
   objectives: { text: string; done: boolean }[];
 }
 
+/**
+ * A box on the game picture that Uncbox reads as text, live (Windows' own OCR): an emerald count,
+ * a level, a timer. Position and size are percent of the uncropped game picture.
+ */
+export interface HudRegion {
+  id: string;
+  label: string;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  /** Read as a number (digits only, "1,234" → "1234") or as text. */
+  numeric: boolean;
+  /** The last reading, and when it changed. */
+  value: string;
+  at: number;
+}
+
 export interface PresetData {
   layout: GridItem[];
   /** What fills the space behind the panels; see src/backgrounds.ts. */
@@ -225,6 +245,8 @@ export interface PresetData {
   wowLinkAt: number;
   windows: AppWindow[];
   widgets: Widget[];
+  /** The Stats panel's screen reader boxes (src/hud). */
+  hud: HudRegion[];
 }
 
 export interface PinnedChannel {
@@ -258,6 +280,7 @@ export const MAX_SLOTS = 12;
 export const MAX_MILESTONES = 24;
 export const MAX_HISTORY = 30;
 export const MAX_QUESTS = 50;
+export const MAX_HUD = 12;
 
 export function uid(): string {
   return Math.random().toString(36).slice(2, 10);

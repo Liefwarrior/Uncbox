@@ -27,6 +27,15 @@ Note:  These are planned integrations, they may not work and may result in the s
   </tr>
 </table>
 
+Two more, without screenshots yet:
+
+- **Minecraft Dungeons II**: torch-lit stone and emerald. A **Stats** panel reads your emeralds,
+  level and more straight off the game's screen, live (see [Stats](#stats-read-off-the-screen)).
+  The session timer starts when the game does. Also party, missions and deaths.
+- **Steam Big Picture**: Steam's own look. A **Steam** panel shows what you're playing (live from
+  the Steam app), its art, your session and total time, and achievements as they unlock. Between
+  games, it shows your recent games.
+
 Every panel works in every preset, so any game can borrow from the others. Each preset also picks
 its own background in the sidebar: animated shapes or a pattern, drawn in the preset's colors.
 
@@ -108,6 +117,37 @@ panel that matches the preset. Add as many as you like.
 They are view only: a web page can show another window but can't click or type into it, and the
 browser asks you to pick each window again after a reload.
 
+### Widgets
+
+**Add a widget** in the sidebar has small panels you can add as many of as you like:
+
+| Widget | Shows |
+| --- | --- |
+| **Clock** | The time here or in any time zone. |
+| **Weather** | Now and today's high and low for any place, from [Open-Meteo](https://open-meteo.com) (no account; only the place is sent). |
+| **Now playing** | The song or video playing on this PC, with its cover: anything that shows in Windows' media controls (Spotify, YouTube in a browser…). |
+| **Notifications** | Windows notifications as they arrive. Titles only unless you ask for the message too, and you can limit it to some apps. It's on stream, so leave private apps out. Only shown on this PC. Needs Node.js 22.5 or newer. |
+| **System** | CPU, graphics card (NVIDIA) and memory load. |
+| **Countdown** | Time left until a date you pick. |
+| **Text** | Any words you like. |
+
+Settings are in each widget's **⋯** menu, and you can rename any of them.
+
+### Stats read off the screen
+
+The **Stats** panel (featured in Minecraft Dungeons II, available in every preset) reads numbers
+off your game's picture as they change, for games that don't share their stats any other way.
+Choose **Set up boxes**, then drag a box around each number on the still of your game: emeralds,
+level, a timer. Uncbox reads the boxes once a second with Windows' own text recognition, and a
+new number has to read the same twice before it shows, so one blurry frame doesn't flash a wrong
+value. Boxes are a share of the picture, so they keep working if the window changes size.
+
+### Steam
+
+The Steam panel reads the Steam app's own files on this PC: which game is running, your name and
+picture, playtime, recent games and achievements. Nothing to sign in to. Games you no longer have
+installed get their name from the Steam store.
+
 ### Clips
 
 While your game is showing as a **Window** or **Capture card**, Uncbox keeps the last 60 seconds
@@ -172,6 +212,11 @@ server/index.mjs           static files, /api/state, live sync over /api/events
 server/discord.mjs         Discord voice bridge over the local RPC pipe
 server/open.mjs            opens setup pages in the default browser (fixed list only)
 server/clips.mjs           saves and serves clips; server/hotkey.mjs watches the clip key
+server/widgets.mjs         system load, now playing and notifications for the widgets
+server/steam.mjs           the Steam panel, from the Steam app's files
+server/ocr.mjs             Windows text recognition for the Stats panel
+src/widgets/               the widget library
+src/hud/                   the Stats panel's screen reader
 src/clips/                 instant replay: the encoder worker, its store, the clip keys
 src/events.ts              the page's one live connection to /api/events
 native/UncboxShell/        the Windows app, where the game can be played in its panel
