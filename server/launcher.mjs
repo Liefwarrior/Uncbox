@@ -15,6 +15,7 @@ import { createReadStream } from 'node:fs';
 import { mkdir, readdir, readFile, rename, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { openInBrowser } from './open.mjs';
+import { noHelpers } from './switches.mjs';
 
 export const TILE_TYPES = ['app', 'folder', 'file', 'url', 'steam'];
 const MAX_NAME = 60;
@@ -272,7 +273,7 @@ export function createLauncher({ sendJson, isLocal, readJson, dataDir }) {
       const icon = /^\/icon\/(tile-[0-9a-f]{12})$/.exec(route);
       if (req.method === 'GET' && icon) {
         const tile = (await load()).find((t) => t.id === icon[1]);
-        const png = tile && (tile.type === 'app' || tile.type === 'file') && process.platform === 'win32' ? await iconFor(tile) : null;
+        const png = tile && (tile.type === 'app' || tile.type === 'file') && process.platform === 'win32' && !noHelpers() ? await iconFor(tile) : null;
         if (!png) return sendJson(res, 404, { error: 'No icon' });
         res.writeHead(200, { 'Content-Type': 'image/png', 'Cache-Control': 'private, max-age=3600' });
         return void createReadStream(png).pipe(res);

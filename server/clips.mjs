@@ -31,6 +31,7 @@ import path from 'node:path';
 import { pipeline } from 'node:stream/promises';
 import { KINDS, NAME, clipName } from './clipnames.mjs';
 import { createHotkey } from './hotkey.mjs';
+import { noHelpers } from './switches.mjs';
 import { DISCORD_MAX_BYTES, createWebhookStore, parseWebhook, sendToWebhook } from './webhook.mjs';
 
 const MAX_CLIP = 2 * 1024 ** 3;
@@ -41,7 +42,7 @@ const DEFAULTS = { enabled: true, key: 'Equal', driveAuto: false, driveShare: fa
 /** Windows keeps Videos wherever the user moved it (often OneDrive), so ask it. */
 function videosFolder() {
   const fallback = path.join(os.homedir(), 'Videos');
-  if (process.platform !== 'win32') return Promise.resolve(fallback);
+  if (process.platform !== 'win32' || noHelpers()) return Promise.resolve(fallback);
   return new Promise((resolve) => {
     execFile(
       'powershell.exe',

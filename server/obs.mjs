@@ -11,6 +11,7 @@
 import { createHash } from 'node:crypto';
 import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import path from 'node:path';
+import { offline } from './switches.mjs';
 
 export const DEFAULT_SETTINGS = { host: '127.0.0.1', port: 4455 };
 
@@ -453,7 +454,8 @@ export function createObsClient({ WebSocketImpl = globalThis.WebSocket, getSetti
   }
 
   async function connect() {
-    if (!started || ws) return;
+    // UNCBOX_OFFLINE: never knock on OBS's door; the snapshot stays "offline".
+    if (!started || ws || offline()) return;
     let settings;
     try {
       settings = await getSettings();

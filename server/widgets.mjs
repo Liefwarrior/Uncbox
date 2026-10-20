@@ -9,6 +9,7 @@ import { execFile } from 'node:child_process';
 import os from 'node:os';
 import path from 'node:path';
 import { createMedia } from './media.mjs';
+import { noHelpers } from './switches.mjs';
 
 // ---- system ----
 
@@ -30,7 +31,7 @@ function cpuPercent() {
 /** NVIDIA cards report through nvidia-smi; other cards just don't show a GPU line. */
 let gpuMissing = false;
 function gpuStats() {
-  if (gpuMissing) return Promise.resolve(null);
+  if (gpuMissing || noHelpers()) return Promise.resolve(null);
   return new Promise((resolve) => {
     execFile(
       'nvidia-smi',
@@ -100,7 +101,7 @@ async function openNotifications() {
 }
 
 async function notifications(after) {
-  if (process.platform !== 'win32') throw Object.assign(new Error('Notifications are read from Windows.'), { status: 501 });
+  if (process.platform !== 'win32' || noHelpers()) throw Object.assign(new Error('Notifications are read from Windows.'), { status: 501 });
   const db = await openNotifications();
   try {
     const q = db.prepare(`

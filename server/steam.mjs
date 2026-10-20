@@ -17,6 +17,7 @@ import { createReadStream } from 'node:fs';
 import { readdir, readFile, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { openInBrowser } from './open.mjs';
+import { noHelpers, offline } from './switches.mjs';
 import { createSteamWindowed } from './steamwindowed.mjs';
 
 const POLL_MS = 3000;
@@ -121,6 +122,7 @@ export function achievements(schema, user) {
 }
 
 function reg(key, value) {
+  if (noHelpers()) return Promise.resolve('');
   return new Promise((resolve) => {
     execFile('reg', ['query', key, ...(value ? ['/v', value] : ['/s', '/v', 'Name'])], { windowsHide: true, maxBuffer: 8 * 1024 * 1024 }, (err, out) =>
       resolve(err ? '' : out),
@@ -211,7 +213,7 @@ export function createSteam({ broadcastEvent, sendJson, isLocal, readJson, dataD
    */
   const asked = new Set();
   async function storeName(appid) {
-    if (asked.has(appid)) return;
+    if (asked.has(appid) || offline()) return;
     asked.add(appid);
     try {
       const r = await fetch(`https://store.steampowered.com/api/appdetails?filters=basic&appids=${appid}`, { signal: AbortSignal.timeout(5000) });

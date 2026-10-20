@@ -5,6 +5,7 @@
 
 import { spawn } from 'node:child_process';
 import { createInterface } from 'node:readline';
+import { noHelpers } from './switches.mjs';
 
 /** KeyboardEvent.code → Windows virtual-key code, for the keys src/clips/keys.ts offers. */
 export function vkFor(code) {
@@ -83,7 +84,7 @@ public static class UncboxClipKey {
 export function createHotkey({ onPress, onStatus = () => {} }) {
   let child = null;
   let vk = 0;
-  let status = process.platform === 'win32' ? 'off' : 'unsupported';
+  let status = process.platform === 'win32' && !noHelpers() ? 'off' : 'unsupported';
   const set = (s) => {
     if (s === status) return;
     status = s;
@@ -124,7 +125,7 @@ export function createHotkey({ onPress, onStatus = () => {} }) {
     status: () => status,
     /** Watches this key (a KeyboardEvent.code), or nothing for an empty or unknown one. */
     watch(code) {
-      if (process.platform !== 'win32') return;
+      if (process.platform !== 'win32' || noHelpers()) return;
       const next = vkFor(code);
       if (next === vk && (child || !next)) return;
       vk = next;

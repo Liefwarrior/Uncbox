@@ -19,6 +19,7 @@ import { readdir, realpath, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { GOOGLE_SCOPES } from './google.mjs';
 import { openInBrowser } from './open.mjs';
+import { noHelpers } from './switches.mjs';
 
 const API = 'https://www.googleapis.com/drive/v3/files';
 const FOLDER = 'application/vnd.google-apps.folder';
@@ -246,7 +247,7 @@ export function safeDriveUrl(url) {
 
 function regQuery() {
   return new Promise((resolve) => {
-    if (process.platform !== 'win32') return resolve('');
+    if (process.platform !== 'win32' || noHelpers()) return resolve('');
     execFile('reg', ['query', 'HKCU\\Software\\Google\\DriveFS', '/s'], { windowsHide: true, maxBuffer: 4 * 1024 * 1024 }, (err, out) => resolve(err ? '' : out));
   });
 }

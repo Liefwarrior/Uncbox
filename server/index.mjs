@@ -4,6 +4,9 @@
 //   node server/index.mjs          serve the built app from dist/
 //   node server/index.mjs --dev    serve through Vite with hot reload
 //
+// Options: --data=DIR (state and secrets), --clips=DIR, --port=N or PORT, HOST. UNCBOX_OFFLINE and
+// UNCBOX_NO_HELPERS keep it from touching anything outside itself (see switches.mjs).
+//
 // Always on http://localhost:5170. Once `npm run setup-domain` has made a certificate, the built
 // app is also served at https://unc.box (dev mode stays on localhost, where hot reload works).
 
@@ -41,10 +44,12 @@ import { createWeb } from './web.mjs';
 import { createTwitch } from './twitch.mjs';
 import { createWidgets } from './widgets.mjs';
 import { createGuardConfig, guardApi } from './guard.mjs';
+import { noHelpers, offline, offlineFetch } from './switches.mjs';
 import { DOMAIN, loadTls } from './tls.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const distDir = path.join(root, 'dist');
+// UNCBOX_DIST serves the built app from somewhere else (the server smoke test points it at a stand-in).
+const distDir = process.env.UNCBOX_DIST ? path.resolve(process.env.UNCBOX_DIST) : path.join(root, 'dist');
 const dataArg = process.argv.find((a) => a.startsWith('--data='));
 const dataDir = dataArg ? path.resolve(dataArg.slice(7)) : path.join(root, 'data');
 const stateFile = path.join(dataDir, 'state.json');
@@ -179,7 +184,7 @@ const guard = createGuardConfig({ bindHost: host, domains: [DOMAIN], extra: proc
 /** Which of the given programs are running ("Dungeons.exe"), for presets that notice their game starting. */
 async function running(req, res, url) {
   const names = (url.searchParams.get('names') ?? '').split(',').map((n) => n.trim().toLowerCase()).filter(Boolean);
-  if (process.platform !== 'win32' || !names.length) return sendJson(res, 200, { running: [] });
+  if (process.platform !== 'win32' || noHelpers() || !names.length) return sendJson(res, 200, { running: [] });
   const { execFile } = await import('node:child_process');
   execFile('tasklist', ['/FO', 'CSV', '/NH'], { windowsHide: true, maxBuffer: 8 * 1024 * 1024 }, (err, out) => {
     const seen = new Set(err ? [] : out.split(/\r?\n/).map((l) => (/^"([^"]+)"/.exec(l)?.[1] ?? '').toLowerCase()));
@@ -196,26 +201,29 @@ const clips = createClips({
   readJson,
 });
 
+// UNCBOX_OFFLINE=1 (see switches.mjs): every call to the outside world fails like a lost connection.
+const fetchImpl = offline() ? offlineFetch : fetch;
+
 const widgets = createWidgets({ broadcastEvent, isLocal, sendJson, readJson });
 const netstats = createNetstats({ broadcastEvent, isLocal, sendJson });
-const web = createWeb({ isLocal, sendJson });
+const web = createWeb({ isLocal, sendJson, fetchImpl });
 const steam = createSteam({ broadcastEvent, sendJson, isLocal, readJson, dataDir });
 const obs = createObs({ broadcastEvent, sendJson, isLocal, readJson, dataDir });
 const launcher = createLauncher({ sendJson, isLocal, readJson, dataDir });
 // Sign-in redirects to this server's own plain-http port, so Google needs `port`.
-const google = createGoogle({ broadcastEvent, sendJson, isLocal, readJson, dataDir, port });
+const google = createGoogle({ broadcastEvent, sendJson, isLocal, readJson, dataDir, port, fetchImpl });
 // UNCBOX_DRIVE_FOLDER stands in for the Drive for desktop folder, to try the widget without it.
 const drive = createDrive({ google, isLocal, sendJson, readJson, localFolder: process.env.UNCBOX_DRIVE_FOLDER || '' });
 const driveUpload = createDriveUpload({ google, dir: clips.folder(), dataDir, broadcastEvent, isLocal, sendJson, readJson });
 clips.onSaved((name, options) => void driveUpload.queue(name, options));
 const calendar = createCalendar({ google, isLocal, sendJson, readJson });
 const gmail = createGmail({ google, isLocal, sendJson, readJson });
-const twitch = createTwitch({ broadcastEvent, sendJson, isLocal, readJson, dataDir });
+const twitch = createTwitch({ broadcastEvent, sendJson, isLocal, readJson, dataDir, fetchImpl });
 const ocr = createOcr({ isLocal, sendJson, readBody });
 const smite = createSmite({ broadcastEvent, sendJson });
 const gameSettings = createGameSettings({ isLocal, sendJson, readJson });
-const gallery = createGallery({ dataDir, sendJson, isLocal, baseUrl: process.env.UNCBOX_GALLERY_URL });
-const update = createUpdate({ dataDir, version: JSON.parse(readFileSync(path.join(root, 'package.json'), 'utf8')).version });
+const gallery = createGallery({ dataDir, sendJson, isLocal, baseUrl: process.env.UNCBOX_GALLERY_URL, fetchImpl });
+const update = createUpdate({ dataDir, fetchImpl, version: JSON.parse(readFileSync(path.join(root, 'package.json'), 'utf8')).version });
 
 async function handleWow(req, res, url) {
   if (!isLocal(req)) return sendJson(res, 403, { error: 'Run this on the PC WoW is on.' });

@@ -9,6 +9,7 @@
 import { spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { createInterface } from 'node:readline';
+import { noHelpers } from './switches.mjs';
 
 // ---- the helper's script ----
 
@@ -275,7 +276,7 @@ export function createMedia({ broadcastEvent, isLocal, sendJson, readJson, appNa
   }
 
   function ensureHelper() {
-    if (process.platform !== 'win32' || helper) return;
+    if (process.platform !== 'win32' || noHelpers() || helper) return;
     helper = startHelper(onLine);
     helper.on('exit', () => (helper = null));
   }

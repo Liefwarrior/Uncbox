@@ -16,6 +16,7 @@ import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import net from 'node:net';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { offline } from './switches.mjs';
 
 function builtInClientId() {
   if (process.env.UNCBOX_DISCORD_CLIENT_ID) return process.env.UNCBOX_DISCORD_CLIENT_ID.trim();
@@ -409,6 +410,11 @@ export function createDiscordBridge({ dataDir, onChange }) {
     if (!clientId()) {
       set({ status: 'unconfigured', error: '', user: null });
       clearChannel();
+      return;
+    }
+    // UNCBOX_OFFLINE: never knock on the Discord app's pipe.
+    if (offline()) {
+      set({ status: 'offline', error: '' });
       return;
     }
     // Tokens belong to the app that issued them; drop them if the app changed.

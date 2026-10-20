@@ -15,6 +15,7 @@ import net from 'node:net';
 import { execFile } from 'node:child_process';
 import { open, readdir, stat } from 'node:fs/promises';
 import path from 'node:path';
+import { noHelpers, offline } from './switches.mjs';
 
 export const DEFAULT_TARGET = '1.1.1.1:443';
 /** How many pings the history keeps. */
@@ -133,6 +134,7 @@ export function summarizeGame(name, rows) {
 
 /** Milliseconds to open a TCP connection, or null when it takes over a second or fails. */
 export function tcpPing({ host, port }, { connect = net.connect, now = () => performance.now() } = {}) {
+  if (offline()) return Promise.resolve(null);
   return new Promise((resolve) => {
     let done = false;
     let socket;
@@ -163,7 +165,7 @@ export function tcpPing({ host, port }, { connect = net.connect, now = () => per
 
 /** This PC's default gateway (the router), or null. Asked of Windows once. */
 export function findGateway() {
-  if (process.platform !== 'win32') return Promise.resolve(null);
+  if (process.platform !== 'win32' || noHelpers()) return Promise.resolve(null);
   return new Promise((resolve) => {
     execFile(
       'powershell.exe',
