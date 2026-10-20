@@ -951,19 +951,58 @@ input[type='color'] {
 .board .react-grid-item .react-resizable-handle::after {
   border-color: var(--accent);
 }
-.board .react-grid-item .react-resizable-handle-se {
+/* Corners: an L mark in the corner, drawn per corner rather than by rotating the handle. */
+.board .react-grid-item .react-resizable-handle-se,
+.board .react-grid-item .react-resizable-handle-sw,
+.board .react-grid-item .react-resizable-handle-ne,
+.board .react-grid-item .react-resizable-handle-nw {
   width: 22px;
   height: 22px;
+  transform: none;
+}
+/* The top corners are short so they stay clear of the header's buttons. */
+.board .react-grid-item .react-resizable-handle-ne,
+.board .react-grid-item .react-resizable-handle-nw {
+  height: 8px;
+}
+.board .react-grid-item .react-resizable-handle-se::after,
+.board .react-grid-item .react-resizable-handle-sw::after,
+.board .react-grid-item .react-resizable-handle-ne::after,
+.board .react-grid-item .react-resizable-handle-nw::after {
+  inset: auto;
+  width: 8px;
+  height: 8px;
+  border: 0 solid var(--accent);
 }
 .board .react-grid-item .react-resizable-handle-se::after {
   right: 6px;
   bottom: 6px;
-  width: 8px;
-  height: 8px;
-  border-right: 2px solid var(--accent);
-  border-bottom: 2px solid var(--accent);
+  border-right-width: 2px;
+  border-bottom-width: 2px;
+}
+.board .react-grid-item .react-resizable-handle-sw::after {
+  bottom: 6px;
+  left: 6px;
+  border-bottom-width: 2px;
+  border-left-width: 2px;
+}
+.board .react-grid-item .react-resizable-handle-ne::after {
+  top: 2px;
+  right: 6px;
+  height: 6px;
+  border-top-width: 2px;
+  border-right-width: 2px;
+}
+.board .react-grid-item .react-resizable-handle-nw::after {
+  top: 2px;
+  left: 6px;
+  height: 6px;
+  border-top-width: 2px;
+  border-left-width: 2px;
 }
 .board .react-grid-item .react-resizable-handle-e,
+.board .react-grid-item .react-resizable-handle-w,
+.board .react-grid-item .react-resizable-handle-n,
 .board .react-grid-item .react-resizable-handle-s {
   margin: 0;
   transform: none;
@@ -976,6 +1015,14 @@ input[type='color'] {
   height: auto;
   cursor: ew-resize;
 }
+.board .react-grid-item .react-resizable-handle-w {
+  top: 24px;
+  bottom: 24px;
+  left: 0;
+  width: 10px;
+  height: auto;
+  cursor: ew-resize;
+}
 .board .react-grid-item .react-resizable-handle-s {
   right: 24px;
   bottom: 0;
@@ -984,7 +1031,18 @@ input[type='color'] {
   height: 10px;
   cursor: ns-resize;
 }
+/* A thin strip along the very top edge: the header below it is the drag handle and holds buttons. */
+.board .react-grid-item .react-resizable-handle-n {
+  top: 0;
+  right: 24px;
+  left: 24px;
+  width: auto;
+  height: 6px;
+  cursor: ns-resize;
+}
 .board .react-grid-item .react-resizable-handle-e::after,
+.board .react-grid-item .react-resizable-handle-w::after,
+.board .react-grid-item .react-resizable-handle-n::after,
 .board .react-grid-item .react-resizable-handle-s::after {
   inset: auto;
   border: 0;
@@ -994,6 +1052,8 @@ input[type='color'] {
   transition: opacity 0.15s;
 }
 .board .react-grid-item .react-resizable-handle-e:hover::after,
+.board .react-grid-item .react-resizable-handle-w:hover::after,
+.board .react-grid-item .react-resizable-handle-n:hover::after,
 .board .react-grid-item .react-resizable-handle-s:hover::after,
 .board .react-grid-item.resizing .react-resizable-handle::after {
   opacity: 1;
@@ -1003,6 +1063,18 @@ input[type='color'] {
   right: 3px;
   width: 3px;
   height: 32px;
+}
+.board .react-grid-item .react-resizable-handle-w::after {
+  top: calc(50% - 16px);
+  left: 3px;
+  width: 3px;
+  height: 32px;
+}
+.board .react-grid-item .react-resizable-handle-n::after {
+  top: 1px;
+  left: calc(50% - 16px);
+  width: 32px;
+  height: 3px;
 }
 .board .react-grid-item .react-resizable-handle-s::after {
   bottom: 3px;
