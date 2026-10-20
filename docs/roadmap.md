@@ -7,7 +7,7 @@ commit), or **Queued**. Loose ideas that are not tickets yet live in [ideas.md](
 
 ## Wave 1: building now
 
-### UBX-1 · Google Drive widget — Building
+### UBX-1 · Google Drive widget — Shipped (b1c95e1)
 Browse and open your Drive from a widget: Recent, Starred, Shared with me, Search, thumbnails.
 - Sign in with Google from Uncbox (installed-app OAuth with PKCE, your own Desktop OAuth client),
   tokens kept server-side in `data/google.json`, never sent to the page.
@@ -15,7 +15,7 @@ Browse and open your Drive from a widget: Recent, Starred, Shared with me, Searc
 - Works without signing in when Google Drive for desktop is installed (browses `G:\My Drive`).
 - Done when: a signed-in widget lists recent files and opens one; signing out revokes the token.
 
-### UBX-2 · Web widget — Building
+### UBX-2 · Web widget — Shipped (0afc6c5)
 A browser inside a panel: address bar, back/forward/reload, Open in browser, zoom, hide toolbar.
 - In a plain browser: an iframe, with a friendly "this site can't be shown here" card for sites
   that refuse framing.
@@ -40,7 +40,7 @@ Live ping (TCP connect timing, no admin), jitter, loss and a sparkline, plus gam
 in-game ping read from SMITE 2's performance timeline when a match is on. Sampling runs only while
 a widget is showing.
 
-### UBX-7 · Now playing gets controls — Building
+### UBX-7 · Now playing gets controls — Shipped (6f508a0)
 Album art, a live progress bar, and previous/play-pause/next/seek for Spotify, browsers and
 anything in the Windows media flyout.
 
@@ -69,7 +69,7 @@ Unread count and the latest few subjects/senders, click to open in the Web widge
 Ctrl+K anywhere in Uncbox: switch presets, add widgets, launch Launcher tiles, search Drive, open
 a URL in a Web widget, save a clip, toggle stream mode.
 
-### UBX-13 · Twitch stream info — Building
+### UBX-13 · Twitch stream info — Shipped (a51aca9)
 Viewer count, followers/subs as they happen, edit title and category from Uncbox (Twitch sign-in
 kept server-side, like Google).
 
