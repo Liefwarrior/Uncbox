@@ -150,7 +150,6 @@ export const PRESETS: Record<PresetId, PresetDef> = {
     id: 'wow',
     name: 'WoW Forever',
     blurb: 'Leveling, raids',
-    steamNames: ['World of Warcraft'],
     titles: { run: '/played' },
     featured: ['game', 'camera', 'character', 'quests', 'slots', 'chat', 'discord', 'progress', 'run'],
     // The addon fills these in with your group; they can still be typed in by hand.
