@@ -61,6 +61,8 @@ export interface PaletteActions {
   toggleStream: () => void;
   /** Opens the preset gallery. */
   browsePresets: () => void;
+  /** Opens the sidebar's editor for a new automation. */
+  addAutomation: () => void;
 }
 
 export interface PaletteContext {
@@ -81,7 +83,7 @@ export interface PaletteContext {
 export type Provider = (ctx: PaletteContext) => Command[];
 
 /** Headings in the order they are listed (before a search puts the best match's heading first). */
-export const GROUPS = ['Presets', 'Panels', 'Widgets', 'Clips', 'Stream', 'Launcher', 'Web', 'Drive', 'OBS', 'Focus timer'] as const;
+export const GROUPS = ['Presets', 'Panels', 'Widgets', 'Clips', 'Stream', 'Launcher', 'Web', 'Drive', 'OBS', 'Focus timer', 'Automations'] as const;
 
 // ---- presets ----
 
@@ -340,7 +342,33 @@ const focusCommands: Provider = ({ state, mutatePreset, actions, now }) => {
   });
 };
 
-export const providers: Provider[] = [presetCommands, panelCommands, widgetCommands, clipCommands, streamCommands, launcherCommands, webCommands, driveCommands, obsCommands, focusCommands];
+// ---- automations ----
+
+const automationCommands: Provider = ({ actions }) => [
+  {
+    id: 'automation:add',
+    title: 'Add an automation',
+    group: 'Automations',
+    icon: 'zap',
+    detail: 'When something happens, do something',
+    keywords: 'rule trigger when then automatic',
+    run: actions.addAutomation,
+  },
+];
+
+export const providers: Provider[] = [
+  presetCommands,
+  panelCommands,
+  widgetCommands,
+  clipCommands,
+  streamCommands,
+  launcherCommands,
+  webCommands,
+  driveCommands,
+  obsCommands,
+  focusCommands,
+  automationCommands,
+];
 
 /** Every command that can run right now. */
 export function buildCommands(ctx: PaletteContext, from: Provider[] = providers): Command[] {

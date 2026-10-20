@@ -6,6 +6,7 @@ import { Gallery } from './components/Gallery';
 import { Sidebar } from './components/Sidebar';
 import { Palette } from './palette/Palette';
 import { UndoToast } from './components/UndoToast';
+import { useAutomations } from './automations/useAutomations';
 import { useClipKeyInPage } from './clips/replay';
 import { useGameDetect, useGameStream, useScreenTriggers } from './hud/reader';
 import { useSmiteSync } from './smite';
@@ -65,6 +66,12 @@ export function App() {
   }, [toggleStream, exitStream]);
 
   useClipKeyInPage(state.clips);
+  useAutomations({
+    state,
+    mutate,
+    isStreaming: useCallback(() => streaming.current, []),
+    setStream: useCallback((on: boolean) => (on ? enterStream() : exitStream()), [enterStream, exitStream]),
+  });
 
   // The page itself never scrolls: everything fits the window. If something focused off screen
   // nudges it anyway, put it straight back, or the whole layout stays shifted.

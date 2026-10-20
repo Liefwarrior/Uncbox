@@ -363,6 +363,38 @@ export interface ClipSettings {
   driveShare: boolean;
 }
 
+/**
+ * "When this, do that" (src/automations). A game is a built-in preset's game ("smite2"), or 'any'
+ * for whatever Steam is running.
+ */
+export type AutomationGame = PresetId | 'any';
+
+export type AutomationWhen =
+  | { kind: 'gameStarts' | 'gameStops'; game: AutomationGame }
+  | { kind: 'streamStarts' | 'streamStops' | 'recordStarts' }
+  /** At a clock time ("21:30", this PC's time) on these days (0 is Sunday); no days means every day. */
+  | { kind: 'time'; at: string; days: number[] }
+  | { kind: 'focusStarts' | 'breakStarts' };
+
+export type AutomationThen =
+  | { kind: 'preset'; preset: PresetId | CustomId }
+  | { kind: 'stream'; on: boolean }
+  | { kind: 'scene'; scene: string }
+  | { kind: 'record'; on: boolean }
+  | { kind: 'focus' }
+  | { kind: 'note'; text: string };
+
+export interface Automation {
+  id: string;
+  enabled: boolean;
+  /** An optional label of your own; the sentence is built from the rule itself. */
+  name: string;
+  when: AutomationWhen;
+  then: AutomationThen[];
+  /** When it last ran (ms since 1970), so a time rule runs once a minute even across reloads. 0 if never. */
+  lastFired: number;
+}
+
 export interface AppState {
   version: 2;
   /** The preset on the board: a built-in one, or one of `custom`. */
@@ -375,6 +407,8 @@ export interface AppState {
   presets: Record<PresetId, PresetData>;
   /** Presets of your own, after the built-in ones in the sidebar. */
   custom: CustomPreset[];
+  /** Shared by every preset, and not part of a preset's export. */
+  automations: Automation[];
 }
 
 export const GRID_COLS = 24;
@@ -389,6 +423,9 @@ export const MAX_PHRASE = 120;
 export const MAX_COOLDOWN = 600;
 export const MAX_CUSTOM = 50;
 export const MAX_PRESET_NAME = 60;
+export const MAX_AUTOMATIONS = 30;
+export const MAX_AUTOMATION_STEPS = 6;
+export const MAX_NOTE = 140;
 
 export function uid(): string {
   return Math.random().toString(36).slice(2, 10);

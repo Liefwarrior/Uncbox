@@ -20,6 +20,7 @@ const fakeActions = (): PaletteActions => ({
   callOut: vi.fn(),
   toggleStream: vi.fn(),
   browsePresets: vi.fn(),
+  addAutomation: vi.fn(),
 });
 
 /** A palette over a fresh default state; the changes the commands make are applied to that state. */
@@ -371,5 +372,15 @@ describe('bump', () => {
     expect(next).toHaveLength(MAX_RECENT);
     expect(next[0]).toBe('new');
     expect(next).not.toContain(`c${MAX_RECENT - 1}`);
+  });
+});
+
+describe('automations', () => {
+  it('has Add an automation, which opens the editor', () => {
+    const { find, actions } = setup();
+    const add = find('automation:add')!;
+    expect(add.title).toBe('Add an automation');
+    add.run();
+    expect(actions.addAutomation).toHaveBeenCalled();
   });
 });

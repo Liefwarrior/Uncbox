@@ -28,6 +28,8 @@ export interface PresetDef {
   triggers?: RecipeId[];
   /** The game's program ("Dungeons.exe"): the run timer starts when it does and pauses when it closes. */
   detect?: string;
+  /** What Steam calls the game (any of these, in any case), so Automations can tell it started. */
+  steamNames?: string[];
   slots: {
     variant: 'list' | 'tiles';
     name: string;
@@ -119,6 +121,7 @@ export const PRESETS: Record<PresetId, PresetDef> = {
     id: 'smite2',
     name: 'SMITE 2',
     blurb: 'Live god, build and teams; record',
+    steamNames: ['SMITE 2'],
     titles: { slots: 'Build', run: 'Session', notes: 'Game plan', record: 'Record' },
     featured: ['game', 'camera', 'chat', 'discord', 'match', 'teams', 'scoreboard', 'damage', 'record', 'slots', 'run', 'notes'],
     slots: { variant: 'tiles', name: 'Item', detail: '', showDown: false },
@@ -147,6 +150,7 @@ export const PRESETS: Record<PresetId, PresetDef> = {
     id: 'wow',
     name: 'WoW Forever',
     blurb: 'Leveling, raids',
+    steamNames: ['World of Warcraft'],
     titles: { run: '/played' },
     featured: ['game', 'camera', 'character', 'quests', 'slots', 'chat', 'discord', 'progress', 'run'],
     // The addon fills these in with your group; they can still be typed in by hand.
@@ -198,6 +202,7 @@ export const PRESETS: Record<PresetId, PresetDef> = {
     slots: { variant: 'list', name: 'Player', detail: 'Build', showDown: true, down: 'Down' },
     hud: ['Emeralds', 'Level', 'Arrows', 'Gold', 'Souls', 'Health'],
     detect: 'Dungeons.exe',
+    steamNames: ['Minecraft Dungeons II'],
     layout: [
       { i: 'game', x: 0, y: 0, w: 17, h: 17 },
       { i: 'camera', x: 17, y: 0, w: 7, h: 7 },

@@ -14,6 +14,7 @@ import { addWidgetTo, placePanel, setPanelShown } from '../layout';
 import { send, shell } from '../native';
 import { PANEL_INFO } from '../panels/catalog';
 import { PaletteHint } from '../palette/Palette';
+import { AutomationsSection } from './Automations';
 import { BackgroundPicker } from './BackgroundPicker';
 import { ClipsSection } from './Clips';
 import { CustomPresetCard } from './CustomPresetCard';
@@ -141,6 +142,8 @@ export function Sidebar({ state, mutate, mutatePreset, status, onStreamMode }: P
           <StartWithWindows />
 
           <ClipsSection settings={state.clips} mutate={mutate} />
+
+          <AutomationsSection state={state} mutate={mutate} />
 
           <h3>On screen</h3>
           <ul className="toggles">{def.featured.map(row)}</ul>

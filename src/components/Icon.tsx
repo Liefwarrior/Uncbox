@@ -75,6 +75,7 @@ const PATHS = {
   calendar: ['M8 2v4', 'M16 2v4', 'M5 4h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z', 'M3 10h18'],
   twitch: ['M21 2H3v16h5v4l4-4h5l4-4V2z', 'M11 11V7', 'M16 11V7'],
   skipForward: ['M5 4l10 8-10 8z', 'M19 5v14'],
+  zap: ['M13 2 3 14h9l-1 8 10-12h-9z'],
 } as const;
 
 export type IconName = keyof typeof PATHS;

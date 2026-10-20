@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { openAutomationEditor } from '../automations/editor';
 import { callOut } from '../callout';
 import { revealClip, saveClip, useClips, watchClip } from '../clips/replay';
 import { Icon } from '../components/Icon';
@@ -114,6 +115,7 @@ function Dialog({ state, mutate, mutatePreset, onToggleStream, onClose }: Props 
       callOut,
       toggleStream: onToggleStream,
       browsePresets: openGallery,
+      addAutomation: openAutomationEditor,
     }),
     [onToggleStream],
   );

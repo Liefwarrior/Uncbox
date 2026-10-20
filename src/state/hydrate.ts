@@ -1,3 +1,4 @@
+import { hydrateAutomations } from '../automations/rules';
 import { isBackgroundId } from '../backgrounds';
 import { DEFAULT_CLIP_KEY, isClipKey } from '../clips/keys';
 import { clampZoom, cleanUrl, isSearchEngine } from '../web';
@@ -72,6 +73,7 @@ export function defaultState(): AppState {
     camera: { enabled: false, deviceId: null, mirrored: true },
     presets: eachPreset(defaultPresetData),
     custom: [],
+    automations: [],
   };
 }
 
@@ -301,5 +303,6 @@ export function hydrate(saved: unknown): AppState {
     camera: { ...overlay(base.camera, camera), deviceId: str(camera.deviceId) },
     presets: eachPreset((id) => hydratePreset(id, presets[id])),
     custom,
+    automations: hydrateAutomations(saved.automations),
   };
 }
