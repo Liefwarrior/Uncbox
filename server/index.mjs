@@ -29,6 +29,7 @@ import { createObs } from './obs.mjs';
 import { createOcr } from './ocr.mjs';
 import { createSmite } from './smite.mjs';
 import { createSteam } from './steam.mjs';
+import { createLauncher } from './launcher.mjs';
 import { createWidgets } from './widgets.mjs';
 import { DOMAIN, loadTls } from './tls.mjs';
 
@@ -184,6 +185,7 @@ const widgets = createWidgets({ broadcastEvent, isLocal, sendJson });
 const netstats = createNetstats({ broadcastEvent, isLocal, sendJson });
 const steam = createSteam({ broadcastEvent, sendJson, isLocal, readJson, dataDir });
 const obs = createObs({ broadcastEvent, sendJson, isLocal, readJson, dataDir });
+const launcher = createLauncher({ sendJson, isLocal, readJson, dataDir });
 const ocr = createOcr({ isLocal, sendJson, readBody });
 const smite = createSmite({ broadcastEvent, sendJson });
 const gameSettings = createGameSettings({ isLocal, sendJson, readJson });
@@ -218,6 +220,7 @@ async function handleApi(req, res, url) {
   if (url.pathname === '/api/netstats') return netstats(req, res, url);
   if (url.pathname === '/api/steam' || url.pathname.startsWith('/api/steam/')) return steam(req, res, url);
   if (url.pathname === '/api/obs' || url.pathname.startsWith('/api/obs/')) return obs(req, res, url);
+  if (url.pathname.startsWith('/api/launcher/')) return launcher(req, res, url);
   if (url.pathname === '/api/ocr') return ocr(req, res);
   if (url.pathname === '/api/smite') return smite(req, res);
   if (url.pathname === '/api/game-settings') return gameSettings(req, res);

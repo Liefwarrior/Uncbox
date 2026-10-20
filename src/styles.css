@@ -4455,3 +4455,210 @@ p.chat-empty {
   color: var(--bad);
   text-align: right;
 }
+
+.widget-settings__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+  gap: 8px;
+}
+
+/* ---------- focus timer ---------- */
+
+.widget-focus {
+  --focus: var(--accent);
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+  gap: 8px;
+  height: 100%;
+}
+.widget-focus.is-break {
+  --focus: var(--accent-2);
+}
+.widget-focus__ring {
+  position: relative;
+  display: grid;
+  min-height: 0;
+  place-items: center;
+}
+.widget-focus__ring svg {
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg);
+}
+.widget-focus__track,
+.widget-focus__arc {
+  fill: none;
+  stroke-width: 5;
+}
+.widget-focus__track {
+  stroke: var(--panel-2);
+}
+.widget-focus__arc {
+  stroke: var(--focus);
+  stroke-linecap: round;
+  transition: stroke-dashoffset 0.9s linear, stroke 0.3s;
+}
+.widget-focus:not(.is-running) .widget-focus__arc {
+  opacity: 0.55;
+}
+.widget-focus__text {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  gap: 2px;
+  text-align: center;
+}
+.widget-focus__text strong {
+  font-family: var(--font-num);
+  font-size: clamp(18px, 15cqmin, 64px);
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  line-height: 1.05;
+}
+.widget-focus__text span {
+  color: var(--focus);
+  font-size: clamp(11px, 5cqmin, 17px);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.widget-focus__dots {
+  display: flex;
+  gap: 6px;
+  margin: 4px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.widget-focus__dots li {
+  width: 8px;
+  height: 8px;
+  border: 1.5px solid var(--focus);
+  border-radius: 50%;
+}
+.widget-focus__dots li.is-done {
+  background: var(--focus);
+}
+.widget-focus__dots li.is-current {
+  background: color-mix(in srgb, var(--focus) 40%, transparent);
+}
+.widget-focus__buttons {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px;
+}
+
+/* ---------- launcher ---------- */
+
+.launcher {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(clamp(56px, 17cqmin, 120px), 1fr));
+  align-content: start;
+  gap: 8px;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  overflow: auto;
+  list-style: none;
+  scrollbar-width: none;
+}
+.launch-tile-wrap {
+  position: relative;
+  min-width: 0;
+}
+.launch-tile {
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+  width: 100%;
+  padding: 8px 4px 6px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: var(--panel-2);
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  transition: border-color 0.2s, transform 0.2s var(--ease-out), background 0.2s;
+}
+.launch-tile:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--accent) 55%, var(--border));
+  transform: translateY(-1px);
+}
+.launch-tile:disabled {
+  cursor: default;
+}
+.launch-tile.is-launching {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 16%, var(--panel-2));
+}
+.launch-tile__icon {
+  width: clamp(28px, 9cqmin, 56px);
+  height: clamp(28px, 9cqmin, 56px);
+  object-fit: contain;
+}
+.launch-tile__icon--glyph {
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+}
+.launch-tile__label {
+  max-width: 100%;
+  overflow: hidden;
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.launch-tile--add {
+  border-style: dashed;
+  border-color: var(--border);
+  background: transparent;
+}
+.launch-tile__tools {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  left: 2px;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 2px;
+}
+.launch-tile__tools .icon-btn {
+  min-width: 22px;
+  height: 22px;
+  padding: 0 3px;
+  background: color-mix(in srgb, var(--panel-2) 90%, transparent);
+}
+@container (max-width: 190px) {
+  .launch-tile__label {
+    display: none;
+  }
+}
+.launcher-browse {
+  height: 100%;
+  grid-template-rows: auto auto minmax(0, 1fr);
+}
+.launcher-browse__list {
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  overflow: auto;
+  list-style: none;
+}
+.launcher-browse__list button {
+  width: 100%;
+  padding: 5px 8px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.launcher-browse__list button:hover {
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+}
+

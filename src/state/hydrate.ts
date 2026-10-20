@@ -145,6 +145,12 @@ export function hydratePreset(id: PresetId, saved: unknown): PresetData {
       title: str(w.title) ?? '',
       settings: overlay(defaultWidgetSettings(), w.settings),
     }));
+  for (const w of p.widgets) {
+    const f = w.settings;
+    if (!['work', 'short', 'long'].includes(f.focusPhase)) f.focusPhase = 'work';
+    f.focusRound = Math.max(1, f.focusRound);
+    f.launcherTiles = f.launcherTiles.filter((t) => typeof t === 'string');
+  }
   p.hud = objects(p.hud)
     .map((r) => overlay({ id: uid(), label: '', x: 0, y: 0, w: 10, h: 5, numeric: true, value: '', at: 0 }, r))
     .slice(0, MAX_HUD);

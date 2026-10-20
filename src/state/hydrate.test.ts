@@ -188,3 +188,30 @@ describe('hydrate', () => {
     });
   });
 });
+
+describe('hydrate: focus and launcher widgets', () => {
+  const load = (settings: unknown, type = 'focus') => {
+    const state = defaultState();
+    state.presets.pokemon.widgets = [{ id: 'wdg-1', type, title: '', settings }] as never;
+    return hydrate(JSON.parse(JSON.stringify(state))).presets.pokemon.widgets[0];
+  };
+
+  it('accepts both new types and fills in missing settings', () => {
+    const focus = load({ focusWork: 50 });
+    expect(focus.type).toBe('focus');
+    expect(focus.settings).toMatchObject({ focusWork: 50, focusShort: 5, focusLong: 15, focusRounds: 4, focusSound: true, focusPhase: 'work', focusRound: 1, focusEndsAt: 0 });
+    const launcher = load({ launcherTiles: ['tile-0123456789ab', 7] }, 'launcher');
+    expect(launcher.type).toBe('launcher');
+    expect(launcher.settings.launcherTiles).toEqual(['tile-0123456789ab']);
+    expect(load({}, 'launcher').settings.launcherTiles).toEqual([]);
+  });
+
+  it('keeps a running timer so a reload carries on', () => {
+    const s = load({ focusPhase: 'short', focusRound: 3, focusEndsAt: 1700000000000, focusLeft: 0 }).settings;
+    expect(s).toMatchObject({ focusPhase: 'short', focusRound: 3, focusEndsAt: 1700000000000 });
+  });
+
+  it('repairs a phase that is not one', () => {
+    expect(load({ focusPhase: 'nap', focusRound: -2 }).settings).toMatchObject({ focusPhase: 'work', focusRound: 1 });
+  });
+});

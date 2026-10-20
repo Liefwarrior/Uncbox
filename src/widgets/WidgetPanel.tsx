@@ -1,4 +1,4 @@
-import { type CSSProperties, useEffect, useState } from 'react';
+import { type CSSProperties, useState } from 'react';
 import { useBoard } from '../components/Board';
 import { Icon } from '../components/Icon';
 import { Panel } from '../components/Panel';
@@ -9,6 +9,9 @@ import { WIDGET_INFO, widgetTitle } from './catalog';
 import { describeWeather, findPlace, useMedia, useNetstats, useNotifications, useSystem, useWeather, type PingStats } from './data';
 import { fpsTone, pingTone, SPARK_H, SPARK_W, sparkline, type Tone } from './netstats';
 import { ObsBody } from './ObsWidget';
+import { FocusBody, FocusSettings } from './FocusWidget';
+import { LauncherBody } from './LauncherWidget';
+import { useNow } from './useNow';
 
 interface Props {
   widget: Widget;
@@ -21,6 +24,7 @@ type SetSettings = (patch: Partial<WidgetSettings>) => void;
 export function WidgetPanel({ widget, mutatePreset }: Props) {
   const { editing } = useBoard();
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [tilesEditing, setTilesEditing] = useState(false);
   const s = widget.settings;
   const edit = (recipe: (w: Widget) => void) =>
     mutatePreset((d) => {
@@ -30,13 +34,14 @@ export function WidgetPanel({ widget, mutatePreset }: Props) {
   const set: SetSettings = (patch) => edit((w) => void Object.assign(w.settings, patch));
   // OBS keeps its connection settings on the server, so its form is its own ("OBS connection" in the menu).
   const obs = useObs(widget.type === 'obs');
-  const hasSettings = !['media', 'system', 'obs'].includes(widget.type);
+  const hasSettings = !['media', 'system', 'obs', 'launcher'].includes(widget.type);
   const unset =
     (widget.type === 'weather' && !s.lat && !s.lon) ||
     (widget.type === 'countdown' && !s.target) ||
     (widget.type === 'text' && !s.text.trim()) ||
     // Nothing to show viewers while OBS isn't there.
-    (widget.type === 'obs' && !obs?.connected);
+    (widget.type === 'obs' && !obs?.connected) ||
+    (widget.type === 'launcher' && !s.launcherTiles.length);
 
   return (
     <Panel
@@ -59,19 +64,39 @@ export function WidgetPanel({ widget, mutatePreset }: Props) {
       menu={
         hasSettings || widget.type === 'obs'
           ? [{ label: widget.type === 'obs' ? 'OBS connection' : settingsOpen ? 'Close settings' : 'Settings', icon: 'list', onSelect: () => setSettingsOpen((o) => !o) }]
-          : undefined
+          : widget.type === 'launcher'
+            ? [{ label: tilesEditing ? 'Done editing tiles' : 'Edit tiles', icon: 'pencil', onSelect: () => setTilesEditing((o) => !o) }]
+            : undefined
       }
     >
       {editing && (settingsOpen || unset) && hasSettings ? (
         <Settings widget={widget} set={set} onDone={() => setSettingsOpen(false)} />
       ) : (
-        <Body widget={widget} obs={obs} setup={settingsOpen} onSetupDone={() => setSettingsOpen(false)} />
+        <Body
+          widget={widget}
+          set={set}
+          editing={editing}
+          tilesEditing={tilesEditing}
+          obs={obs}
+          setup={settingsOpen}
+          onSetupDone={() => setSettingsOpen(false)}
+        />
       )}
     </Panel>
   );
 }
 
-function Body({ widget, obs, setup, onSetupDone }: { widget: Widget; obs: ObsSnapshot | null; setup: boolean; onSetupDone: () => void }) {
+interface BodyProps {
+  widget: Widget;
+  set: SetSettings;
+  editing: boolean;
+  tilesEditing: boolean;
+  obs: ObsSnapshot | null;
+  setup: boolean;
+  onSetupDone: () => void;
+}
+
+function Body({ widget, set, editing, tilesEditing, obs, setup, onSetupDone }: BodyProps) {
   const s = widget.settings;
   switch (widget.type) {
     case 'clock':
@@ -88,26 +113,15 @@ function Body({ widget, obs, setup, onSetupDone }: { widget: Widget; obs: ObsSna
       return <NetworkBody s={s} />;
     case 'countdown':
       return <Countdown s={s} />;
+    case 'focus':
+      return <FocusBody s={s} set={set} editing={editing} />;
+    case 'launcher':
+      return <LauncherBody s={s} set={set} editing={editing} tilesEditing={tilesEditing} />;
     case 'text':
       return <p className="widget-text">{s.text}</p>;
     case 'obs':
       return <ObsBody obs={obs} setup={setup} onSetupDone={onSetupDone} />;
   }
-}
-
-/** Re-renders every second (or minute), lined up with the clock. */
-function useNow(everyMs = 1000) {
-  const [now, setNow] = useState(Date.now);
-  useEffect(() => {
-    let t: ReturnType<typeof setTimeout>;
-    const tick = () => {
-      setNow(Date.now());
-      t = setTimeout(tick, everyMs - (Date.now() % everyMs) + 5);
-    };
-    t = setTimeout(tick, everyMs - (Date.now() % everyMs) + 5);
-    return () => clearTimeout(t);
-  }, [everyMs]);
-  return now;
 }
 
 function Clock({ s }: { s: WidgetSettings }) {
@@ -412,6 +426,7 @@ function Settings({ widget, set, onDone }: { widget: Widget; set: SetSettings; o
           </label>
         </>
       )}
+      {widget.type === 'focus' && <FocusSettings s={s} set={set} />}
       {widget.type === 'text' && (
         <label>
           Text

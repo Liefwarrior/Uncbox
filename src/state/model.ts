@@ -59,7 +59,7 @@ export function isWidgetId(id: string): id is WidgetId {
   return id.startsWith('wdg-');
 }
 
-export const WIDGET_TYPES = ['clock', 'weather', 'media', 'notifications', 'system', 'network', 'countdown', 'text', 'obs'] as const;
+export const WIDGET_TYPES = ['clock', 'weather', 'media', 'notifications', 'system', 'network', 'countdown', 'text', 'obs', 'focus', 'launcher'] as const;
 export type WidgetType = (typeof WIDGET_TYPES)[number];
 
 /** Every widget type's settings in one shape; each type reads only its own. */
@@ -85,6 +85,21 @@ export interface WidgetSettings {
   pingTarget: string;
   /** Ping & FPS: also show the ping to this PC's router. */
   showRouter: boolean;
+  /** Focus timer: minutes of work, short break and long break; work rounds before a long break. */
+  focusWork: number;
+  focusShort: number;
+  focusLong: number;
+  focusRounds: number;
+  /** Focus timer: start the next phase by itself, and chime when one ends. */
+  focusAuto: boolean;
+  focusSound: boolean;
+  /** Focus timer: where it is (see widgets/focus.ts). It's saved, so a reload carries on. */
+  focusPhase: 'work' | 'short' | 'long';
+  focusRound: number;
+  focusEndsAt: number;
+  focusLeft: number;
+  /** Launcher: the ids of the saved tiles it shows, in order. The tiles themselves live on this PC (server/launcher.mjs). */
+  launcherTiles: string[];
 }
 
 export interface Widget {
