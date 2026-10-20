@@ -76,9 +76,11 @@ kept server-side, like Google).
 ### UBX-14 · Community preset gallery — Queued
 Browse and install shared `.uncbox` presets from inside Uncbox (a GitHub-hosted index to start).
 
-### UBX-15 · Screen reading for more games — Queued
-Ready-made readers like the SMITE 2 one: Pokémon party HP and fainted markers, an automatic death
-counter.
+### UBX-15 · Screen reading for more games — Shipped (b8e5903)
+Screen triggers: "when this phrase shows in this box, add 1 to a counter, mark a party member
+down, or tick a milestone", with recipes (Souls, GTA, Game Over, Nuzlocke "{name} fainted!",
+Defeat), fuzzy matching for OCR noise, one firing per sighting, and Undo on every firing. Not yet
+built: reading the Pokémon HP bar by its colour (a follow-up).
 
 ## HIP sprint 1: harden and innovate (queued until UBX-14 and UBX-15 land)
 
