@@ -50,7 +50,7 @@ Uncbox when Windows starts", and a quiet "a new version is out" notice from GitH
 
 ## Wave 2: queued (start as wave 1 lands)
 
-### UBX-6 · Desk preset — Building
+### UBX-6 · Desk preset — Shipped (ae6bf93)
 A built-in "Desk" preset for working between games: Drive, Web, Focus, Launcher, Calendar, Now
 playing, Notifications, Clock/Weather, with its own calm theme.
 
@@ -58,7 +58,7 @@ playing, Notifications, Clock/Weather, with its own calm theme.
 Today and the next few days from your calendars, "starts in 10 min" highlight, join-meeting
 button for Meet links; reuses the Google sign-in with incremental consent.
 
-### UBX-10 · Save clips to Google Drive — Building
+### UBX-10 · Save clips to Google Drive — Shipped (2c18d52)
 A "Save to Drive" button in the clip player (and an option to upload every clip automatically)
 into an "Uncbox Clips" folder, resumable uploads, a share link copied when done.
 
