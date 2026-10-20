@@ -168,6 +168,19 @@ show under **Clips** in the sidebar, where clicking one plays it right in Uncbox
 - Video only, like the rest of Uncbox. Keeping the last minute takes about 225 MB of memory.
 - `--clips=<folder>` saves them somewhere else.
 
+**Vertical shorts.** Open a clip and press **Make vertical** to get a 9:16 frame over the video.
+Drag it (or use the Frame slider) to choose what the short shows, pick Start and End or just
+**Last 30 s** / **Last 15 s**, then **Save vertical**. Uncbox re-encodes it in the page with your
+graphics card (1080x1920, 60 fps, about 12 Mbps) and saves it next to the other clips as
+`Uncbox <date> vertical.mp4`. It needs Chrome or Edge, and takes a little while for a long clip.
+
+**Send to Discord.** Under **Clips** in the sidebar, add a Discord webhook (in Discord: channel
+settings, Integrations, Webhooks, Copy Webhook URL). Then **Send to Discord** appears in the clip
+player and in the vertical editor. Discord takes about 10 MB, so a bigger clip is first re-encoded
+as a smaller 720p, 30 fps copy sized for its length; trims under 30 seconds stay sharp. The webhook
+is a secret: it is kept only on this PC, in `data/clips-discord.json`, never in the saved state,
+and the page only ever shows its last four characters.
+
 ### Twitch chat
 
 Type your channel name into the chat panel. It connects anonymously and read-only, so there's
@@ -218,7 +231,7 @@ syntax check of every server file, the tests and a production build.
 server/index.mjs           static files, /api/state, live sync over /api/events
 server/discord.mjs         Discord voice bridge over the local RPC pipe
 server/open.mjs            opens setup pages in the default browser (fixed list only)
-server/clips.mjs           saves and serves clips; server/hotkey.mjs watches the clip key
+server/clips.mjs           saves and serves clips, sends them to Discord; server/hotkey.mjs watches the clip key
 server/widgets.mjs         system load, now playing and notifications for the widgets
 server/steam.mjs           the Steam panel, from the Steam app's files
 server/ocr.mjs             Windows text recognition for the Stats panel

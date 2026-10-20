@@ -1783,10 +1783,112 @@ kbd {
 }
 .clip-player__bar {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 8px;
   color: var(--muted);
   font-size: 14px;
+}
+/* The vertical editor takes the video's place: narrower, so the controls fit under it. */
+.clip-player__box.is-editing {
+  width: min(960px, 100%);
+}
+.clip-status {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+  color: var(--muted);
+  font-size: 14px;
+}
+.clip-status progress {
+  flex: 1;
+  min-width: 80px;
+  accent-color: var(--accent);
+}
+.clip-status--done {
+  color: var(--good);
+}
+.vedit {
+  display: grid;
+  gap: 10px;
+}
+.vedit__stage {
+  position: relative;
+  /* Width, not max-height, limits it: the frame's percentages assume the stage keeps 16:9. */
+  width: min(100%, calc((100vh - 340px) * 16 / 9));
+  aspect-ratio: 16 / 9;
+  margin-inline: auto;
+  overflow: hidden;
+  border-radius: calc(var(--radius-sm) - 4px);
+  background: #000;
+}
+.vedit__stage video {
+  display: block;
+  width: 100%;
+  height: 100%;
+  max-height: none;
+  object-fit: contain;
+}
+/* The 9:16 slice; the shadow darkens everything outside it. */
+.vedit__frame {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  border: 2px solid var(--accent);
+  box-shadow: 0 0 0 100vmax rgba(0, 0, 0, 0.62);
+  cursor: ew-resize;
+  touch-action: none;
+}
+.vedit__controls {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px 16px;
+  color: var(--muted);
+  font-size: 13px;
+}
+.vedit__controls label {
+  display: grid;
+  gap: 2px;
+}
+.vedit__controls output {
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+.vedit__quick {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  grid-column: 1 / -1;
+}
+.vedit__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.clips__discord {
+  display: grid;
+  gap: 4px;
+  margin: 6px 6px 0;
+}
+.clips__discord input {
+  min-width: 0;
+  padding: 5px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--panel-2);
+  font-size: 14px;
+}
+.clips__discord input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+.clips__discord .hint {
+  margin: 0;
+}
+.clips__discord .clips__actions {
+  margin: 0;
 }
 
 .menu {

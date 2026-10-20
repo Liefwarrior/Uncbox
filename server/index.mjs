@@ -171,6 +171,7 @@ async function running(req, res, url) {
 
 const clips = createClips({
   clipsDir: clipsArg ? path.resolve(clipsArg.slice(8)) : null,
+  dataDir,
   broadcastEvent,
   isLocal,
   sendJson,
