@@ -35,7 +35,7 @@ replay buffer. Password kept server-side.
   launches tiles you saved (never an arbitrary path from the page); icons from the apps.
 - Done when: a tile launches its app and a focus round chimes at the end.
 
-### UBX-5 · Ping & FPS widget — Building
+### UBX-5 · Ping & FPS widget — Shipped (6327242)
 Live ping (TCP connect timing, no admin), jitter, loss and a sparkline, plus game FPS, 1% lows and
 in-game ping read from SMITE 2's performance timeline when a match is on. Sampling runs only while
 a widget is showing.
