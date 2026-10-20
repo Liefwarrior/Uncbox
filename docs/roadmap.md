@@ -65,7 +65,7 @@ into an "Uncbox Clips" folder, resumable uploads, a share link copied when done.
 ### UBX-11 · Gmail glance — Building
 Unread count and the latest few subjects/senders, click to open in the Web widget or browser.
 
-### UBX-12 · Command palette — Building
+### UBX-12 · Command palette — Shipped (b19c36f)
 Ctrl+K anywhere in Uncbox: switch presets, add widgets, launch Launcher tiles, search Drive, open
 a URL in a Web widget, save a clip, toggle stream mode.
 
