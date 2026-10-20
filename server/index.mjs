@@ -184,7 +184,7 @@ const clips = createClips({
   readJson,
 });
 
-const widgets = createWidgets({ broadcastEvent, isLocal, sendJson });
+const widgets = createWidgets({ broadcastEvent, isLocal, sendJson, readJson });
 const netstats = createNetstats({ broadcastEvent, isLocal, sendJson });
 const web = createWeb({ isLocal, sendJson });
 const steam = createSteam({ broadcastEvent, sendJson, isLocal, readJson, dataDir });
@@ -224,7 +224,7 @@ async function handleApi(req, res, url) {
   if (url.pathname === '/api/discord' || url.pathname.startsWith('/api/discord/')) return handleDiscord(req, res, url);
   if (url.pathname.startsWith('/api/wow/')) return handleWow(req, res, url);
   if (url.pathname === '/api/clips' || url.pathname.startsWith('/api/clips/')) return clips.handle(req, res, url);
-  if (['/api/system', '/api/media', '/api/notifications'].includes(url.pathname)) return widgets(req, res, url);
+  if (['/api/system', '/api/notifications'].includes(url.pathname) || url.pathname.startsWith('/api/media')) return widgets(req, res, url);
   if (url.pathname === '/api/netstats') return netstats(req, res, url);
   if (url.pathname === '/api/web/frameable') return web(req, res, url);
   if (url.pathname === '/api/steam' || url.pathname.startsWith('/api/steam/')) return steam(req, res, url);

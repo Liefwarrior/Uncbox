@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { listen } from '../events';
 import type { WidgetSettings } from '../state/model';
+import { interpolatePosition } from './mediaProgress';
 
 // Live data for the widgets, from the Uncbox server (server/widgets.mjs) or, for the weather,
 // straight from Open-Meteo (free, no account; only the chosen place's coordinates are sent).
@@ -39,20 +40,33 @@ export interface Media {
   title?: string;
   artist?: string;
   album?: string;
-  /** Cover art as a data: URL, or ''. */
+  /** The cover's version (see mediaArtUrl), or '' when there isn't one. */
   art?: string;
+  /** Seconds into the track when it was read, and how long ago that was when the page got it. */
+  position?: number;
+  age?: number;
+  /** Seconds; 0 when unknown. */
+  duration?: number;
+  /** Which buttons the playing app allows. */
+  controls?: { playPause: boolean; next: boolean; previous: boolean; seek: boolean };
 }
 
-export function useMedia(): Media | null {
-  const [media, setMedia] = useState<Media | null>(null);
+/** A reading plus when this page got it, so the progress bar can carry on from there. */
+export type MediaNow = Media & { receivedAt: number };
+
+export const mediaArtUrl = (version: string) => `/api/media/art?v=${encodeURIComponent(version)}`;
+
+export function useMedia(): MediaNow | null {
+  const [media, setMedia] = useState<MediaNow | null>(null);
   useEffect(() => {
     let alive = true;
+    const take = (m: Media) => alive && setMedia({ ...m, receivedAt: performance.now() });
     // The first ask starts the server's reader; after that, changes arrive as events.
     fetch('/api/media')
       .then((r) => r.json())
-      .then((m) => alive && setMedia(m))
+      .then(take)
       .catch(() => {});
-    const stop = listen('media', (data) => setMedia(JSON.parse(data)));
+    const stop = listen('media', (data) => take(JSON.parse(data)));
     return () => {
       alive = false;
       stop();
@@ -133,6 +147,32 @@ export function useNetstats(s: WidgetSettings): { stats: Netstats | null; error:
     };
   }, [target, router]);
   return { stats, error };
+}
+
+export type MediaAction = 'toggle' | 'next' | 'previous' | 'seek';
+
+/** Presses a button on the music playing on this PC. The next reading shows the result. */
+export function sendMediaControl(action: MediaAction, position?: number): void {
+  fetch('/api/media/control', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ action, position }),
+  }).catch(() => {});
+}
+
+/** Where the track is now, redrawn a few times a second while it plays. */
+export function useMediaPosition(m: MediaNow): number {
+  const at = () =>
+    interpolatePosition({ position: m.position ?? 0, duration: m.duration ?? 0, playing: m.playing }, (m.age ?? 0) + performance.now() - m.receivedAt);
+  const [position, setPosition] = useState(at);
+  useEffect(() => {
+    setPosition(at);
+    if (!m.playing) return;
+    const t = setInterval(() => setPosition(at), 250);
+    return () => clearInterval(t);
+    // at() reads m, which these cover.
+  }, [m.position, m.age, m.duration, m.playing, m.receivedAt]);
+  return position;
 }
 
 export interface Toast {

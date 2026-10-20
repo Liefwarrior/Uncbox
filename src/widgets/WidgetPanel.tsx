@@ -1,4 +1,4 @@
-import { type CSSProperties, useState } from 'react';
+import { type CSSProperties, type MouseEvent, useState } from 'react';
 import { useBoard } from '../components/Board';
 import { Icon } from '../components/Icon';
 import { Panel } from '../components/Panel';
@@ -7,13 +7,14 @@ import type { MutatePreset } from '../state/useAppState';
 import { type ObsSnapshot, useObs } from '../obs';
 import { WIDGET_INFO, widgetTitle } from './catalog';
 import { DriveBody, DriveSettings } from './DriveWidget';
-import { describeWeather, findPlace, useMedia, useNetstats, useNotifications, useSystem, useWeather, type PingStats } from './data';
+import { describeWeather, findPlace, useMedia, useNetstats, useNotifications, useSystem, useWeather, type PingStats, mediaArtUrl, type MediaNow, sendMediaControl, useMediaPosition } from './data';
 import { fpsTone, pingTone, SPARK_H, SPARK_W, sparkline, type Tone } from './netstats';
 import { ObsBody } from './ObsWidget';
 import { FocusBody, FocusSettings } from './FocusWidget';
 import { LauncherBody } from './LauncherWidget';
 import { useNow } from './useNow';
 import { WebPanel } from './WebWidget';
+import { formatClock, progressFraction, seekPosition } from './mediaProgress';
 
 interface Props {
   widget: Widget;
@@ -197,16 +198,67 @@ function WeatherBody({ s }: { s: WidgetSettings }) {
 
 function MediaBody() {
   const m = useMedia();
+  // In stream mode it only shows what's playing; the buttons and the seek bar are for the editor.
+  const { editing } = useBoard();
   if (!m) return null;
   if (!m.title) return <p className="muted">Nothing is playing.</p>;
+  return <MediaPlayer m={m} canControl={editing} />;
+}
+
+function MediaPlayer({ m, canControl }: { m: MediaNow; canControl: boolean }) {
+  const can = m.controls ?? { playPause: false, next: false, previous: false, seek: false };
+  const duration = m.duration ?? 0;
+  const position = useMediaPosition(m);
+  const seekable = canControl && can.seek && duration > 0;
+  const seekTo = (e: MouseEvent<HTMLDivElement>) => {
+    const box = e.currentTarget.getBoundingClientRect();
+    if (box.width > 0) sendMediaControl('seek', seekPosition((e.clientX - box.left) / box.width, duration));
+  };
   return (
     <div className={`widget-media ${m.playing ? 'is-playing' : ''}`}>
-      {m.art ? <img src={m.art} alt="" /> : <span className="widget-media__art"><Icon name="music" size={22} /></span>}
-      <div>
+      {m.art && <div className="widget-media__backdrop" style={{ backgroundImage: `url(${mediaArtUrl(m.art)})` }} />}
+      {m.art ? <img src={mediaArtUrl(m.art)} alt="" /> : <span className="widget-media__art"><Icon name="music" size={22} /></span>}
+      <div className="widget-media__info">
         <strong>{m.title}</strong>
-        <span>{[m.artist, m.album].filter(Boolean).join(' · ')}</span>
-        {!m.playing && <small>Paused</small>}
+        {m.artist && <span>{m.artist}</span>}
+        <small>{[m.app, !m.playing && 'Paused'].filter(Boolean).join(' · ')}</small>
       </div>
+      {duration > 0 && (
+        <div className="widget-media__timeline">
+          <span>{formatClock(position)}</span>
+          <div
+            className={`widget-media__bar ${seekable ? 'is-seekable' : ''}`}
+            role={seekable ? 'slider' : 'progressbar'}
+            aria-label="Position"
+            aria-valuemin={0}
+            aria-valuemax={Math.round(duration)}
+            aria-valuenow={Math.round(position)}
+            onClick={seekable ? seekTo : undefined}
+          >
+            <i style={{ width: `${progressFraction(position, duration) * 100}%` }} />
+          </div>
+          <span>{formatClock(duration)}</span>
+        </div>
+      )}
+      {canControl && (
+        <div className="widget-media__controls">
+          <button className="widget-media__skip" disabled={!can.previous} title="Previous" aria-label="Previous" onClick={() => sendMediaControl('previous')}>
+            <Icon name="skipBack" size={18} />
+          </button>
+          <button
+            className="widget-media__play"
+            disabled={!can.playPause}
+            title={m.playing ? 'Pause' : 'Play'}
+            aria-label={m.playing ? 'Pause' : 'Play'}
+            onClick={() => sendMediaControl('toggle')}
+          >
+            <Icon name={m.playing ? 'pause' : 'play'} size={20} />
+          </button>
+          <button className="widget-media__skip" disabled={!can.next} title="Next" aria-label="Next" onClick={() => sendMediaControl('next')}>
+            <Icon name="skipForward" size={18} />
+          </button>
+        </div>
+      )}
     </div>
   );
 }

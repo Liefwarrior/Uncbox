@@ -2,13 +2,13 @@
 // Each starts only when a widget first asks, so none of it runs for people who don't use them.
 //
 //   GET /api/system          { cpu, memory: { used, total }, gpu: { name, load, temp, used, total } | null }
-//   GET /api/media           what's playing, also pushed as a "media" event when it changes
+//   /api/media, /api/media/art, /api/media/control   what's playing and its controls (server/media.mjs)
 //   GET /api/notifications   the latest Windows notifications ({ after } for newer ones); this PC only
 
-import { execFile, spawn } from 'node:child_process';
+import { execFile } from 'node:child_process';
 import os from 'node:os';
 import path from 'node:path';
-import { createInterface } from 'node:readline';
+import { createMedia } from './media.mjs';
 
 // ---- system ----
 
@@ -60,53 +60,6 @@ async function system() {
     gpu: await gpuStats(),
   };
   return systemCache;
-}
-
-// ---- media: Windows' "now playing" (the media flyout's), read by a small PowerShell helper ----
-
-const MEDIA_HELPER = `
-Add-Type -AssemblyName System.Runtime.WindowsRuntime
-$asTask = [System.WindowsRuntimeSystemExtensions].GetMethods() | Where-Object { $_.Name -eq 'AsTask' -and $_.GetParameters().Count -eq 1 -and $_.GetParameters()[0].ParameterType.Name -eq 'IAsyncOperation\`1' } | Select-Object -First 1
-function Await($op, [Type]$t) { $task = $asTask.MakeGenericMethod($t).Invoke($null, @($op)); $task.Wait(-1) | Out-Null; $task.Result }
-[Windows.Media.Control.GlobalSystemMediaTransportControlsSessionManager, Windows.Media.Control, ContentType = WindowsRuntime] | Out-Null
-[Windows.Storage.Streams.IRandomAccessStreamWithContentType, Windows.Storage.Streams, ContentType = WindowsRuntime] | Out-Null
-$mgr = Await ([Windows.Media.Control.GlobalSystemMediaTransportControlsSessionManager]::RequestAsync()) ([Windows.Media.Control.GlobalSystemMediaTransportControlsSessionManager])
-$parent = Get-Process -Id ([int]$env:UNCBOX_PARENT)
-$last = ''; $lastArt = ''; $art = ''
-while (-not $parent.HasExited) {
-  $out = @{ playing = $false }
-  try {
-    $s = $mgr.GetCurrentSession()
-    if ($s) {
-      $p = Await ($s.TryGetMediaPropertiesAsync()) ([Windows.Media.Control.GlobalSystemMediaTransportControlsSessionMediaProperties])
-      $key = "$($p.Title)|$($p.Artist)"
-      if ($key -ne $lastArt) {
-        $lastArt = $key; $art = ''
-        if ($p.Thumbnail) {
-          $stream = Await ($p.Thumbnail.OpenReadAsync()) ([Windows.Storage.Streams.IRandomAccessStreamWithContentType])
-          $ms = New-Object System.IO.MemoryStream
-          [System.IO.WindowsRuntimeStreamExtensions]::AsStreamForRead($stream).CopyTo($ms)
-          if ($ms.Length -lt 400000) { $art = 'data:' + $stream.ContentType + ';base64,' + [Convert]::ToBase64String($ms.ToArray()) }
-        }
-      }
-      $out = @{ playing = ($s.GetPlaybackInfo().PlaybackStatus -eq 'Playing'); app = $s.SourceAppUserModelId; title = $p.Title; artist = $p.Artist; album = $p.AlbumTitle; art = $art }
-    }
-  } catch { }
-  $json = $out | ConvertTo-Json -Compress
-  if ($json -ne $last) { $last = $json; [Console]::Out.WriteLine($json); [Console]::Out.Flush() }
-  Start-Sleep -Milliseconds 1000
-}
-`;
-
-function startHelper(script, onLine) {
-  const child = spawn(
-    'powershell.exe',
-    ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-EncodedCommand', Buffer.from(script, 'utf16le').toString('base64')],
-    { windowsHide: true, stdio: ['pipe', 'pipe', 'ignore'], env: { ...process.env, UNCBOX_PARENT: String(process.pid) } },
-  );
-  createInterface({ input: child.stdout }).on('line', onLine);
-  child.on('error', () => {});
-  return child;
 }
 
 /** "Spotify.exe" or "308046B0AF4A39CB" → a readable app name where Windows gives one. */
@@ -173,28 +126,13 @@ async function notifications(after) {
 
 // ---- routes ----
 
-export function createWidgets({ broadcastEvent, isLocal, sendJson }) {
-  let media = { playing: false };
-  let mediaHelper = null;
+export function createWidgets({ broadcastEvent, isLocal, sendJson, readJson }) {
+  const media = createMedia({ broadcastEvent, isLocal, sendJson, readJson, appName });
 
   return async function handle(req, res, url) {
     try {
       if (url.pathname === '/api/system') return sendJson(res, 200, await system());
-      if (url.pathname === '/api/media') {
-        if (process.platform === 'win32' && !mediaHelper) {
-          mediaHelper = startHelper(MEDIA_HELPER, (line) => {
-            try {
-              const m = JSON.parse(line);
-              media = { ...m, app: appName(m.app) };
-              broadcastEvent('media', media);
-            } catch {
-              // A partial line; the next poll sends it again.
-            }
-          });
-          mediaHelper.on('exit', () => (mediaHelper = null));
-        }
-        return sendJson(res, 200, media);
-      }
+      if (url.pathname.startsWith('/api/media')) return media(req, res, url);
       if (url.pathname === '/api/notifications') {
         // Notifications can be private, so never to another device, even when HOST opens Uncbox to the LAN.
         if (!isLocal(req)) return sendJson(res, 403, { error: 'This PC only' });
