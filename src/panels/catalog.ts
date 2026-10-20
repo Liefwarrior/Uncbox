@@ -1,4 +1,5 @@
-import { type BoardId, isWindowId, type PanelId } from '../state/model';
+import { type BoardId, isWidgetId, isWindowId, type PanelId, type Widget } from '../state/model';
+import { WIDGET_INFO } from '../widgets/catalog';
 
 // What every panel type is called, what it is for, and how big it starts. The sidebar, the board
 // and state loading all read this, so a new panel type is added here and in ./index.tsx only.
@@ -28,10 +29,21 @@ export const PANEL_INFO: Record<PanelId, PanelInfo> = {
   character: { title: 'Character', hint: 'Level, XP, zone and gold', w: 7, h: 8, minW: 5, minH: 6 },
   discord: { title: 'Discord', hint: 'Who is talking in voice', w: 4, h: 7, minW: 3, minH: 3 },
   quests: { title: 'Quest log', hint: 'Your quests, live from WoW', w: 5, h: 8, minW: 4, minH: 4 },
+  steam: { title: 'Steam', hint: 'What you’re playing on Steam, live', w: 7, h: 9, minW: 4, minH: 4 },
+  hud: { title: 'Stats', hint: 'Numbers read live off your game’s screen', w: 5, h: 7, minW: 3, minH: 3 },
+  teams: { title: 'Teams', hint: 'Both teams’ gods, live from SMITE 2', w: 7, h: 7, minW: 4, minH: 4 },
+  scoreboard: { title: 'Scoreboard', hint: 'Everyone’s K/D/A and gold, from the Tab screen', w: 9, h: 9, minW: 5, minH: 5 },
+  damage: { title: 'Damage', hint: 'Damage dealt and taken, from the T screen', w: 8, h: 9, minW: 4, minH: 5 },
 };
 
 const WINDOW_SIZE = { w: 7, h: 8, minW: 3, minH: 3 };
 
-export function sizeOf(id: BoardId) {
-  return isWindowId(id) ? WINDOW_SIZE : PANEL_INFO[id];
+/** A widget's size depends on its type, so pass the widgets when id may be one. */
+export function sizeOf(id: BoardId, widgets: Widget[] = []) {
+  if (isWindowId(id)) return WINDOW_SIZE;
+  if (isWidgetId(id)) {
+    const w = widgets.find((x) => x.id === id);
+    return w ? WIDGET_INFO[w.type] : { w: 4, h: 3, minW: 2, minH: 2 };
+  }
+  return PANEL_INFO[id];
 }

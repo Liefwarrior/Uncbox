@@ -47,6 +47,26 @@ In the toolbar:
 Uncbox remembers the game. Next time, it goes back into the panel by itself as soon as the game
 is running.
 
+**Games that won't resize.** Some games keep themselves at full screen size (Unity games in full
+screen mode do). After a couple of seconds of that, Uncbox stops fighting and shows the game in
+the panel as a live picture from Windows' compositor instead, with no capture and no added delay.
+Your controller and keyboard still go to the game; click the panel to hand them back if you clicked
+elsewhere. The mouse can't reach a picture, so the toolbar shows how to make that game resizable:
+for Unity and Unreal games it names the launch option to add in Steam (game, **Properties**,
+**Launch Options**), such as `-window-mode borderless` or `-windowed`.
+
+**Start games windowed.** In the Steam panel's **⋯** menu, this gives every installed Steam
+game the launch option its engine needs to start in a window (Unity, Unreal, Source and Godot
+games), so they size into the panel and the mouse works. Games you set launch options for
+yourself are left alone, and turning it off removes exactly what Uncbox added. Steam reads launch
+options when it starts, so Uncbox restarts it (back into Big Picture if you were there); it won't
+while a game is running.
+
+**Steam.** In the Steam Big Picture preset, **Big Picture** and **Steam library** put Steam itself
+in the panel. A game you start from there takes the panel the moment its window appears (Windows
+tells Uncbox about new windows, and Uncbox takes any from your Steam game folders), and Steam comes
+back as soon as you quit it.
+
 For OBS, use a **Display Capture** of the monitor Uncbox is on. A Window Capture of Uncbox leaves
 the game out, because the game is its own window.
 
@@ -93,10 +113,11 @@ The page and the app talk with small JSON messages over WebView2's `postMessage`
 | --- | --- |
 | `UncboxShell/Program.cs` | Options, one copy at a time. |
 | `UncboxShell/ShellForm.cs` | The window, tray, WebView2, messages, the hole and Full screen. |
-| `UncboxShell/ServerHost.cs` | Finds or starts the Uncbox server. |
+| `UncboxShell/ServerHost.cs` | Finds or starts the Uncbox server (the repo's, or a package's own). |
 | `UncboxShell/GameWindow.cs` | Restyles, places and restores the game's window. |
 | `UncboxShell/Native.cs` | The Win32 calls. |
 | `../scripts/app.mjs` | `npm run app`: builds when needed, then starts the app. |
+| `../scripts/package.mjs` | `npm run package`: the folder and zip anyone can run. |
 
 ## Tested
 
@@ -118,8 +139,37 @@ Driven over WebView2's DevTools port, with a stand-in game window:
 app's window is what tools like Borderless Gaming do, and it never touches the game's memory or
 input. Still, check competitive games one at a time.
 
+## Packaging
+
+```bash
+npm run package
+```
+
+builds the page, publishes the app as one self-contained file (no .NET install needed), and puts
+everything into `release/Uncbox/`, plus `release/Uncbox-<version>-win-x64.zip` to hand out. It
+needs the .NET 10 SDK and a connection the first time, to download Node.
+
+```
+Uncbox.exe              the app
+node/node.exe           a portable Node (pinned in scripts/package.mjs), with its license
+app/package.json        marks app/ as Uncbox's folder
+app/server/             the server, without its tests
+app/integrations/wow/   install.mjs and the addon the server copies into WoW
+app/dist/               the built page
+```
+
+The Node zip comes from nodejs.org and is checked against the `SHASUMS256.txt` published beside
+it; packaging stops if they differ. It's cached in `release/.cache/`, which, like the rest of
+`release/`, git ignores.
+
+Next to its `node\` folder, the app runs the server with that Node from `app\`, never builds, and
+keeps the user's data in `%LOCALAPPDATA%\Uncbox\data` (unless given `--data=`), so the folder can
+be unzipped anywhere, even somewhere read-only. Run from the repo, nothing changes.
+
+**Not done yet:** an installer (a Start menu entry, start with Windows, updates). Until then,
+people unzip and run it.
+
 ## Later
 
 - **Mixed DPI / several monitors:** placement assumes Uncbox and the game are on the same monitor.
-- **Packaging:** a single-file `dotnet publish` and an installer, so the app can live outside the
-  Uncbox folder and start with Windows.
+- **An installer** on top of the package (see Packaging).

@@ -2,6 +2,7 @@ import { callOut } from '../callout';
 import { useDiscord } from '../discord';
 import { placePanel } from '../layout';
 import { type AppState, type PanelId } from '../state/model';
+import { activePreset } from '../state/presets';
 import type { MutatePreset } from '../state/useAppState';
 import { normalizeChannel } from '../twitch';
 import { Icon } from './Icon';
@@ -18,7 +19,7 @@ interface Props {
  */
 export function SetupList({ state, mutatePreset }: Props) {
   const discord = useDiscord();
-  const data = state.presets[state.preset];
+  const { base, data } = activePreset(state);
   const shown = new Set(data.layout.map((item) => item.i));
 
   // "always" lines show even when their panel is hidden; clicking one adds the panel back.
@@ -28,7 +29,7 @@ export function SetupList({ state, mutatePreset }: Props) {
     { id: 'chat', label: 'Add your Twitch chat', done: normalizeChannel(state.twitch.channel) !== '' },
     { id: 'discord', label: 'Connect Discord', done: discord.status === 'ready' },
   ];
-  if (state.preset === 'wow') steps.push({ id: 'quests', label: 'Connect WoW', done: data.wowLinkAt > 0, always: true });
+  if (base === 'wow') steps.push({ id: 'quests', label: 'Connect WoW', done: data.wowLinkAt > 0, always: true });
   const mine = steps.filter((s) => s.always || shown.has(s.id));
   const left = mine.filter((s) => !s.done).length;
   if (left === 0) return null;

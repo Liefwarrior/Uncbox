@@ -4,8 +4,25 @@ import type { BackgroundId } from '../backgrounds';
 // live between every open window, so a phone or second monitor can drive the streamed one.
 // Each game preset keeps its own layout and data; Twitch and camera settings are shared.
 
-export const PRESET_IDS = ['pokemon', 'smite2', 'wow', 'terminal'] as const;
+export const PRESET_IDS = ['pokemon', 'smite2', 'wow', 'mcd2', 'steam', 'terminal'] as const;
 export type PresetId = (typeof PRESET_IDS)[number];
+
+/**
+ * A preset of your own: a saved copy of a built-in one, or one imported from a file. The built-in
+ * it is based on ("base") decides its theme, panel wording and game-specific behavior; the name and
+ * the data are its own.
+ */
+export type CustomId = `custom-${string}`;
+export interface CustomPreset {
+  id: CustomId;
+  name: string;
+  base: PresetId;
+  data: PresetData;
+}
+
+export function isCustomId(id: string): id is CustomId {
+  return id.startsWith('custom-');
+}
 
 export const PANEL_IDS = [
   'game',
@@ -20,15 +37,58 @@ export const PANEL_IDS = [
   'character',
   'discord',
   'quests',
+  'steam',
+  'hud',
+  'teams',
+  'scoreboard',
+  'damage',
 ] as const;
 export type PanelId = (typeof PANEL_IDS)[number];
 
 /** App window panels can be added any number of times, so each gets its own id. */
 export type WindowId = `win-${string}`;
-export type BoardId = PanelId | WindowId;
+/** So can widgets (a clock, the weather…); see src/widgets. */
+export type WidgetId = `wdg-${string}`;
+export type BoardId = PanelId | WindowId | WidgetId;
 
 export function isWindowId(id: string): id is WindowId {
   return id.startsWith('win-');
+}
+
+export function isWidgetId(id: string): id is WidgetId {
+  return id.startsWith('wdg-');
+}
+
+export const WIDGET_TYPES = ['clock', 'weather', 'media', 'notifications', 'system', 'countdown', 'text'] as const;
+export type WidgetType = (typeof WIDGET_TYPES)[number];
+
+/** Every widget type's settings in one shape; each type reads only its own. */
+export interface WidgetSettings {
+  /** Clock: an IANA time zone ("Europe/London"), or '' for this PC's. */
+  timeZone: string;
+  hour12: boolean;
+  seconds: boolean;
+  /** Weather: the place as found, and where it is. */
+  place: string;
+  lat: number;
+  lon: number;
+  celsius: boolean;
+  /** Notifications: only these apps (comma-separated, as listed), or '' for all. */
+  apps: string;
+  /** Notifications: show the message itself, not just who it's from. Off by default: it's on stream. */
+  showBody: boolean;
+  /** Countdown: when it ends (ms since 1970), or 0 if not set. */
+  target: number;
+  /** Text: what it says. Countdown: what's coming. */
+  text: string;
+}
+
+export interface Widget {
+  id: WidgetId;
+  type: WidgetType;
+  /** Shown as the panel's title; '' uses the type's name. */
+  title: string;
+  settings: WidgetSettings;
 }
 
 /** Position on the board grid, in cells. */
@@ -62,7 +122,7 @@ export interface GameSettings {
   /** Solid color for the "chroma slot" source; key it out in OBS and put your capture under it. */
   chroma: string;
   /** Play here: the game window to put back in the panel when it (or Uncbox) starts again. */
-  nativeGame: { process: string; title: string } | null;
+  nativeGame: { process: string; title: string; exact?: boolean } | null;
 }
 
 export interface CameraSettings {
@@ -163,6 +223,24 @@ export interface Quest {
   objectives: { text: string; done: boolean }[];
 }
 
+/**
+ * A box on the game picture that Uncbox reads as text, live (Windows' own OCR): an emerald count,
+ * a level, a timer. Position and size are percent of the uncropped game picture.
+ */
+export interface HudRegion {
+  id: string;
+  label: string;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  /** Read as a number (digits only, "1,234" → "1234") or as text. */
+  numeric: boolean;
+  /** The last reading, and when it changed. */
+  value: string;
+  at: number;
+}
+
 export interface PresetData {
   layout: GridItem[];
   /** What fills the space behind the panels; see src/backgrounds.ts. */
@@ -186,6 +264,9 @@ export interface PresetData {
   /** When the WoW addon last sent something new; 0 if it never has. */
   wowLinkAt: number;
   windows: AppWindow[];
+  widgets: Widget[];
+  /** The Stats panel's screen reader boxes (src/hud). */
+  hud: HudRegion[];
 }
 
 export interface PinnedChannel {
@@ -204,13 +285,16 @@ export interface ClipSettings {
 
 export interface AppState {
   version: 2;
-  preset: PresetId;
+  /** The preset on the board: a built-in one, or one of `custom`. */
+  preset: PresetId | CustomId;
   twitch: { channel: string; hideBots: boolean };
   clips: ClipSettings;
   /** Voice channels pinned to the Discord panel for one-click joining. Shared by every preset. */
   discord: { pinned: PinnedChannel[] };
   camera: CameraSettings;
   presets: Record<PresetId, PresetData>;
+  /** Presets of your own, after the built-in ones in the sidebar. */
+  custom: CustomPreset[];
 }
 
 export const GRID_COLS = 24;
@@ -219,6 +303,9 @@ export const MAX_SLOTS = 12;
 export const MAX_MILESTONES = 24;
 export const MAX_HISTORY = 30;
 export const MAX_QUESTS = 50;
+export const MAX_HUD = 12;
+export const MAX_CUSTOM = 50;
+export const MAX_PRESET_NAME = 60;
 
 export function uid(): string {
   return Math.random().toString(36).slice(2, 10);

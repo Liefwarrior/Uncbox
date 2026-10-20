@@ -28,8 +28,11 @@ export interface HostWindow {
 
 export type ShellMessage =
   | { type: 'windows'; windows: HostWindow[] }
-  | { type: 'attached'; id: string; title: string; process: string }
-  | { type: 'detached' };
+  /** followed: the app took it by itself (a game Steam started), so it isn't the saved window. */
+  | { type: 'attached'; id: string; title: string; process: string; followed?: boolean }
+  | { type: 'detached' }
+  /** The game won't be resized, so it's shown as a live picture; launchOption makes it resizable. */
+  | { type: 'picture'; on: boolean; launchOption: string };
 
 export function send(message: { type: string; [key: string]: unknown }) {
   shell?.postMessage(message);

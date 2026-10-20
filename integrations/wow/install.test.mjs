@@ -1,8 +1,8 @@
-import { mkdir, mkdtemp, readFile, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { findInstalls, install } from './install.mjs';
+import { findInstalls, install, status, uninstall } from './install.mjs';
 
 let dir;
 let roots;
@@ -23,7 +23,30 @@ describe('WoW addon install', () => {
     expect(toc).toContain('Codec.lua');
   });
 
+  it('installs everywhere in one go, replaces an old copy whole, and removes it', async () => {
+    await mkdir(path.join(roots[0], '_classic_beta_'));
+    const before = await status(roots);
+    expect(before.bundled).toMatch(/^\d+\.\d+\.\d+$/);
+    expect(before.installs.map((i) => i.version)).toEqual([null, null]);
+
+    // An old copy with a file the new version no longer has.
+    const era = before.installs.find((i) => i.flavor === '_classic_era_').path;
+    await mkdir(path.join(era, 'Uncbox'), { recursive: true });
+    await writeFile(path.join(era, 'Uncbox', 'Old.lua'), '-- gone in the new version');
+    await writeFile(path.join(era, 'Uncbox', 'Uncbox.toc'), '## Version: 0.9.0\n');
+    expect((await status(roots)).installs.find((i) => i.path === era).version).toBe('0.9.0');
+
+    expect(await install(undefined, roots)).toHaveLength(2);
+    const after = await status(roots);
+    expect(after.installs.every((i) => i.version === after.bundled)).toBe(true);
+    await expect(stat(path.join(era, 'Uncbox', 'Old.lua'))).rejects.toThrow();
+
+    await uninstall(undefined, roots);
+    expect((await status(roots)).installs.map((i) => i.version)).toEqual([null, null]);
+  });
+
   it('refuses any other folder', async () => {
     await expect(install(path.join(dir, 'elsewhere'), roots)).rejects.toThrow(/found/);
+    await expect(uninstall(path.join(dir, 'elsewhere'), roots)).rejects.toThrow(/found/);
   });
 });

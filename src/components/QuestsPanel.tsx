@@ -1,11 +1,14 @@
-import { useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import type { Quest } from '../state/model';
 import { useBoard } from './Board';
+import type { MenuEntry } from './Menu';
 import { Panel } from './Panel';
 
 interface Install {
   flavor: string;
   path: string;
+  /** The installed addon's version, or null when it isn't installed there. */
+  version: string | null;
 }
 
 const post = (url: string, body?: object) =>
@@ -23,11 +26,90 @@ function splitProgress(text: string): [string, string] {
   return m ? [m[1], `${m[2]}/${m[3]}`] : [text, ''];
 }
 
+const MESSAGE_MS = 8000;
+
+/**
+ * The Uncbox addon in every WoW install on this PC: what's there, and one click to install,
+ * update, reinstall or remove it everywhere.
+ */
+function useAddon() {
+  const [bundled, setBundled] = useState('');
+  const [installs, setInstalls] = useState<Install[]>([]);
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState<{ text: string; error?: boolean } | null>(null);
+
+  const load = useCallback(
+    () =>
+      fetch('/api/wow/status')
+        .then((r) => (r.ok ? r.json() : null))
+        .then((s) => {
+          if (!s) return;
+          setBundled(s.bundled ?? '');
+          setInstalls(s.installs ?? []);
+        })
+        .catch(() => {}),
+    [],
+  );
+  useEffect(() => void load(), [load]);
+  useEffect(() => {
+    if (!message) return;
+    const t = setTimeout(() => setMessage(null), MESSAGE_MS);
+    return () => clearTimeout(t);
+  }, [message]);
+
+  const where = (list: Install[]) => list.map((i) => `WoW ${flavorName(i.flavor)}`).join(' and ');
+  const run = async (action: 'install' | 'uninstall') => {
+    setBusy(true);
+    setMessage(null);
+    try {
+      if (!installs.length) {
+        await post('/api/wow/reveal');
+        setMessage({ text: 'Couldn’t find WoW. Copy the Uncbox folder that just opened into WoW’s Interface\\AddOns folder.' });
+        return;
+      }
+      await post(`/api/wow/${action}`);
+      setMessage({
+        text:
+          action === 'install'
+            ? `Installed in ${where(installs)}. Type /reload in WoW (or restart it). If WoW calls it out of date, tick Load out of date AddOns.`
+            : `Removed from ${where(installs)}. Type /reload in WoW to unload it.`,
+      });
+    } catch (err) {
+      setMessage({ text: err instanceof Error ? err.message : String(err), error: true });
+    } finally {
+      setBusy(false);
+      void load();
+    }
+  };
+
+  const installed = installs.filter((i) => i.version !== null);
+  const outdated = installed.some((i) => i.version !== bundled) || (installed.length > 0 && installed.length < installs.length);
+  const installLabel = !installed.length ? 'Install the addon' : outdated ? `Update the addon to ${bundled}` : 'Reinstall the addon';
+  const menu: MenuEntry[] = [
+    { label: installLabel, icon: 'reset', disabled: busy, onSelect: () => void run('install') },
+    installed.length > 0 && {
+      label: 'Remove the addon',
+      icon: 'x',
+      disabled: busy,
+      confirm: 'Click again to remove it from WoW',
+      onSelect: () => void run('uninstall'),
+    },
+  ];
+  return { installed, outdated, bundled, busy, message, run, menu };
+}
+
 /** The WoW quest log, read-only: the addon keeps it up to date. */
 export function QuestsPanel({ quests, linked, title }: { quests: Quest[]; linked: boolean; title: string }) {
   const { editing } = useBoard();
+  const addon = useAddon();
   return (
-    <Panel id="quests" title={title} empty={quests.length === 0}>
+    <Panel id="quests" title={title} empty={quests.length === 0} menu={addon.menu}>
+      {editing && addon.message && <p className={`addon-message ${addon.message.error ? 'error' : ''}`}>{addon.message.text}</p>}
+      {editing && !addon.message && linked && addon.outdated && (
+        <button className="btn btn--small addon-message" onClick={() => void addon.run('install')}>
+          Update the WoW addon to {addon.bundled}
+        </button>
+      )}
       {quests.length > 0 ? (
         <ol className="quests">
           {quests.map((q, i) => (
@@ -56,46 +138,13 @@ export function QuestsPanel({ quests, linked, title }: { quests: Quest[]; linked
       ) : linked ? (
         <p className="muted">Your quest log is empty.</p>
       ) : editing ? (
-        <Setup />
+        <Setup addon={addon} />
       ) : null}
     </Panel>
   );
 }
 
-function Setup() {
-  const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState<{ text: string; error?: boolean } | null>(null);
-  const fail = (err: unknown) => setMessage({ text: err instanceof Error ? err.message : String(err), error: true });
-  const [choices, setChoices] = useState<Install[]>([]);
-
-  const install = (to: Install) =>
-    post('/api/wow/install', { path: to.path })
-      .then(() => {
-        setChoices([]);
-        setMessage({
-          text: `Installed for WoW ${flavorName(to.flavor)}. If WoW calls it out of date, tick Load out of date AddOns.`,
-        });
-      })
-      .catch(fail);
-
-  const start = async () => {
-    setBusy(true);
-    setMessage(null);
-    try {
-      const { installs } = (await fetch('/api/wow/installs').then((r) => r.json())) as { installs: Install[] };
-      if (installs.length === 1) await install(installs[0]);
-      else if (installs.length > 1) setChoices(installs);
-      else {
-        await post('/api/wow/reveal');
-        setMessage({ text: 'Couldn’t find WoW. Copy the Uncbox folder that just opened into WoW’s Interface\\AddOns folder.' });
-      }
-    } catch (err) {
-      fail(err);
-    } finally {
-      setBusy(false);
-    }
-  };
-
+function Setup({ addon }: { addon: ReturnType<typeof useAddon> }) {
   return (
     <div className="voice__setup no-drag">
       <ol>
@@ -103,22 +152,11 @@ function Setup() {
         <li>
           Start WoW, or type <code>/reload</code> if it’s open.
         </li>
-        <li>Show WoW in the game window as a Window.</li>
+        <li>Show WoW in the game panel: as a Window, or with Play here and clips on.</li>
       </ol>
-      {choices.length > 0 ? (
-        <div className="row">
-          {choices.map((c) => (
-            <button key={c.path} className="btn" onClick={() => void install(c)}>
-              WoW {flavorName(c.flavor)}
-            </button>
-          ))}
-        </div>
-      ) : (
-        <button className="btn btn--accent" data-setup="" disabled={busy} onClick={() => void start()}>
-          Install addon
-        </button>
-      )}
-      {message && <p className={message.error ? 'error' : 'muted'}>{message.text}</p>}
+      <button className="btn btn--accent" data-setup="" disabled={addon.busy} onClick={() => void addon.run('install')}>
+        {addon.installed.length ? (addon.outdated ? `Update addon to ${addon.bundled}` : 'Reinstall addon') : 'Install addon'}
+      </button>
       <p className="hint">
         The addon flashes a thin strip along the game’s top edge when something changes. Uncbox reads it and crops it out.
       </p>

@@ -1,8 +1,8 @@
-// Puts the Uncbox addon into WoW's AddOns folder for the "Install addon" button. It only ever
-// copies into an AddOns folder it found itself in a usual WoW install location.
+// Installs, updates and removes the Uncbox addon for the Quest log's addon buttons. It only ever
+// touches an Uncbox folder inside an AddOns folder it found itself in a usual WoW install location.
 
 import { spawn } from 'node:child_process';
-import { cp, mkdir, readdir } from 'node:fs/promises';
+import { cp, mkdir, readdir, readFile, rm } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -33,15 +33,50 @@ export async function findInstalls(roots = defaultRoots()) {
   return found;
 }
 
-/** Copies the addon into target, which must be one of the folders findInstalls() returns. */
-export async function install(target, roots = defaultRoots()) {
+/** The "## Version:" in an addon's .toc, or null if it isn't there. */
+async function versionIn(addonDir) {
+  const toc = await readFile(path.join(addonDir, 'Uncbox.toc'), 'utf8').catch(() => null);
+  return toc === null ? null : (/^## Version:\s*(\S+)/m.exec(toc)?.[1] ?? '');
+}
+
+/** The version Uncbox ships, and each WoW install's copy: { bundled, installs: [{ flavor, path, version }] }. */
+export async function status(roots = defaultRoots()) {
   const installs = await findInstalls(roots);
+  return {
+    bundled: await versionIn(path.join(ADDON_DIR, 'Uncbox')),
+    installs: await Promise.all(installs.map(async (i) => ({ ...i, version: await versionIn(path.join(i.path, 'Uncbox')) }))),
+  };
+}
+
+/** The AddOns folders to act on: target (which must be one Uncbox found), or every one found. */
+async function targets(target, roots) {
+  const installs = await findInstalls(roots);
+  if (target === undefined) return installs.map((i) => i.path);
   if (typeof target !== 'string' || !installs.some((i) => i.path === target)) {
     throw Object.assign(new Error('That isn’t a WoW AddOns folder Uncbox found.'), { status: 400 });
   }
-  await mkdir(target, { recursive: true });
-  await cp(path.join(ADDON_DIR, 'Uncbox'), path.join(target, 'Uncbox'), { recursive: true, force: true });
-  return target;
+  return [target];
+}
+
+/**
+ * Copies the addon into target, or into every WoW install found when target is left out. An
+ * older copy is replaced whole, so files a newer version dropped don't linger. Returns the folders.
+ */
+export async function install(target, roots = defaultRoots()) {
+  const done = await targets(target, roots);
+  for (const dir of done) {
+    await mkdir(dir, { recursive: true });
+    await rm(path.join(dir, 'Uncbox'), { recursive: true, force: true });
+    await cp(path.join(ADDON_DIR, 'Uncbox'), path.join(dir, 'Uncbox'), { recursive: true });
+  }
+  return done;
+}
+
+/** Removes the addon from target, or from every WoW install found. Its saved settings stay in WTF. */
+export async function uninstall(target, roots = defaultRoots()) {
+  const done = await targets(target, roots);
+  for (const dir of done) await rm(path.join(dir, 'Uncbox'), { recursive: true, force: true });
+  return done;
 }
 
 /** Opens the folder holding the addon, for copying it by hand. */

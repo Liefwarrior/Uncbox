@@ -1,0 +1,15 @@
+# Ideas
+
+Things to build next, newest first. Move an item out when it ships.
+
+- **Installer.** `npm run package` makes a zip anyone can run; next is a real `Uncbox Setup.exe`
+  (Start menu entry, start with Windows, uninstaller), ideally with automatic updates.
+- **Community preset gallery.** Presets can be shared as `.uncbox` files; a gallery inside Uncbox
+  to browse and install other people's presets (Nuzlocke layouts, game themes) is the next step.
+- **Screen reading for more games.** The Stats panel and the SMITE 2 reader read numbers off the
+  game picture with Windows OCR. Ready-made readers for other games, such as a Pokémon party's HP
+  and fainted markers or a death counter that ticks itself, would make those presets automatic.
+- **Ping and FPS widget.** SMITE 2 writes a performance timeline while you play
+  (`%LOCALAPPDATA%\SMITE2Alpha\Saved\Logs\PEX_Timeline_*.csv`, one row a second: frame time, GPU
+  time, ping, packets), and its HUD shows an FPS counter the SMITE reader already picks up. A widget
+  could show live ping and frame rate from these, and from other games' equivalents.

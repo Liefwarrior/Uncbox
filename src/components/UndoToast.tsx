@@ -5,17 +5,19 @@ export function UndoToast() {
   const pending = useUndo();
   if (!pending) return null;
   return (
-    <div key={pending.key} className="toast" role="status">
+    <div key={pending.key} className={`toast ${pending.undo ? '' : 'toast--note'}`} role="status">
       <span>{pending.message}</span>
-      <button
-        className="toast__undo"
-        onClick={() => {
-          pending.undo();
-          dismissUndo();
-        }}
-      >
-        <Icon name="undo" size={15} /> Undo
-      </button>
+      {pending.undo && (
+        <button
+          className="toast__undo"
+          onClick={() => {
+            pending.undo?.();
+            dismissUndo();
+          }}
+        >
+          <Icon name="undo" size={15} /> Undo
+        </button>
+      )}
     </div>
   );
 }

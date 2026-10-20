@@ -13,10 +13,21 @@ import { createReadStream } from 'node:fs';
 import { mkdir, readFile, rename, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { findInstalls, install as installWowAddon, reveal as revealWowAddon } from '../integrations/wow/install.mjs';
+import {
+  findInstalls,
+  install as installWowAddon,
+  reveal as revealWowAddon,
+  status as wowAddonStatus,
+  uninstall as uninstallWowAddon,
+} from '../integrations/wow/install.mjs';
 import { createClips } from './clips.mjs';
 import { createDiscordBridge } from './discord.mjs';
 import { openInBrowser, pageFor } from './open.mjs';
+import { createGameSettings } from './gamesettings.mjs';
+import { createOcr } from './ocr.mjs';
+import { createSmite } from './smite.mjs';
+import { createSteam } from './steam.mjs';
+import { createWidgets } from './widgets.mjs';
 import { DOMAIN, loadTls } from './tls.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -147,20 +158,43 @@ async function handleDiscord(req, res, url) {
 // server to the LAN.
 const isLocal = (req) => ['127.0.0.1', '::1', '::ffff:127.0.0.1'].includes(req.socket.remoteAddress ?? '');
 
+/** Which of the given programs are running ("Dungeons.exe"), for presets that notice their game starting. */
+async function running(req, res, url) {
+  const names = (url.searchParams.get('names') ?? '').split(',').map((n) => n.trim().toLowerCase()).filter(Boolean);
+  if (process.platform !== 'win32' || !names.length) return sendJson(res, 200, { running: [] });
+  const { execFile } = await import('node:child_process');
+  execFile('tasklist', ['/FO', 'CSV', '/NH'], { windowsHide: true, maxBuffer: 8 * 1024 * 1024 }, (err, out) => {
+    const seen = new Set(err ? [] : out.split(/\r?\n/).map((l) => (/^"([^"]+)"/.exec(l)?.[1] ?? '').toLowerCase()));
+    sendJson(res, 200, { running: names.filter((n) => seen.has(n)) });
+  });
+}
+
 const clips = createClips({
   clipsDir: clipsArg ? path.resolve(clipsArg.slice(8)) : null,
+  dataDir,
   broadcastEvent,
   isLocal,
   sendJson,
   readJson,
 });
 
+const widgets = createWidgets({ broadcastEvent, isLocal, sendJson });
+const steam = createSteam({ broadcastEvent, sendJson, isLocal, readJson, dataDir });
+const ocr = createOcr({ isLocal, sendJson, readBody });
+const smite = createSmite({ broadcastEvent, sendJson });
+const gameSettings = createGameSettings({ isLocal, sendJson, readJson });
+
 async function handleWow(req, res, url) {
   if (!isLocal(req)) return sendJson(res, 403, { error: 'Run this on the PC WoW is on.' });
   try {
     if (url.pathname === '/api/wow/installs' && req.method === 'GET') return sendJson(res, 200, { installs: await findInstalls() });
+    if (url.pathname === '/api/wow/status' && req.method === 'GET') return sendJson(res, 200, await wowAddonStatus());
+    // Without a path, these act on every WoW install found.
     if (url.pathname === '/api/wow/install' && req.method === 'POST') {
-      return sendJson(res, 200, { ok: true, path: await installWowAddon((await readJson(req)).path) });
+      return sendJson(res, 200, { ok: true, paths: await installWowAddon((await readJson(req)).path) });
+    }
+    if (url.pathname === '/api/wow/uninstall' && req.method === 'POST') {
+      return sendJson(res, 200, { ok: true, paths: await uninstallWowAddon((await readJson(req)).path) });
     }
     if (url.pathname === '/api/wow/reveal' && req.method === 'POST') {
       revealWowAddon();
@@ -176,6 +210,12 @@ async function handleApi(req, res, url) {
   if (url.pathname === '/api/discord' || url.pathname.startsWith('/api/discord/')) return handleDiscord(req, res, url);
   if (url.pathname.startsWith('/api/wow/')) return handleWow(req, res, url);
   if (url.pathname === '/api/clips' || url.pathname.startsWith('/api/clips/')) return clips.handle(req, res, url);
+  if (['/api/system', '/api/media', '/api/notifications'].includes(url.pathname)) return widgets(req, res, url);
+  if (url.pathname === '/api/steam' || url.pathname.startsWith('/api/steam/')) return steam(req, res, url);
+  if (url.pathname === '/api/ocr') return ocr(req, res);
+  if (url.pathname === '/api/smite') return smite(req, res);
+  if (url.pathname === '/api/game-settings') return gameSettings(req, res);
+  if (url.pathname === '/api/running') return running(req, res, url);
 
   if (url.pathname === '/api/open' && req.method === 'POST') {
     if (!isLocal(req)) return sendJson(res, 403, { error: 'Local only' });

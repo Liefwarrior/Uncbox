@@ -10,10 +10,16 @@ import { ProgressPanel } from '../components/ProgressPanel';
 import { QuestsPanel } from '../components/QuestsPanel';
 import { RecordPanel } from '../components/RecordPanel';
 import { RunPanel } from '../components/RunPanel';
+import { HudPanel } from '../components/HudPanel';
 import { SlotsPanel } from '../components/SlotsPanel';
+import { SteamPanel } from '../components/SteamPanel';
+import { DamagePanel } from '../components/DamagePanel';
+import { ScoreboardPanel } from '../components/ScoreboardPanel';
+import { TeamsPanel } from '../components/TeamsPanel';
 import { WindowPanel } from '../components/WindowPanel';
 import { panelTitle, type PresetDef } from '../presets';
-import { type AppState, type BoardId, isWindowId, type PanelId, type PresetData } from '../state/model';
+import { type AppState, type BoardId, isWidgetId, isWindowId, type PanelId, type PresetData } from '../state/model';
+import { WidgetPanel } from '../widgets/WidgetPanel';
 import type { Mutate, MutatePreset } from '../state/useAppState';
 
 export interface PanelContext {
@@ -27,7 +33,13 @@ export interface PanelContext {
 
 const RENDER: Record<PanelId, (c: PanelContext) => ReactNode> = {
   game: (c) => (
-    <GamePanel game={c.data.game} wow={c.def.id === 'wow' ? c.data : null} clips={c.state.clips} mutatePreset={c.mutatePreset} />
+    <GamePanel
+      game={c.data.game}
+      preset={c.def.id}
+      wow={c.def.id === 'wow' ? c.data : null}
+      clips={c.state.clips}
+      mutatePreset={c.mutatePreset}
+    />
   ),
   camera: (c) => <CameraPanel camera={c.state.camera} title={c.title} mutate={c.mutate} />,
   chat: (c) => <ChatPanel twitch={c.state.twitch} title={c.title} mutate={c.mutate} />,
@@ -42,12 +54,21 @@ const RENDER: Record<PanelId, (c: PanelContext) => ReactNode> = {
   character: (c) => <CharacterPanel character={c.data.character} title={c.title} mutatePreset={c.mutatePreset} />,
   discord: (c) => <DiscordPanel pinned={c.state.discord.pinned} title={c.title} mutate={c.mutate} />,
   quests: (c) => <QuestsPanel quests={c.data.quests} linked={c.data.wowLinkAt > 0} title={c.title} />,
+  steam: (c) => <SteamPanel title={c.title} />,
+  teams: (c) => <TeamsPanel title={c.title} />,
+  scoreboard: (c) => <ScoreboardPanel title={c.title} />,
+  damage: (c) => <DamagePanel title={c.title} />,
+  hud: (c) => <HudPanel hud={c.data.hud} title={c.title} suggestions={c.def.hud ?? []} mutatePreset={c.mutatePreset} />,
 };
 
 export function renderPanel(id: BoardId, c: Omit<PanelContext, 'title'>): ReactNode {
   if (isWindowId(id)) {
     const win = c.data.windows.find((w) => w.id === id);
     return win ? <WindowPanel win={win} mutatePreset={c.mutatePreset} /> : null;
+  }
+  if (isWidgetId(id)) {
+    const widget = c.data.widgets.find((w) => w.id === id);
+    return widget ? <WidgetPanel widget={widget} mutatePreset={c.mutatePreset} /> : null;
   }
   return RENDER[id]({ ...c, title: panelTitle(c.def, id) });
 }

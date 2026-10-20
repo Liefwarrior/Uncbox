@@ -1,9 +1,11 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { keyLabel, isClipKey } from '../clips/keys';
 import { CLIP_SECONDS, clipUrl, revealClip, saveClip, useClips, watchClip } from '../clips/replay';
+import { removeWebhook, sendToDiscord, setWebhook, useWebhook } from '../clips/share';
 import { useCover } from '../native';
 import type { ClipSettings } from '../state/model';
 import type { Mutate } from '../state/useAppState';
+import { StatusLine, VerticalEditor, useJob } from './ClipEditor';
 import { Icon } from './Icon';
 
 const TOAST_MS = 6000;
@@ -102,16 +104,93 @@ export function ClipsSection({ settings, mutate }: { settings: ClipSettings; mut
               <button className="side-link" title="Watch" onClick={() => watchClip(c.name)}>
                 <Icon name="play" size={13} />
                 <span>{when(c.at)}</span>
-                <small>{megabytes(c.size)}</small>
+                <small>
+                  {c.name.includes(' vertical') && 'Vertical · '}
+                  {megabytes(c.size)}
+                </small>
               </button>
             </li>
           ))}
         </ul>
       )}
+      <DiscordWebhook />
       <button className="side-link side-link--quiet" title={clips.dir} onClick={() => revealClip()}>
         <Icon name="folder" /> Open clips folder
       </button>
     </>
+  );
+}
+
+/** Where "Send to Discord" sends clips. The server keeps the URL; this only ever shows its last characters. */
+function DiscordWebhook() {
+  const { set, hint } = useWebhook();
+  const [editing, setEditing] = useState(false);
+  const [url, setUrl] = useState('');
+  const [error, setError] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  const close = () => {
+    setEditing(false);
+    setUrl('');
+    setError('');
+  };
+  const save = async () => {
+    setSaving(true);
+    const problem = await setWebhook(url);
+    setSaving(false);
+    if (problem) setError(problem);
+    else close();
+  };
+
+  if (!editing) {
+    return (
+      <div className="clips__discord">
+        <p className="hint">
+          Discord webhook: {set ? `set (${hint})` : 'not set'}
+        </p>
+        <div className="clips__actions">
+          <button className="btn btn--small" onClick={() => setEditing(true)}>
+            {set ? 'Replace' : 'Add webhook'}
+          </button>
+          {set && (
+            <button className="btn btn--small" onClick={() => void removeWebhook()}>
+              Remove
+            </button>
+          )}
+        </div>
+      </div>
+    );
+  }
+  return (
+    <form
+      className="clips__discord"
+      onSubmit={(e) => {
+        e.preventDefault();
+        void save();
+      }}
+    >
+      {/* Hidden as you type, like a password: it lets anyone post to your channel. */}
+      <input
+        type="password"
+        autoComplete="off"
+        spellCheck={false}
+        autoFocus
+        placeholder="https://discord.com/api/webhooks/…"
+        aria-label="Discord webhook URL"
+        value={url}
+        onChange={(e) => setUrl(e.target.value)}
+      />
+      {error && <p className="error">{error}</p>}
+      <p className="hint">In Discord: channel settings, Integrations, Webhooks, Copy Webhook URL. It stays on this PC.</p>
+      <div className="clips__actions">
+        <button className="btn btn--small btn--accent" disabled={!url.trim() || saving}>
+          {saving ? 'Saving…' : 'Save'}
+        </button>
+        <button type="button" className="btn btn--small" onClick={close}>
+          Cancel
+        </button>
+      </div>
+    </form>
   );
 }
 
@@ -148,29 +227,68 @@ export function ClipToast() {
 export function ClipPlayer() {
   const { playing } = useClips();
   useCover(Boolean(playing));
+  // Keyed, so each clip starts with a fresh editor and no leftover "Sent to Discord".
+  return playing ? <Player key={playing} playing={playing} /> : null;
+}
+
+/** The player itself, with Make vertical and Send to Discord. */
+function Player({ playing }: { playing: string }) {
+  const { set: discord } = useWebhook();
+  const job = useJob();
+  const [editing, setEditing] = useState(false);
+
+  // While something is being made, Esc and a click outside stop that rather than closing the player.
+  const { busy, cancel } = job;
+  const close = () => (busy ? cancel() : watchClip(null));
+  const closeRef = useRef(close);
+  closeRef.current = close;
   useEffect(() => {
-    if (!playing) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== 'Escape') return;
       e.stopPropagation();
-      watchClip(null);
+      closeRef.current();
     };
     window.addEventListener('keydown', onKey, true);
     return () => window.removeEventListener('keydown', onKey, true);
-  }, [playing]);
+  }, []);
 
-  if (!playing) return null;
+  const vertical = playing.includes(' vertical');
   return (
-    <div className="clip-player" role="dialog" aria-label="Clip" onClick={() => watchClip(null)}>
-      <div className="clip-player__box" onClick={(e) => e.stopPropagation()}>
-        <video src={clipUrl(playing)} controls autoPlay />
+    <div className="clip-player" role="dialog" aria-label="Clip" onClick={close}>
+      <div className={`clip-player__box ${editing ? 'is-editing' : ''}`} onClick={(e) => e.stopPropagation()}>
+        {editing ? (
+          <VerticalEditor name={playing} job={job} discord={discord} />
+        ) : (
+          <video src={clipUrl(playing)} controls autoPlay />
+        )}
+        <StatusLine job={job} />
         <div className="clip-player__bar">
           <span>{playing.replace(/\.mp4$/, '')}</span>
           <span className="spacer" />
+          {!vertical && (
+            <button className={`btn btn--small ${editing ? 'btn--on' : ''}`} disabled={busy} onClick={() => setEditing((e) => !e)}>
+              <Icon name="crop" size={14} /> {editing ? 'Back to the clip' : 'Make vertical'}
+            </button>
+          )}
+          {!editing && (
+            <button
+              className="btn btn--small"
+              disabled={busy || !discord}
+              title={discord ? 'Send this clip to your Discord channel' : 'Add a Discord webhook under Clips first'}
+              onClick={() =>
+                job.run(async (report, signal) => {
+                  await sendToDiscord({ name: playing, trim: null, frame: null }, report, signal);
+                  return { text: 'Sent to Discord.' };
+                })
+              }
+            >
+              <Icon name="message" size={14} /> Send to Discord
+            </button>
+          )}
           <button className="btn btn--small" onClick={() => revealClip(playing)}>
             <Icon name="folder" size={14} /> Show in folder
           </button>
-          <button className="icon-btn" title="Close" onClick={() => watchClip(null)}>
+          <button className="icon-btn" title="Close" onClick={close}>
             <Icon name="x" size={14} />
           </button>
         </div>

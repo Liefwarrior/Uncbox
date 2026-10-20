@@ -5,11 +5,15 @@ import { ClipPlayer, ClipToast } from './components/Clips';
 import { Sidebar } from './components/Sidebar';
 import { UndoToast } from './components/UndoToast';
 import { useClipKeyInPage } from './clips/replay';
+import { useGameDetect } from './hud/reader';
+import { useSmiteSync } from './smite';
+import { useSmiteScreen } from './smite/reader';
 import { renderPanel } from './panels';
-import { PRESETS } from './presets';
+import { usePresetDrop } from './presetio';
 import type { BoardId } from './state/model';
+import { activePreset } from './state/presets';
 import { useAppState } from './state/useAppState';
-import { dismissUndo } from './undo';
+import { dismissUndoOnSwitch } from './undo';
 
 function initialStreamMode() {
   const v = new URLSearchParams(window.location.search).get('stream');
@@ -58,11 +62,25 @@ export function App() {
 
   useClipKeyInPage(state.clips);
 
-  // An undo restores into the active preset, so it must not outlive a switch to another one.
-  useEffect(dismissUndo, [state.preset]);
+  // The page itself never scrolls: everything fits the window. If something focused off screen
+  // nudges it anyway, put it straight back, or the whole layout stays shifted.
+  useEffect(() => {
+    const back = () => {
+      if (window.scrollX || window.scrollY) window.scrollTo(0, 0);
+    };
+    back();
+    window.addEventListener('scroll', back);
+    return () => window.removeEventListener('scroll', back);
+  }, []);
+  // Game-specific behavior follows the base, so a copy of the SMITE 2 preset still reads SMITE.
+  const { base, def, data } = activePreset(state);
+  useGameDetect(def.detect, mutatePreset);
+  useSmiteSync(base === 'smite2', mutatePreset);
+  useSmiteScreen(base === 'smite2', mutatePreset);
+  usePresetDrop(state, mutate);
 
-  const def = PRESETS[state.preset];
-  const data = state.presets[state.preset];
+  useEffect(dismissUndoOnSwitch, [state.preset]);
+
   const render = (id: BoardId) => renderPanel(id, { state, data, def, mutate, mutatePreset });
 
   // Draw nothing until the saved state arrives (a few ms locally). Otherwise every reload shows the
@@ -70,7 +88,7 @@ export function App() {
   if (status === 'loading') return null;
 
   return (
-    <div className={`app theme-${state.preset} ${streamMode ? 'is-stream' : 'is-editing'}`}>
+    <div className={`app theme-${base} ${streamMode ? 'is-stream' : 'is-editing'}`}>
       <Sidebar
         state={state}
         mutate={mutate}
@@ -79,10 +97,11 @@ export function App() {
         onStreamMode={enterStream}
       />
       <main className="stage">
-        <Backdrop id={data.background} preset={state.preset} />
+        <Backdrop id={data.background} preset={base} />
         <Board
           key={state.preset}
           layout={data.layout}
+          widgets={data.widgets}
           editing={!streamMode}
           mutatePreset={mutatePreset}
           renderPanel={render}

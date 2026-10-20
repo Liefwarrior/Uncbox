@@ -142,6 +142,64 @@
   --panel-shadow: none;
 }
 
+/* Minecraft Dungeons II: torch-lit stone, emerald and gold, blocky type. */
+.theme-mcd2 {
+  --bg: #13100e;
+  --glow-1: rgba(63, 217, 106, 0.06);
+  --glow-2: rgba(242, 193, 78, 0.05);
+  --panel: rgba(30, 25, 22, 0.95);
+  --panel-top: rgba(40, 33, 28, 0.95);
+  --panel-2: #2f2722;
+  --border: #4a3c32;
+  --text: #f2eadd;
+  --muted: #a99a87;
+  --accent: #3fd96a;
+  --accent-2: #f2c14e;
+  --accent-ink: #062210;
+  --good: #3fd96a;
+  --bad: #e2483d;
+  --font-display: 'Pixelify Sans Variable', var(--font-body);
+  --font-ui: var(--font-body);
+  --font-num: 'Pixelify Sans Variable', var(--font-body);
+  --title-case: uppercase;
+  --title-tracking: 0.08em;
+  --title-size: 15px;
+  --title-weight: 600;
+  --radius: 4px;
+  --radius-sm: 3px;
+  --art-radius: 3px;
+  --panel-shadow: inset 0 0 0 2px rgba(0, 0, 0, 0.35), 0 6px 0 rgba(0, 0, 0, 0.3);
+}
+
+/* Steam Big Picture: deep navy, Steam blue, clean bold type. */
+.theme-steam {
+  --bg: #0b0f15;
+  --glow-1: rgba(26, 159, 255, 0.08);
+  --glow-2: rgba(102, 192, 244, 0.05);
+  --panel: rgba(23, 29, 38, 0.94);
+  --panel-top: rgba(32, 40, 52, 0.94);
+  --panel-2: #2a3442;
+  --border: #323d4c;
+  --text: #e1e5ea;
+  --muted: #8f99a5;
+  --accent: #1a9fff;
+  --accent-2: #66c0f4;
+  --accent-ink: #03111d;
+  --good: #5ba32b;
+  --bad: #e0464b;
+  --font-display: var(--font-body);
+  --font-ui: var(--font-body);
+  --font-num: var(--font-body);
+  --title-case: none;
+  --title-tracking: 0.01em;
+  --title-size: 16px;
+  --title-weight: 700;
+  --radius: 10px;
+  --radius-sm: 6px;
+  --art-radius: 6px;
+  --panel-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+}
+
 /* ---------- base ---------- */
 
 *,
@@ -505,6 +563,15 @@ input[type='color'] {
   font-family: 'Marcellus', serif;
   color: #f2b443;
 }
+.preset-card--mcd2 strong {
+  font-family: 'Pixelify Sans Variable', sans-serif;
+  color: #3fd96a;
+}
+.preset-card--steam strong {
+  font-family: var(--font-body);
+  font-weight: 700;
+  color: #66c0f4;
+}
 .preset-card--terminal strong {
   font-family: 'Cascadia Mono Variable', Consolas, monospace;
   font-weight: 500;
@@ -512,6 +579,42 @@ input[type='color'] {
 }
 .preset-card.on {
   border-color: var(--accent);
+}
+
+/* Presets of your own: the base's card, a menu button in the corner, and long names cut short. */
+.preset-slot {
+  position: relative;
+}
+.preset-slot .preset-card {
+  width: 100%;
+  padding-right: 44px;
+}
+.preset-card.is-custom strong,
+.preset-card.is-custom span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.preset-slot__menu {
+  position: absolute;
+  top: 50%;
+  right: 8px;
+  transform: translateY(-50%);
+}
+.preset-rename {
+  /* Inside the card's name, so it previews the base's font and color like the name does. */
+  width: 100%;
+  min-width: 0;
+  padding: 0 0 1px;
+  border: 0;
+  border-bottom: 1px solid var(--accent);
+  border-radius: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  letter-spacing: inherit;
+  outline: none;
 }
 
 .stream-btn {
@@ -545,6 +648,8 @@ input[type='color'] {
   list-style: none;
 }
 .toggles label {
+  /* Holds the hidden checkbox in place; otherwise focusing it scrolls the whole page. */
+  position: relative;
   display: flex;
   align-items: center;
   gap: 12px;
@@ -846,19 +951,58 @@ input[type='color'] {
 .board .react-grid-item .react-resizable-handle::after {
   border-color: var(--accent);
 }
-.board .react-grid-item .react-resizable-handle-se {
+/* Corners: an L mark in the corner, drawn per corner rather than by rotating the handle. */
+.board .react-grid-item .react-resizable-handle-se,
+.board .react-grid-item .react-resizable-handle-sw,
+.board .react-grid-item .react-resizable-handle-ne,
+.board .react-grid-item .react-resizable-handle-nw {
   width: 22px;
   height: 22px;
+  transform: none;
+}
+/* The top corners are short so they stay clear of the header's buttons. */
+.board .react-grid-item .react-resizable-handle-ne,
+.board .react-grid-item .react-resizable-handle-nw {
+  height: 8px;
+}
+.board .react-grid-item .react-resizable-handle-se::after,
+.board .react-grid-item .react-resizable-handle-sw::after,
+.board .react-grid-item .react-resizable-handle-ne::after,
+.board .react-grid-item .react-resizable-handle-nw::after {
+  inset: auto;
+  width: 8px;
+  height: 8px;
+  border: 0 solid var(--accent);
 }
 .board .react-grid-item .react-resizable-handle-se::after {
   right: 6px;
   bottom: 6px;
-  width: 8px;
-  height: 8px;
-  border-right: 2px solid var(--accent);
-  border-bottom: 2px solid var(--accent);
+  border-right-width: 2px;
+  border-bottom-width: 2px;
+}
+.board .react-grid-item .react-resizable-handle-sw::after {
+  bottom: 6px;
+  left: 6px;
+  border-bottom-width: 2px;
+  border-left-width: 2px;
+}
+.board .react-grid-item .react-resizable-handle-ne::after {
+  top: 2px;
+  right: 6px;
+  height: 6px;
+  border-top-width: 2px;
+  border-right-width: 2px;
+}
+.board .react-grid-item .react-resizable-handle-nw::after {
+  top: 2px;
+  left: 6px;
+  height: 6px;
+  border-top-width: 2px;
+  border-left-width: 2px;
 }
 .board .react-grid-item .react-resizable-handle-e,
+.board .react-grid-item .react-resizable-handle-w,
+.board .react-grid-item .react-resizable-handle-n,
 .board .react-grid-item .react-resizable-handle-s {
   margin: 0;
   transform: none;
@@ -871,6 +1015,14 @@ input[type='color'] {
   height: auto;
   cursor: ew-resize;
 }
+.board .react-grid-item .react-resizable-handle-w {
+  top: 24px;
+  bottom: 24px;
+  left: 0;
+  width: 10px;
+  height: auto;
+  cursor: ew-resize;
+}
 .board .react-grid-item .react-resizable-handle-s {
   right: 24px;
   bottom: 0;
@@ -879,7 +1031,18 @@ input[type='color'] {
   height: 10px;
   cursor: ns-resize;
 }
+/* A thin strip along the very top edge: the header below it is the drag handle and holds buttons. */
+.board .react-grid-item .react-resizable-handle-n {
+  top: 0;
+  right: 24px;
+  left: 24px;
+  width: auto;
+  height: 6px;
+  cursor: ns-resize;
+}
 .board .react-grid-item .react-resizable-handle-e::after,
+.board .react-grid-item .react-resizable-handle-w::after,
+.board .react-grid-item .react-resizable-handle-n::after,
 .board .react-grid-item .react-resizable-handle-s::after {
   inset: auto;
   border: 0;
@@ -889,6 +1052,8 @@ input[type='color'] {
   transition: opacity 0.15s;
 }
 .board .react-grid-item .react-resizable-handle-e:hover::after,
+.board .react-grid-item .react-resizable-handle-w:hover::after,
+.board .react-grid-item .react-resizable-handle-n:hover::after,
 .board .react-grid-item .react-resizable-handle-s:hover::after,
 .board .react-grid-item.resizing .react-resizable-handle::after {
   opacity: 1;
@@ -898,6 +1063,18 @@ input[type='color'] {
   right: 3px;
   width: 3px;
   height: 32px;
+}
+.board .react-grid-item .react-resizable-handle-w::after {
+  top: calc(50% - 16px);
+  left: 3px;
+  width: 3px;
+  height: 32px;
+}
+.board .react-grid-item .react-resizable-handle-n::after {
+  top: 1px;
+  left: calc(50% - 16px);
+  width: 32px;
+  height: 3px;
 }
 .board .react-grid-item .react-resizable-handle-s::after {
   bottom: 3px;
@@ -950,6 +1127,10 @@ input[type='color'] {
 .is-stream .toast {
   display: none;
 }
+.toast--note {
+  padding: 10px 16px;
+  max-width: min(560px, 90%);
+}
 .toast__undo {
   display: inline-flex;
   align-items: center;
@@ -965,6 +1146,660 @@ input[type='color'] {
 }
 .toast__undo:hover {
   background: color-mix(in srgb, var(--accent) 14%, transparent);
+}
+
+/* ---------- widgets ---------- */
+
+.widget-library summary {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 6px;
+  border-radius: var(--radius-sm);
+  color: var(--accent);
+  font-size: 16px;
+}
+.widget-library summary::before,
+.widget-library[open] summary::before {
+  content: none;
+}
+.widget-library summary:hover {
+  background: var(--panel);
+}
+.widget-library__list {
+  display: grid;
+  gap: 2px;
+  margin: 2px 0 6px 20px;
+  padding: 0;
+  list-style: none;
+}
+.widget-library__item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 6px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text);
+  font-size: 15px;
+  text-align: left;
+  cursor: pointer;
+}
+.widget-library__item:hover {
+  background: var(--panel);
+}
+.widget-library__item svg {
+  flex: none;
+  color: var(--accent);
+}
+
+.panel--widget .panel__body {
+  container-type: size;
+}
+.widget-clock,
+.widget-countdown {
+  display: grid;
+  align-content: safe center;
+  justify-items: center;
+  height: 100%;
+  text-align: center;
+}
+.widget-clock strong,
+.widget-countdown strong {
+  font-family: var(--font-num);
+  font-size: clamp(22px, min(22cqw, 46cqh), 96px);
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  line-height: 1.05;
+}
+.widget-clock span,
+.widget-countdown span {
+  color: var(--muted);
+  font-size: clamp(12px, 7cqw, 18px);
+}
+.widget-weather {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  height: 100%;
+}
+.widget-weather__symbol {
+  font-size: clamp(32px, min(28cqw, 60cqh), 88px);
+  line-height: 1;
+}
+.widget-weather div {
+  display: grid;
+  min-width: 0;
+}
+.widget-weather strong {
+  font-family: var(--font-num);
+  font-size: clamp(24px, min(20cqw, 40cqh), 72px);
+  line-height: 1;
+}
+.widget-weather span {
+  font-size: 15px;
+}
+.widget-weather small,
+.widget-media small {
+  color: var(--muted);
+  font-size: 13px;
+}
+.widget-media {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  height: 100%;
+  min-width: 0;
+}
+.widget-media img,
+.widget-media__art {
+  display: grid;
+  flex: none;
+  place-items: center;
+  height: min(100%, 96px);
+  aspect-ratio: 1;
+  border-radius: var(--radius-sm);
+  background: var(--panel-2);
+  color: var(--muted);
+  object-fit: cover;
+}
+.widget-media div {
+  display: grid;
+  min-width: 0;
+}
+.widget-media strong,
+.widget-media span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.widget-media strong {
+  font-size: 17px;
+}
+.widget-media span {
+  color: var(--muted);
+  font-size: 14px;
+}
+.widget-media:not(.is-playing) img {
+  opacity: 0.6;
+}
+.widget-toasts {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.widget-toasts li {
+  display: grid;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--panel-2);
+  animation: rise 0.4s var(--ease-out);
+}
+.widget-toasts__app {
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 650;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.widget-toasts strong {
+  font-size: 15px;
+}
+.widget-toasts p {
+  margin: 2px 0 0;
+  color: var(--muted);
+  font-size: 14px;
+}
+.widget-system {
+  display: grid;
+  /* Centered when there's room; from the top when there isn't, so the first line never hides. */
+  align-content: safe center;
+  gap: 8px;
+  height: 100%;
+  overflow: auto;
+  scrollbar-width: none;
+}
+.meter {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 3px 8px;
+}
+.meter__label {
+  font-size: 14px;
+  font-weight: 600;
+}
+.meter__value {
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+}
+.meter__bar {
+  grid-column: 1 / -1;
+  height: 6px;
+  border-radius: 3px;
+  background: linear-gradient(90deg, var(--accent) var(--v), var(--panel-2) var(--v));
+  transition: background 0.6s;
+}
+.meter small {
+  grid-column: 1 / -1;
+  color: var(--muted);
+  font-size: 12px;
+}
+.meter small:empty {
+  display: none;
+}
+.widget-text {
+  display: grid;
+  place-items: center;
+  height: 100%;
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: clamp(16px, min(9cqw, 30cqh), 48px);
+  text-align: center;
+  white-space: pre-wrap;
+}
+.widget-settings {
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  font-size: 14px;
+}
+.widget-settings label {
+  display: grid;
+  gap: 4px;
+}
+.widget-settings label.inline {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.widget-settings input:not([type='checkbox']),
+.widget-settings select,
+.widget-settings textarea {
+  width: 100%;
+  min-width: 0;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--panel-2);
+  color: var(--text);
+  font: inherit;
+}
+.widget-settings .row {
+  display: flex;
+  gap: 6px;
+}
+.widget-settings > .btn {
+  justify-self: start;
+}
+
+/* ---------- WoW addon controls ---------- */
+
+.addon-message {
+  margin: 0 0 8px;
+  color: var(--muted);
+  font-size: 13px;
+}
+.addon-message.error {
+  color: var(--bad);
+}
+.panel--bleed .steam-message {
+  position: absolute;
+  top: 44px;
+  right: 10px;
+  left: 10px;
+  z-index: 3;
+  padding: 6px 10px;
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--panel) 90%, transparent);
+}
+button.addon-message {
+  color: var(--accent);
+}
+
+/* ---------- SMITE 2 teams ---------- */
+
+.teams {
+  display: grid;
+  gap: 8px;
+}
+.teams__status {
+  display: flex;
+  justify-content: space-between;
+  margin: 0;
+  color: var(--accent);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+.teams__clock {
+  color: var(--text);
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+}
+.teams__sides {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: start;
+  gap: 8px;
+}
+.teams__side {
+  display: grid;
+  gap: 3px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 15px;
+}
+.teams__side--enemies {
+  text-align: right;
+}
+.teams__side li {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.teams__side--allies li {
+  color: var(--good);
+}
+.teams__side--enemies li {
+  color: var(--bad);
+}
+.teams__side li.is-me {
+  color: var(--accent-2);
+  font-weight: 700;
+}
+.teams__side li.is-me::after {
+  content: ' (you)';
+  color: var(--muted);
+  font-weight: 400;
+}
+.teams__vs {
+  align-self: center;
+  color: var(--muted);
+  font-size: 12px;
+  text-transform: uppercase;
+}
+
+/* ---------- Steam ---------- */
+
+.steam-now {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+  height: 100%;
+}
+.steam-now__hero {
+  position: relative;
+  display: grid;
+  place-items: center;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--panel-2);
+}
+.steam-now__bg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  mask-image: linear-gradient(to bottom, black 55%, transparent);
+}
+.steam-now__logo {
+  position: relative;
+  max-width: 70%;
+  max-height: 60%;
+  object-fit: contain;
+  filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.6));
+}
+.steam-now__info {
+  display: grid;
+  gap: 4px;
+  padding: 10px 14px 14px;
+}
+.steam-now__label {
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.steam-now__info > strong {
+  font-family: var(--font-display);
+  font-size: clamp(18px, 7cqw, 26px);
+  line-height: 1.15;
+}
+.steam-now__stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  color: var(--muted);
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+}
+.steam-now__stats span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.steam-ach {
+  display: grid;
+  gap: 6px;
+  margin-top: 6px;
+}
+.steam-ach__bar {
+  height: 6px;
+  overflow: hidden;
+  border-radius: 3px;
+  background: var(--panel-2);
+}
+.steam-ach__bar span {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, var(--accent), var(--accent-2));
+  transition: width 0.8s var(--ease-out);
+}
+.steam-ach__count {
+  color: var(--muted);
+  font-size: 13px;
+}
+.steam-ach__latest {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px;
+  border-radius: var(--radius-sm);
+  background: var(--panel-2);
+  font-size: 14px;
+  font-weight: 600;
+}
+.steam-ach__latest.is-fresh {
+  box-shadow: 0 0 0 1px var(--accent);
+  animation: pop 0.6s var(--ease-out);
+}
+.steam-ach__latest img {
+  width: 36px;
+  height: 36px;
+  border-radius: 4px;
+}
+.steam-ach__latest span {
+  display: grid;
+}
+.steam-ach__latest small {
+  color: var(--accent-2);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.steam-idle {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 10px;
+  height: 100%;
+}
+.steam-idle__me {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.steam-idle__avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: var(--art-radius);
+}
+.steam-idle__me span {
+  display: grid;
+}
+.steam-idle__me small {
+  color: var(--muted);
+  font-size: 13px;
+}
+.steam-recent {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(78px, 1fr));
+  align-content: start;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  list-style: none;
+}
+.steam-recent li {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  animation: rise 0.5s var(--ease-out) both;
+}
+.steam-recent__art {
+  width: 100%;
+  aspect-ratio: 2 / 3;
+  border-radius: var(--radius-sm);
+  background: var(--panel-2);
+  object-fit: cover;
+}
+.steam-recent__name {
+  overflow: hidden;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.steam-recent small {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+/* ---------- stats read off the screen ---------- */
+
+.hud-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+  align-content: start;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.hud-stats li {
+  display: grid;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--panel-2);
+}
+.hud-stats__label {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 650;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.hud-stats__value {
+  color: var(--accent-2);
+  font-family: var(--font-num);
+  font-size: clamp(20px, 9cqw, 34px);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+}
+.hud-empty {
+  display: grid;
+  justify-items: start;
+  gap: 8px;
+}
+.hud-editor {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(0, 0, 0, 0.72);
+}
+.is-stream .hud-editor {
+  display: none;
+}
+.hud-editor__box {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 10px;
+  width: min(1500px, 100%);
+  max-height: 100%;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--panel);
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.6);
+}
+.hud-editor__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.hud-editor__main {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 300px;
+  gap: 12px;
+  min-height: 0;
+}
+.hud-editor__picture {
+  position: relative;
+  align-self: start;
+  cursor: crosshair;
+  user-select: none;
+  touch-action: none;
+}
+.hud-editor__picture img {
+  display: block;
+  width: 100%;
+  max-height: calc(100vh - 140px);
+  object-fit: contain;
+  pointer-events: none;
+}
+.hud-editor__mark {
+  position: absolute;
+  border: 2px solid var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  pointer-events: none;
+}
+.hud-editor__mark.is-selected {
+  border-color: var(--accent-2);
+}
+.hud-editor__mark span {
+  position: absolute;
+  bottom: 100%;
+  left: -2px;
+  padding: 1px 6px;
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.hud-editor__list {
+  display: grid;
+  align-content: start;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+.hud-editor__list li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 4px 8px;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--panel-2);
+  font-size: 14px;
+}
+.hud-editor__list li.is-selected {
+  border-color: var(--accent-2);
+}
+.hud-editor__list input:not([type='checkbox']) {
+  min-width: 0;
+  padding: 5px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--panel);
+  color: var(--text);
+  font: inherit;
+}
+.hud-editor__reading {
+  color: var(--accent-2);
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+}
+.hud-editor__list .hud-editor__note {
+  display: block;
+  border-style: dashed;
+  background: transparent;
 }
 
 /* ---------- clips ---------- */
@@ -1060,10 +1895,112 @@ kbd {
 }
 .clip-player__bar {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 8px;
   color: var(--muted);
   font-size: 14px;
+}
+/* The vertical editor takes the video's place: narrower, so the controls fit under it. */
+.clip-player__box.is-editing {
+  width: min(960px, 100%);
+}
+.clip-status {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+  color: var(--muted);
+  font-size: 14px;
+}
+.clip-status progress {
+  flex: 1;
+  min-width: 80px;
+  accent-color: var(--accent);
+}
+.clip-status--done {
+  color: var(--good);
+}
+.vedit {
+  display: grid;
+  gap: 10px;
+}
+.vedit__stage {
+  position: relative;
+  /* Width, not max-height, limits it: the frame's percentages assume the stage keeps 16:9. */
+  width: min(100%, calc((100vh - 340px) * 16 / 9));
+  aspect-ratio: 16 / 9;
+  margin-inline: auto;
+  overflow: hidden;
+  border-radius: calc(var(--radius-sm) - 4px);
+  background: #000;
+}
+.vedit__stage video {
+  display: block;
+  width: 100%;
+  height: 100%;
+  max-height: none;
+  object-fit: contain;
+}
+/* The 9:16 slice; the shadow darkens everything outside it. */
+.vedit__frame {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  border: 2px solid var(--accent);
+  box-shadow: 0 0 0 100vmax rgba(0, 0, 0, 0.62);
+  cursor: ew-resize;
+  touch-action: none;
+}
+.vedit__controls {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px 16px;
+  color: var(--muted);
+  font-size: 13px;
+}
+.vedit__controls label {
+  display: grid;
+  gap: 2px;
+}
+.vedit__controls output {
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+.vedit__quick {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  grid-column: 1 / -1;
+}
+.vedit__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.clips__discord {
+  display: grid;
+  gap: 4px;
+  margin: 6px 6px 0;
+}
+.clips__discord input {
+  min-width: 0;
+  padding: 5px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--panel-2);
+  font-size: 14px;
+}
+.clips__discord input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+.clips__discord .hint {
+  margin: 0;
+}
+.clips__discord .clips__actions {
+  margin: 0;
 }
 
 .menu {
@@ -1433,6 +2370,21 @@ kbd {
   position: relative;
   inset: auto;
   margin: 0 12px 8px;
+}
+.game-toolbar__note {
+  color: var(--muted);
+  font-size: 13px;
+}
+.game-toolbar__note code {
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: var(--panel-2);
+  color: var(--text);
+  user-select: all;
+}
+/* Shown as a picture, the panel takes the click and hands it to the game. */
+.panel--game.is-native .game-hole {
+  cursor: pointer;
 }
 .window-list {
   display: grid;
@@ -3103,4 +4055,165 @@ p.chat-empty {
 }
 .theme-terminal .live-dot--connected {
   box-shadow: none;
+}
+
+/* ---------- SMITE 2 scoreboard and damage (read off the Tab and T screens) ---------- */
+
+.board,
+.damage {
+  display: grid;
+  gap: 10px;
+  align-content: start;
+}
+.board__ago {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+.board-team {
+  display: grid;
+  gap: 2px;
+}
+.board-team__name {
+  margin: 0 0 2px;
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+.board-team__head,
+.board-row {
+  display: grid;
+  grid-template-columns: 2em minmax(0, 1fr) 2.2em 2.2em 2.2em 4em;
+  align-items: center;
+  gap: 6px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.board-team__head {
+  color: var(--muted);
+  font-size: 11px;
+}
+.board-row {
+  padding: 3px 6px;
+  border-radius: var(--radius-sm);
+  font-family: var(--font-num);
+  font-size: 15px;
+}
+.board-row.is-me {
+  background: color-mix(in srgb, var(--accent-2) 16%, transparent);
+  color: var(--accent-2);
+}
+.board-row__level {
+  color: var(--muted);
+}
+.board-row__who {
+  display: grid;
+  min-width: 0;
+  text-align: left;
+}
+.board-row__who b,
+.board-row__who small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.board-row__who small {
+  color: var(--muted);
+  font-size: 11px;
+}
+.board-row__gold {
+  color: var(--accent-2);
+}
+.board-kills ul {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 14px;
+}
+.board-kills li {
+  display: flex;
+  gap: 8px;
+}
+.board-kills time {
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.damage-side h3 {
+  margin: 0 0 4px;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 500;
+}
+.damage-side h3 b {
+  color: var(--text);
+  font-family: var(--font-num);
+  font-size: 20px;
+}
+.damage-side ul {
+  display: grid;
+  gap: 3px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.damage-side li {
+  position: relative;
+  display: grid;
+  grid-template-columns: 3.4em 2.4em minmax(0, 1fr);
+  gap: 6px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 14px;
+  background: linear-gradient(90deg, var(--bar) var(--share), transparent var(--share));
+}
+.damage-side--dealt li {
+  --bar: color-mix(in srgb, var(--good) 28%, transparent);
+}
+.damage-side--taken li {
+  --bar: color-mix(in srgb, var(--bad) 28%, transparent);
+}
+.damage-row__amount {
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+}
+.damage-row__hits {
+  color: var(--muted);
+}
+.damage-row__name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.damage-top {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  font-size: 13px;
+}
+.damage-top div {
+  display: grid;
+  grid-template-columns: 6.5em minmax(0, 1fr);
+  gap: 6px;
+}
+.damage-top dt {
+  color: var(--muted);
+}
+.damage-top dd {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 0;
+}
+.damage-top__ally {
+  color: var(--good);
+}
+.damage-top__enemy {
+  color: var(--bad);
+  text-align: right;
 }
