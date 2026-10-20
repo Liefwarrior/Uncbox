@@ -6,8 +6,9 @@
 //
 // Any trouble (offline, rate limited, no releases yet) just means "no update" and stays quiet.
 
-import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
+import { readFile } from 'node:fs/promises';
 import path from 'node:path';
+import { writeJsonAtomic } from './datafile.mjs';
 
 const REPO = 'Liefwarrior/Uncbox';
 const LATEST = `https://api.github.com/repos/${REPO}/releases/latest`;
@@ -92,10 +93,7 @@ export function createUpdate({ dataDir, version, fetchImpl = fetch, now = Date.n
 
   async function writeCache(cache) {
     try {
-      await mkdir(dataDir, { recursive: true });
-      const tmp = `${file}.tmp`;
-      await writeFile(tmp, JSON.stringify(cache));
-      await rename(tmp, file);
+      await writeJsonAtomic(file, cache);
     } catch {
       // Not being able to remember it only means asking again next time.
     }

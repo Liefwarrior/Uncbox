@@ -354,7 +354,7 @@ export function createNetstats({ broadcastEvent, isLocal, sendJson, sampler }) {
   // One lease per widget setup: asking again keeps it alive, going quiet lets it lapse.
   const leases = new Map(); // "key|router" → { stop, timer }
 
-  return function handle(req, res, url) {
+  function handle(req, res, url) {
     // This opens connections to whatever is typed in, so only the person at this PC may ask.
     if (!isLocal(req)) return sendJson(res, 403, { error: 'This PC only' });
     const target = parseTarget(url.searchParams.get('target'));
@@ -372,5 +372,15 @@ export function createNetstats({ broadcastEvent, isLocal, sendJson, sampler }) {
       }, LEASE_MS),
     });
     return sendJson(res, 200, { key: target.key, ...s.snapshot() });
+  }
+
+  /** Drops every lease, which stops the timers (the server is shutting down). */
+  handle.close = () => {
+    for (const { stop, timer } of leases.values()) {
+      clearTimeout(timer);
+      stop();
+    }
+    leases.clear();
   };
+  return handle;
 }

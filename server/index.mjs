@@ -13,7 +13,7 @@
 import http from 'node:http';
 import https from 'node:https';
 import { createReadStream, readFileSync } from 'node:fs';
-import { mkdir, readFile, rename, stat, writeFile } from 'node:fs/promises';
+import { stat } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
@@ -46,13 +46,15 @@ import { createWidgets } from './widgets.mjs';
 import { createGuardConfig, guardApi } from './guard.mjs';
 import { noHelpers, offline, offlineFetch } from './switches.mjs';
 import { DOMAIN, loadTls } from './tls.mjs';
+import { cleanStaleTemps } from './datafile.mjs';
+import { createShutdown } from './lifecycle.mjs';
+import { createStateStore } from './statestore.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 // UNCBOX_DIST serves the built app from somewhere else (the server smoke test points it at a stand-in).
 const distDir = process.env.UNCBOX_DIST ? path.resolve(process.env.UNCBOX_DIST) : path.join(root, 'dist');
 const dataArg = process.argv.find((a) => a.startsWith('--data='));
 const dataDir = dataArg ? path.resolve(dataArg.slice(7)) : path.join(root, 'data');
-const stateFile = path.join(dataDir, 'state.json');
 const clipsArg = process.argv.find((a) => a.startsWith('--clips='));
 
 const isDev = process.argv.includes('--dev');
@@ -79,9 +81,19 @@ const MIME = {
   '.woff2': 'font/woff2',
 };
 
-/** @type {Set<http.ServerResponse>} */
-const listeners = new Set();
-let writeChain = Promise.resolve();
+/**
+ * The open live-update streams. The first one to join after the settings were restored from their
+ * backup is told so once ("Uncbox restored your last good settings").
+ * @type {Set<http.ServerResponse>}
+ */
+const listeners = new (class extends Set {
+  add(res) {
+    super.add(res);
+    const notice = store.takeNotice();
+    if (notice) res.write(`event: notice\ndata: ${JSON.stringify(notice)}\n\n`);
+    return this;
+  }
+})();
 
 function sendJson(res, status, body) {
   res.writeHead(status, { 'Content-Type': MIME['.json'], 'Cache-Control': 'no-store' });
@@ -106,25 +118,12 @@ function readBody(req) {
   });
 }
 
-async function loadState() {
-  try {
-    return JSON.parse(await readFile(stateFile, 'utf8'));
-  } catch (err) {
-    if (err.code === 'ENOENT') return null;
-    throw err;
-  }
-}
-
-// Writes are serialized and go through a temp file so a crash mid-write never leaves half a JSON file.
-function saveState(state) {
-  writeChain = writeChain.then(async () => {
-    await mkdir(dataDir, { recursive: true });
-    const tmp = `${stateFile}.tmp`;
-    await writeFile(tmp, JSON.stringify(state, null, 2));
-    await rename(tmp, stateFile);
-  });
-  return writeChain;
-}
+// Saves are serialized, atomic and backed up; a damaged state.json is restored from its backup
+// (see statestore.mjs).
+const store = createStateStore({ dataDir });
+const loadState = () => store.load();
+const saveState = (state) => store.save(state);
+const shutdown = createShutdown();
 
 function broadcast(state, fromClient) {
   const payload = `data: ${JSON.stringify({ clientId: fromClient, state })}\n\n`;
@@ -413,6 +412,7 @@ function listenLocal(srv, p, onReady) {
 
 const tls = isDev ? null : await loadTls(dataDir).catch((err) => console.warn(`Uncbox: can't read the ${DOMAIN} certificate: ${err.message}`));
 let secure = null;
+let redirectServer = null;
 try {
   if (tls) secure = https.createServer(tls, handleRequest);
 } catch (err) {
@@ -428,4 +428,45 @@ if (secure) {
     res.end();
   });
   listenLocal(redirect, redirectPort);
+  redirectServer = redirect;
 }
+
+// ---- stopping ----
+// Ctrl+C or a kill closes the servers, finishes any state save already accepted and stops every
+// helper process, so nothing is left running (a second Ctrl+C exits at once). When the Uncbox app
+// quits, it closes this server's input instead (--exit-with-stdin), which does the same; only a
+// hard kill skips it, and then the state file is still never half written.
+
+/** Stops a server from listening and drops its open connections (the live-update streams too). */
+function closeServer(srv) {
+  return new Promise((resolve) => {
+    if (!srv?.listening) return resolve();
+    srv.close(() => resolve());
+    srv.closeAllConnections?.();
+  });
+}
+
+// Added first so they stop last: the helpers and pollers.
+shutdown.add('helpers', () => {
+  for (const part of [widgets, ocr, netstats, steam, obs, smite, twitch, discord, clips]) {
+    try {
+      (part.close ?? part.stop)?.call(part);
+    } catch (err) {
+      console.warn('Uncbox: a helper did not stop cleanly:', err.message);
+    }
+  }
+});
+shutdown.add('saving your settings', () => store.flush());
+shutdown.add('the web servers', async () => {
+  for (const res of listeners) res.end();
+  await Promise.all([server, secure, redirectServer].map(closeServer));
+});
+if (vite) shutdown.add('the dev server', () => vite.close());
+shutdown.install();
+// Only when asked, since a server started in a terminal or a task has no meaningful stdin.
+if (process.argv.includes('--exit-with-stdin')) {
+  process.stdin.on('end', () => void shutdown.run('the app closed'));
+  process.stdin.on('error', () => {});
+  process.stdin.resume();
+}
+cleanStaleTemps(dataDir).catch(() => {});

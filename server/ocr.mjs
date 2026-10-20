@@ -8,6 +8,7 @@
 
 import { spawn } from 'node:child_process';
 import { createInterface } from 'node:readline';
+import { createLease, HELPER_IDLE_MS } from './lifecycle.mjs';
 
 const MAX_IMAGES = 16;
 const MAX_IMAGE_CHARS = 2_000_000;
@@ -60,7 +61,10 @@ export function parseWords(raw) {
   return (Array.isArray(parsed) ? parsed : [parsed]).map((l) => ({ ...l, words: Array.isArray(l.words?.[0]) ? l.words : [l.words].filter(Boolean) }));
 }
 
-export function createOcr({ isLocal, sendJson, readBody }) {
+/** The helper stops when nothing has asked it to read for this long. */
+export const IDLE_MS = HELPER_IDLE_MS;
+
+export function createOcr({ isLocal, sendJson, readBody, idleMs = IDLE_MS, setTimer, clearTimer }) {
   let helper = null;
   /** Replies come back one line per picture, in order. */
   const waiting = [];
@@ -81,22 +85,37 @@ export function createOcr({ isLocal, sendJson, readBody }) {
     });
     child.on('error', () => {});
     child.on('exit', () => {
-      if (helper === child) helper = null;
+      if (helper === child) {
+        // It died on its own: the next picture starts a fresh one.
+        helper = null;
+        lease.close();
+      }
       while (waiting.length) waiting.shift()('');
     });
-    // The helper outlives no one: it reads until its input closes, which happens when Uncbox exits.
+    // It also reads until its input closes, which happens if Uncbox is killed without a goodbye.
     return child;
   }
 
+  function stop() {
+    const child = helper;
+    helper = null;
+    child?.kill();
+    while (waiting.length) waiting.shift()('');
+  }
+
+  // Reading screens is bursty (a match, a scoreboard), so the helper goes away a minute after the
+  // last picture and starts again, about a quarter second, on the next one.
+  const lease = createLease({ idleMs, start: () => (helper ??= start()), stop, setTimer, clearTimer });
+
   function read(image, words) {
-    helper ??= start();
+    lease.touch();
     return new Promise((resolve) => {
       waiting.push(resolve);
       helper.stdin.write(`${words ? 'W' : 'T'} ${image}\n`);
     });
   }
 
-  return async function handle(req, res) {
+  async function handle(req, res) {
     if (req.method !== 'POST') return sendJson(res, 405, { error: 'Method not allowed' });
     if (!isLocal(req)) return sendJson(res, 403, { error: 'This PC only' });
     if (process.platform !== 'win32') return sendJson(res, 501, { error: 'Reading the screen uses Windows’ own text recognition.' });
@@ -118,5 +137,9 @@ export function createOcr({ isLocal, sendJson, readBody }) {
     const lines = [];
     for (const image of images) lines.push(parseWords(await read(image, true)));
     return sendJson(res, 200, { texts: lines.map((ls) => ls.map((l) => l.text).join(' ')), lines });
-  };
+  }
+
+  /** Stops the helper now (the server is shutting down). */
+  handle.close = lease.close;
+  return handle;
 }

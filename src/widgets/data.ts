@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { listen } from '../events';
+import { keepAlive } from '../keepAlive';
 import type { WidgetSettings } from '../state/model';
 import { interpolatePosition } from './mediaProgress';
 
@@ -67,9 +68,12 @@ export function useMedia(): MediaNow | null {
       .then(take)
       .catch(() => {});
     const stop = listen('media', (data) => take(JSON.parse(data)));
+    // The reader stops when nobody has asked for a while, so a showing widget keeps asking.
+    const stopAsking = keepAlive('/api/media');
     return () => {
       alive = false;
       stop();
+      stopAsking();
     };
   }, []);
   return media;

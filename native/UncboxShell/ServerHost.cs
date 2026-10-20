@@ -95,7 +95,8 @@ internal sealed class ServerHost : IDisposable
             }
         }
         status.Report("Starting Uncbox…");
-        string args = $"server/index.mjs --port={url.Port}";
+        // --exit-with-stdin: the server stops cleanly (saves, helper processes) when its input closes.
+        string args = $"server/index.mjs --port={url.Port} --exit-with-stdin";
         dataDir ??= bundledNode is not null ? PackagedDataDir : null;
         if (dataDir is not null) args += $" \"--data={Path.GetFullPath(dataDir)}\"";
         _server = Start(root, bundledNode ?? "node", args);
@@ -119,6 +120,7 @@ internal sealed class ServerHost : IDisposable
                 WorkingDirectory = root,
                 UseShellExecute = false,
                 CreateNoWindow = true,
+                RedirectStandardInput = true,
             })!;
             AssignProcessToJobObject(_job, p.Handle);
             return p;
@@ -132,6 +134,17 @@ internal sealed class ServerHost : IDisposable
 
     public void Dispose()
     {
+        // Ask the server to stop first (closing its input does that), so it can finish a save and
+        // stop its helper programs. It gets a couple of seconds; then the job ends whatever is left.
+        try
+        {
+            _server?.StandardInput.Close();
+            _server?.WaitForExit(2500);
+        }
+        catch (Exception)
+        {
+            // Already gone, or never had an input.
+        }
         // Closing the job ends the server and anything it started.
         if (_job != IntPtr.Zero) CloseHandle(_job);
         _server?.Dispose();

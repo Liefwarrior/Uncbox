@@ -26,9 +26,10 @@
 // (incremental consent).
 
 import { createHash, randomBytes } from 'node:crypto';
-import { mkdir, readFile, rename, unlink, writeFile } from 'node:fs/promises';
+import { readFile, unlink } from 'node:fs/promises';
 import path from 'node:path';
 import { openInBrowser } from './open.mjs';
+import { writeJsonAtomic } from './datafile.mjs';
 
 const AUTH_URL = 'https://accounts.google.com/o/oauth2/v2/auth';
 const TOKEN_URL = 'https://oauth2.googleapis.com/token';
@@ -169,10 +170,7 @@ export function createGoogle({ broadcastEvent, sendJson, isLocal, readJson, data
       });
       return;
     }
-    await mkdir(dataDir, { recursive: true });
-    const tmp = `${file}.tmp`;
-    await writeFile(tmp, JSON.stringify(next, null, 2), { mode: 0o600 });
-    await rename(tmp, file);
+    await writeJsonAtomic(file, next, { mode: 0o600, pretty: true });
   }
 
   /** What the page may know. Never the client secret or any token. */

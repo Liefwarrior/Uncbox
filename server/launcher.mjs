@@ -12,10 +12,11 @@
 import { execFile, spawn } from 'node:child_process';
 import { createHash, randomUUID } from 'node:crypto';
 import { createReadStream } from 'node:fs';
-import { mkdir, readdir, readFile, rename, stat, writeFile } from 'node:fs/promises';
+import { mkdir, readdir, readFile, rename, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { openInBrowser } from './open.mjs';
 import { noHelpers } from './switches.mjs';
+import { writeJsonAtomic } from './datafile.mjs';
 
 export const TILE_TYPES = ['app', 'folder', 'file', 'url', 'steam'];
 const MAX_NAME = 60;
@@ -202,10 +203,7 @@ export function createLauncher({ sendJson, isLocal, readJson, dataDir }) {
   }
 
   async function save(tiles) {
-    await mkdir(dataDir, { recursive: true });
-    const tmp = `${file}.tmp`;
-    await writeFile(tmp, JSON.stringify({ tiles }, null, 2));
-    await rename(tmp, file);
+    await writeJsonAtomic(file, { tiles }, { pretty: true });
   }
 
   async function saveTile(body) {

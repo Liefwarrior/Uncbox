@@ -1,6 +1,7 @@
 // OBS, over obs-websocket v5 (built into OBS 28 and newer): stream health for the OBS widget and
 // the buttons that control OBS. Nothing starts until the page first asks, so people who don't use
-// the widget never have a socket open. The connection settings live in data/obs.json on this PC;
+// the widget never have a socket open, and the socket (and its retries while OBS is closed) goes
+// away again a minute after the last ask. The connection settings live in data/obs.json on this PC;
 // the password is never sent to the page, which is only told whether one is set.
 //
 //   GET  /api/obs            the live snapshot, also pushed as an "obs" event (at most once a second)
@@ -9,9 +10,11 @@
 //   POST /api/obs/action     { type, ... } switches scenes, starts and stops things; this PC only
 
 import { createHash } from 'node:crypto';
-import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
+import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { offline } from './switches.mjs';
+import { writeJsonAtomic } from './datafile.mjs';
+import { createLease, HELPER_IDLE_MS } from './lifecycle.mjs';
 
 export const DEFAULT_SETTINGS = { host: '127.0.0.1', port: 4455 };
 
@@ -232,10 +235,7 @@ export function createSettingsStore(dataDir) {
       }
     },
     async set(settings) {
-      await mkdir(dataDir, { recursive: true });
-      const tmp = `${file}.tmp`;
-      await writeFile(tmp, JSON.stringify(settings), { mode: 0o600 });
-      await rename(tmp, file);
+      await writeJsonAtomic(file, settings, { mode: 0o600 });
     },
   };
 }
@@ -520,6 +520,9 @@ export function createObsClient({ WebSocketImpl = globalThis.WebSocket, getSetti
       clearTimeout(emitTimer);
       retryTimer = emitTimer = null;
       drop();
+      // Whatever it last knew is out of date by the time it starts again.
+      snap = emptySnapshot();
+      lastJson = '';
     },
     request,
     snapshot: () => snap,
@@ -533,21 +536,26 @@ export function createObsClient({ WebSocketImpl = globalThis.WebSocket, getSetti
 // ---- wiring into the server ----
 
 /** The route handler for /api/obs. */
-export function createObs({ broadcastEvent, sendJson, isLocal, readJson, dataDir, WebSocketImpl }) {
+/** The connection to OBS is dropped when nothing has asked about OBS this long (a widget asks every 30 s). */
+export const IDLE_MS = HELPER_IDLE_MS;
+
+export function createObs({ broadcastEvent, sendJson, isLocal, readJson, dataDir, WebSocketImpl, idleMs = IDLE_MS, setTimer, clearTimer }) {
   const store = createSettingsStore(dataDir);
   const client = createObsClient({
     WebSocketImpl,
     getSettings: () => store.get(),
     onSnapshot: (snap) => broadcastEvent('obs', snap),
   });
+  // While nobody is looking at OBS, nothing keeps knocking on its door either.
+  const lease = createLease({ idleMs, setTimer, clearTimer, start: () => client.start(), stop: () => client.stop() });
 
   const publicSettings = (s) => ({ host: s.host, port: s.port, passwordSet: Boolean(s.password) });
 
-  return async function handle(req, res, url) {
+  async function handle(req, res, url) {
     const route = url.pathname.slice('/api/obs'.length);
     try {
       if (route === '' && req.method === 'GET') {
-        client.start();
+        lease.touch();
         return sendJson(res, 200, client.snapshot());
       }
       if (route === '/settings') {
@@ -556,7 +564,7 @@ export function createObs({ broadcastEvent, sendJson, isLocal, readJson, dataDir
         if (req.method === 'POST') {
           const next = mergeSettings(await store.get(), await readJson(req));
           await store.set(next);
-          client.start();
+          lease.touch();
           client.reconnect();
           return sendJson(res, 200, publicSettings(next));
         }
@@ -565,6 +573,7 @@ export function createObs({ broadcastEvent, sendJson, isLocal, readJson, dataDir
       if (route === '/action' && req.method === 'POST') {
         if (!isLocal(req)) return sendJson(res, 403, { error: 'Run this on the PC OBS is on.' });
         const { requestType, requestData } = actionRequest(await readJson(req));
+        if (lease.active) lease.touch();
         try {
           await client.request(requestType, Object.keys(requestData).length ? requestData : undefined);
         } catch (err) {
@@ -576,5 +585,9 @@ export function createObs({ broadcastEvent, sendJson, isLocal, readJson, dataDir
     } catch (err) {
       return sendJson(res, err.status || 500, { error: err.status ? err.message : 'OBS error' });
     }
-  };
+  }
+
+  /** Disconnects from OBS now (the server is shutting down). */
+  handle.close = lease.close;
+  return handle;
 }

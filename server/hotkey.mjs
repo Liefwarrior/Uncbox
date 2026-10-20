@@ -2,6 +2,10 @@
 // is in front, so on Windows a small helper watches the one key Uncbox asks for and reports each
 // press. It reads the key's state rather than registering a hotkey, so the key still reaches the
 // game and every other app (typing "=" in chat keeps working), and it never sees any other key.
+//
+// This helper deliberately has no idle shutdown. The key must work while a game has focus and no
+// Uncbox page is being looked at (the page may be minimized to the tray), so it runs for as long as
+// clips are switched on in the settings, and stops when they are turned off or the server stops.
 
 import { spawn } from 'node:child_process';
 import { createInterface } from 'node:readline';

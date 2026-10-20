@@ -5,11 +5,16 @@
 //   GET  /api/media               what's playing, also pushed as a "media" event when it changes
 //   GET  /api/media/art?v=<hash>  the current cover, as a small image
 //   POST /api/media/control       { action: toggle | next | previous | seek, position? }; this PC only
+//
+// The helper is a lease: the first ask starts it, and it stops again once nothing has asked for a
+// minute and a half. A widget on the page asks again every 30 seconds while it shows, so it runs
+// only then.
 
 import { spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { createInterface } from 'node:readline';
 import { noHelpers } from './switches.mjs';
+import { createLease, HELPER_IDLE_MS } from './lifecycle.mjs';
 
 // ---- the helper's script ----
 
@@ -249,7 +254,10 @@ function startHelper(onLine) {
   return child;
 }
 
-export function createMedia({ broadcastEvent, isLocal, sendJson, readJson, appName }) {
+/** The helper stops when nothing has asked for the music this long. */
+export const IDLE_MS = HELPER_IDLE_MS;
+
+export function createMedia({ broadcastEvent, isLocal, sendJson, readJson, appName, idleMs = IDLE_MS, setTimer, clearTimer, spawnHelper = startHelper, platform = process.platform }) {
   const art = createArtCache();
   let media = null;
   let helper = null;
@@ -275,19 +283,37 @@ export function createMedia({ broadcastEvent, isLocal, sendJson, readJson, appNa
     if (send) broadcastEvent('media', stamped());
   }
 
-  function ensureHelper() {
-    if (process.platform !== 'win32' || noHelpers() || helper) return;
-    helper = startHelper(onLine);
-    helper.on('exit', () => (helper = null));
+  function startMedia() {
+    if (platform !== 'win32' || noHelpers() || helper) return;
+    const child = spawnHelper(onLine);
+    helper = child;
+    child.on('exit', () => {
+      if (helper !== child) return;
+      // It died on its own: the next ask starts a fresh one.
+      helper = null;
+      lease.close();
+    });
   }
 
-  return async function handle(req, res, url) {
+  function stopMedia() {
+    const child = helper;
+    helper = null;
+    // What it last said may be out of date by the time it runs again.
+    media = null;
+    art.clear();
+    child?.kill();
+  }
+
+  const lease = createLease({ idleMs, start: startMedia, stop: stopMedia, setTimer, clearTimer });
+
+  async function handle(req, res, url) {
     try {
       if (url.pathname === '/api/media') {
-        ensureHelper();
+        lease.touch();
         return sendJson(res, 200, stamped());
       }
       if (url.pathname === '/api/media/art') {
+        if (helper) lease.touch();
         const cover = art.get(url.searchParams.get('v') ?? '');
         if (!cover) return sendJson(res, 404, { error: 'No cover' });
         // The version is in the address, so a given address never changes.
@@ -300,6 +326,7 @@ export function createMedia({ broadcastEvent, isLocal, sendJson, readJson, appNa
         const cmd = normalizeCommand(await readJson(req));
         if (!cmd) return sendJson(res, 400, { error: 'Unknown control' });
         if (!helper) return sendJson(res, 409, { error: 'Nothing is playing' });
+        lease.touch();
         helper.stdin.write(`${encodeCommand(cmd)}\n`);
         return sendJson(res, 200, { ok: true });
       }
@@ -307,5 +334,9 @@ export function createMedia({ broadcastEvent, isLocal, sendJson, readJson, appNa
     } catch (err) {
       return sendJson(res, err.status || 500, { error: err.message || 'Media error' });
     }
-  };
+  }
+
+  /** Stops the helper now (the server is shutting down). */
+  handle.close = lease.close;
+  return handle;
 }

@@ -1,5 +1,7 @@
 // Data for the widgets that need this PC: system load, what's playing, and Windows notifications.
-// Each starts only when a widget first asks, so none of it runs for people who don't use them.
+// Each starts only when a widget first asks, so none of it runs for people who don't use them. The
+// music helper also stops again once no widget has asked for a minute (see media.mjs); system
+// load and notifications are one-shot reads with nothing left running between asks.
 //
 //   GET /api/system          { cpu, memory: { used, total }, gpu: { name, load, temp, used, total } | null }
 //   /api/media, /api/media/art, /api/media/control   what's playing and its controls (server/media.mjs)
@@ -130,7 +132,7 @@ async function notifications(after) {
 export function createWidgets({ broadcastEvent, isLocal, sendJson, readJson }) {
   const media = createMedia({ broadcastEvent, isLocal, sendJson, readJson, appName });
 
-  return async function handle(req, res, url) {
+  async function handle(req, res, url) {
     try {
       if (url.pathname === '/api/system') return sendJson(res, 200, await system());
       if (url.pathname.startsWith('/api/media')) return media(req, res, url);
@@ -144,5 +146,9 @@ export function createWidgets({ broadcastEvent, isLocal, sendJson, readJson }) {
     } catch (err) {
       return sendJson(res, err.status || 500, { error: err.message || 'Widget error' });
     }
-  };
+  }
+
+  /** Stops the helpers (the server is shutting down). */
+  handle.close = media.close;
+  return handle;
 }

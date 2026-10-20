@@ -12,11 +12,12 @@
 import { EventEmitter } from 'node:events';
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { readFileSync } from 'node:fs';
-import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
+import { readFile } from 'node:fs/promises';
 import net from 'node:net';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { offline } from './switches.mjs';
+import { writeJsonAtomic } from './datafile.mjs';
 
 function builtInClientId() {
   if (process.env.UNCBOX_DISCORD_CLIENT_ID) return process.env.UNCBOX_DISCORD_CLIENT_ID.trim();
@@ -272,10 +273,7 @@ export function createDiscordBridge({ dataDir, onChange }) {
   }
 
   async function save() {
-    await mkdir(dataDir, { recursive: true });
-    const tmp = `${file}.tmp`;
-    await writeFile(tmp, JSON.stringify(config, null, 2), { mode: 0o600 });
-    await rename(tmp, file);
+    await writeJsonAtomic(file, config, { mode: 0o600, pretty: true });
   }
 
   async function tokenRequest(params) {

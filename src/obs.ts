@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { listen, onConnection } from './events';
+import { keepAlive } from './keepAlive';
 
 // OBS, live from the Uncbox server (server/obs.mjs), which talks to OBS over its WebSocket server.
 // The password stays on the server; this side only ever sees whether one is set.
@@ -52,10 +53,13 @@ export function useObs(on = true): ObsSnapshot | null {
     load();
     const stopConnection = onConnection(load);
     const stop = listen('obs', (data) => setSnap(JSON.parse(data)));
+    // The server lets go of OBS when nobody has asked for a while.
+    const stopAsking = keepAlive('/api/obs');
     return () => {
       alive = false;
       stop();
       stopConnection();
+      stopAsking();
     };
   }, [on]);
   return snap;

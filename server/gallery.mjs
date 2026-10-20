@@ -15,9 +15,10 @@
 // UNCBOX_GALLERY_URL changes where the gallery is read from: another https address (a branch), or a
 // folder on this PC (a plain path or file://). All of it only answers the PC Uncbox runs on.
 
-import { mkdir, readFile, rename, stat, writeFile } from 'node:fs/promises';
+import { readFile, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { writeJsonAtomic } from './datafile.mjs';
 
 export const DEFAULT_GALLERY_URL = 'https://raw.githubusercontent.com/Liefwarrior/Uncbox/main/gallery/';
 
@@ -194,10 +195,7 @@ export function createGallery({ dataDir, sendJson, isLocal, baseUrl = DEFAULT_GA
 
   async function saveCache() {
     try {
-      await mkdir(dataDir, { recursive: true });
-      const tmp = `${cacheFile}.tmp`;
-      await writeFile(tmp, JSON.stringify({ source: base, fetchedAt: cache.fetchedAt, index: cache.index }));
-      await rename(tmp, cacheFile);
+      await writeJsonAtomic(cacheFile, { source: base, fetchedAt: cache.fetchedAt, index: cache.index });
     } catch {
       // Not being able to remember it only means asking again next time.
     }

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { listen } from './events';
+import { keepAlive } from './keepAlive';
 
 // Steam, live from the Steam client on this PC (server/steam.mjs): what you're playing and your
 // recent games. Shared by the Steam panel and the game panel, which hands the panel to a game Steam starts.
@@ -43,9 +44,12 @@ export function useSteam(on = true) {
       .then((s) => alive && setSnap(s))
       .catch(() => {});
     const stop = listen('steam', (data) => setSnap(JSON.parse(data)));
+    // The server stops reading Steam when nobody has asked for a while.
+    const stopAsking = keepAlive('/api/steam');
     return () => {
       alive = false;
       stop();
+      stopAsking();
     };
   }, [on]);
   return on ? snap : null;

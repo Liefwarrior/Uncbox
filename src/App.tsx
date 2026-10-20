@@ -16,7 +16,8 @@ import { usePresetDrop } from './presetio';
 import type { BoardId } from './state/model';
 import { activePreset } from './state/presets';
 import { useAppState } from './state/useAppState';
-import { dismissUndoOnSwitch } from './undo';
+import { listen } from './events';
+import { dismissUndoOnSwitch, showNotice } from './undo';
 
 function initialStreamMode() {
   const v = new URLSearchParams(window.location.search).get('stream');
@@ -92,6 +93,20 @@ export function App() {
   usePresetDrop(state, mutate);
 
   useEffect(dismissUndoOnSwitch, [state.preset]);
+
+  // The server says so when it had to bring back the last good copy of the saved settings.
+  useEffect(
+    () =>
+      listen('notice', (data) => {
+        try {
+          const { message } = JSON.parse(data);
+          if (typeof message === 'string' && message) showNotice(message);
+        } catch {
+          // Not a message we understand.
+        }
+      }),
+    [],
+  );
 
   const render = (id: BoardId) => renderPanel(id, { state, data, def, mutate, mutatePreset });
 

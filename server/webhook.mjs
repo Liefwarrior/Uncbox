@@ -3,8 +3,9 @@
 // part of the shared state, and the page is only ever told whether one is set and its last four
 // characters, never the whole thing.
 
-import { mkdir, readFile, rename, unlink, writeFile } from 'node:fs/promises';
+import { readFile, unlink } from 'node:fs/promises';
 import path from 'node:path';
+import { writeJsonAtomic } from './datafile.mjs';
 
 /** Discord turns away files over 10 MB on normal servers. The page aims for 9.5 MB to stay clear. */
 export const DISCORD_MAX_BYTES = 10_000_000;
@@ -78,10 +79,7 @@ export function createWebhookStore(dataDir) {
       }
     },
     async set(url) {
-      await mkdir(dataDir, { recursive: true });
-      const tmp = `${file}.tmp`;
-      await writeFile(tmp, JSON.stringify({ url }), { mode: 0o600 });
-      await rename(tmp, file);
+      await writeJsonAtomic(file, { url }, { mode: 0o600 });
     },
     async clear() {
       await unlink(file).catch((err) => {

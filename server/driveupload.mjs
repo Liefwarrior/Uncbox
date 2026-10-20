@@ -13,11 +13,12 @@
 // goes up at a time; clips saved while one is going wait their turn. Local PC only. The folder's id
 // is kept in data/google-drive-upload.json, and found again by name if it was deleted.
 
-import { mkdir, open, readFile, rename, stat, writeFile } from 'node:fs/promises';
+import { open, readFile, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { NAME } from './clipnames.mjs';
 import { driveProblem } from './drive.mjs';
 import { GOOGLE_SCOPES } from './google.mjs';
+import { writeJsonAtomic } from './datafile.mjs';
 
 const FILES = 'https://www.googleapis.com/drive/v3/files';
 const UPLOAD = 'https://www.googleapis.com/upload/drive/v3/files';
@@ -78,10 +79,7 @@ export function createDriveUpload({ google, dir, dataDir, broadcastEvent = () =>
   }
 
   async function rememberFolder(folderId) {
-    await mkdir(dataDir, { recursive: true });
-    const tmp = `${file}.tmp`;
-    await writeFile(tmp, JSON.stringify({ folderId }, null, 2));
-    await rename(tmp, file);
+    await writeJsonAtomic(file, { folderId }, { pretty: true });
   }
 
   /** A Drive API call, as JSON. Throws a problem in plain words when Google refuses. */

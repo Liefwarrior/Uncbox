@@ -19,8 +19,9 @@
 // While a widget watches, the stream is read every 30 s and pushed as a "twitchstream" event.
 // With nobody watching, nothing runs. Everything here is for this PC only.
 
-import { mkdir, readFile, rename, unlink, writeFile } from 'node:fs/promises';
+import { readFile, unlink } from 'node:fs/promises';
 import path from 'node:path';
+import { writeJsonAtomic } from './datafile.mjs';
 
 const ID_URL = 'https://id.twitch.tv/oauth2';
 const HELIX = 'https://api.twitch.tv/helix';
@@ -123,10 +124,7 @@ export function createTwitchStore(dataDir) {
       }
     },
     async set(data) {
-      await mkdir(dataDir, { recursive: true });
-      const tmp = `${file}.tmp`;
-      await writeFile(tmp, JSON.stringify(data), { mode: 0o600 });
-      await rename(tmp, file);
+      await writeJsonAtomic(file, data, { mode: 0o600 });
     },
     async clear() {
       await unlink(file).catch((err) => {

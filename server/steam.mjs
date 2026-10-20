@@ -16,6 +16,7 @@ import { execFile } from 'node:child_process';
 import { createReadStream } from 'node:fs';
 import { readdir, readFile, stat } from 'node:fs/promises';
 import path from 'node:path';
+import { createLease, HELPER_IDLE_MS } from './lifecycle.mjs';
 import { openInBrowser } from './open.mjs';
 import { noHelpers, offline } from './switches.mjs';
 import { createSteamWindowed } from './steamwindowed.mjs';
@@ -136,7 +137,10 @@ const VIEWS = {
   library: ['steam://close/bigpicture', 'steam://open/games'],
 };
 
-export function createSteam({ broadcastEvent, sendJson, isLocal, readJson, dataDir }) {
+/** Steam stops being read when nothing has asked for it this long. */
+export const IDLE_MS = HELPER_IDLE_MS;
+
+export function createSteam({ broadcastEvent, sendJson, isLocal, readJson, dataDir, idleMs = IDLE_MS, setTimer, clearTimer }) {
   let root = null;
   let names = new Map();
   let user = null;
@@ -144,6 +148,17 @@ export function createSteam({ broadcastEvent, sendJson, isLocal, readJson, dataD
   let running = { appid: 0, since: 0 };
   let snap = { available: false };
   let polling = null;
+  let starting = null;
+  const lease = createLease({
+    idleMs,
+    setTimer,
+    clearTimer,
+    start: () => {},
+    stop: () => {
+      clearInterval(polling);
+      polling = null;
+    },
+  });
 
   async function findSteam() {
     if (process.platform !== 'win32') return null;
@@ -318,14 +333,19 @@ export function createSteam({ broadcastEvent, sendJson, isLocal, readJson, dataD
     return true;
   }
 
-  return async function handle(req, res, url) {
+  async function handle(req, res, url) {
     try {
+      // Reading Steam every few seconds runs only while a panel keeps asking (it does every 30 s).
+      lease.touch();
       if (!polling) {
-        // Names load once up front; after that, only new games trigger another look.
-        await findSteam().then((r) => (root = r));
-        if (root) await loadNames();
-        await poll();
-        polling = setInterval(poll, POLL_MS);
+        starting ??= (async () => {
+          // Names load once up front; after that, only new games trigger another look.
+          await findSteam().then((r) => (root = r));
+          if (root) await loadNames();
+          await poll();
+          if (lease.active && !polling) polling = setInterval(poll, POLL_MS);
+        })().finally(() => (starting = null));
+        await starting;
       }
       if (url.pathname === '/api/steam') return sendJson(res, 200, snap);
       if (url.pathname === '/api/steam/windowed') {
@@ -363,5 +383,9 @@ export function createSteam({ broadcastEvent, sendJson, isLocal, readJson, dataD
     } catch (err) {
       return sendJson(res, 500, { error: err.message || 'Steam error' });
     }
-  };
+  }
+
+  /** Stops reading Steam now (the server is shutting down). */
+  handle.close = lease.close;
+  return handle;
 }
