@@ -84,7 +84,7 @@ built: reading the Pokémon HP bar by its colour (a follow-up).
 
 ## HIP sprint 1: harden and innovate
 
-### HIP-1 · Local routes only answer Uncbox itself — Building
+### HIP-1 · Local routes only answer Uncbox itself — Shipped (01539d6)
 Every "this PC only" route trusts any request from this PC, so a web page open in your browser
 could post to `localhost` (launch a tile, stop the stream, replace the Google client) and a
 DNS-rebinding page could read Drive, Calendar or Gmail answers. Done when: one guard in front of
