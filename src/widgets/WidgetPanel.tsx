@@ -4,9 +4,11 @@ import { Icon } from '../components/Icon';
 import { Panel } from '../components/Panel';
 import type { Widget, WidgetSettings } from '../state/model';
 import type { MutatePreset } from '../state/useAppState';
+import { type ObsSnapshot, useObs } from '../obs';
 import { WIDGET_INFO, widgetTitle } from './catalog';
 import { describeWeather, findPlace, useMedia, useNetstats, useNotifications, useSystem, useWeather, type PingStats } from './data';
 import { fpsTone, pingTone, SPARK_H, SPARK_W, sparkline, type Tone } from './netstats';
+import { ObsBody } from './ObsWidget';
 
 interface Props {
   widget: Widget;
@@ -26,11 +28,15 @@ export function WidgetPanel({ widget, mutatePreset }: Props) {
       if (w) recipe(w);
     });
   const set: SetSettings = (patch) => edit((w) => void Object.assign(w.settings, patch));
-  const hasSettings = !['media', 'system'].includes(widget.type);
+  // OBS keeps its connection settings on the server, so its form is its own ("OBS connection" in the menu).
+  const obs = useObs(widget.type === 'obs');
+  const hasSettings = !['media', 'system', 'obs'].includes(widget.type);
   const unset =
     (widget.type === 'weather' && !s.lat && !s.lon) ||
     (widget.type === 'countdown' && !s.target) ||
-    (widget.type === 'text' && !s.text.trim());
+    (widget.type === 'text' && !s.text.trim()) ||
+    // Nothing to show viewers while OBS isn't there.
+    (widget.type === 'obs' && !obs?.connected);
 
   return (
     <Panel
@@ -50,18 +56,22 @@ export function WidgetPanel({ widget, mutatePreset }: Props) {
           widgetTitle(widget)
         )
       }
-      menu={hasSettings ? [{ label: settingsOpen ? 'Close settings' : 'Settings', icon: 'list', onSelect: () => setSettingsOpen((o) => !o) }] : undefined}
+      menu={
+        hasSettings || widget.type === 'obs'
+          ? [{ label: widget.type === 'obs' ? 'OBS connection' : settingsOpen ? 'Close settings' : 'Settings', icon: 'list', onSelect: () => setSettingsOpen((o) => !o) }]
+          : undefined
+      }
     >
       {editing && (settingsOpen || unset) && hasSettings ? (
         <Settings widget={widget} set={set} onDone={() => setSettingsOpen(false)} />
       ) : (
-        <Body widget={widget} />
+        <Body widget={widget} obs={obs} setup={settingsOpen} onSetupDone={() => setSettingsOpen(false)} />
       )}
     </Panel>
   );
 }
 
-function Body({ widget }: { widget: Widget }) {
+function Body({ widget, obs, setup, onSetupDone }: { widget: Widget; obs: ObsSnapshot | null; setup: boolean; onSetupDone: () => void }) {
   const s = widget.settings;
   switch (widget.type) {
     case 'clock':
@@ -80,6 +90,8 @@ function Body({ widget }: { widget: Widget }) {
       return <Countdown s={s} />;
     case 'text':
       return <p className="widget-text">{s.text}</p>;
+    case 'obs':
+      return <ObsBody obs={obs} setup={setup} onSetupDone={onSetupDone} />;
   }
 }
 

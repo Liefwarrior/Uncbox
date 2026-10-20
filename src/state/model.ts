@@ -59,7 +59,7 @@ export function isWidgetId(id: string): id is WidgetId {
   return id.startsWith('wdg-');
 }
 
-export const WIDGET_TYPES = ['clock', 'weather', 'media', 'notifications', 'system', 'network', 'countdown', 'text'] as const;
+export const WIDGET_TYPES = ['clock', 'weather', 'media', 'notifications', 'system', 'network', 'countdown', 'text', 'obs'] as const;
 export type WidgetType = (typeof WIDGET_TYPES)[number];
 
 /** Every widget type's settings in one shape; each type reads only its own. */

@@ -24,6 +24,7 @@ export const WIDGET_INFO: Record<WidgetType, WidgetInfo> = {
   network: { name: 'Ping & FPS', hint: 'Your connection, and frame rate in a game', icon: 'wifi', w: 4, h: 4, minW: 2, minH: 2 },
   countdown: { name: 'Countdown', hint: 'Time left until something', icon: 'timer', w: 4, h: 3, minW: 3, minH: 2 },
   text: { name: 'Text', hint: 'Any words you like', icon: 'type', w: 5, h: 3, minW: 2, minH: 2 },
+  obs: { name: 'OBS', hint: 'Stream health, scenes and recording', icon: 'cast', w: 6, h: 6, minW: 3, minH: 2 },
 };
 
 export function defaultWidgetSettings(): WidgetSettings {
