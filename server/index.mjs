@@ -40,6 +40,7 @@ import { createLauncher } from './launcher.mjs';
 import { createWeb } from './web.mjs';
 import { createTwitch } from './twitch.mjs';
 import { createWidgets } from './widgets.mjs';
+import { createGuardConfig, guardApi } from './guard.mjs';
 import { DOMAIN, loadTls } from './tls.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -170,6 +171,11 @@ async function handleDiscord(req, res, url) {
 // server to the LAN.
 const isLocal = (req) => ['127.0.0.1', '::1', '::ffff:127.0.0.1'].includes(req.socket.remoteAddress ?? '');
 
+// Loopback is not proof the request came from Uncbox: any page open in the browser connects from
+// there too. Every /api route also has to pass this (see guard.mjs). UNCBOX_ALLOWED_HOSTS adds
+// extra names, comma separated, for a reverse proxy you set up yourself.
+const guard = createGuardConfig({ bindHost: host, domains: [DOMAIN], extra: process.env.UNCBOX_ALLOWED_HOSTS });
+
 /** Which of the given programs are running ("Dungeons.exe"), for presets that notice their game starting. */
 async function running(req, res, url) {
   const names = (url.searchParams.get('names') ?? '').split(',').map((n) => n.trim().toLowerCase()).filter(Boolean);
@@ -234,6 +240,9 @@ async function handleWow(req, res, url) {
 }
 
 async function handleApi(req, res, url) {
+  if (guardApi(req, res, guard, sendJson)) return;
+  // No CORS headers anywhere, so another site's preflight is always refused.
+  if (req.method === 'OPTIONS') return sendJson(res, 405, { error: 'Method not allowed' });
   if (url.pathname === '/api/discord' || url.pathname.startsWith('/api/discord/')) return handleDiscord(req, res, url);
   if (url.pathname.startsWith('/api/wow/')) return handleWow(req, res, url);
   if (url.pathname === '/api/clips' || url.pathname.startsWith('/api/clips/')) return clips.handle(req, res, url);

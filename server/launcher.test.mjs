@@ -9,7 +9,6 @@ import {
   launchTile,
   listShortcuts,
   parseLink,
-  sameOrigin,
   validateTile,
 } from './launcher.mjs';
 
@@ -131,26 +130,9 @@ describe('the launch route', () => {
     expect((await run('POST', '/api/launcher/launch', { id: 'tile-ffffffffffff' })).status).toBe(404);
   });
 
-  it('turns away pages from other sites', async () => {
-    const r = await run('GET', '/api/launcher/tiles', undefined, { origin: 'https://evil.example', host: 'localhost:3000' });
-    expect(r.status).toBe(403);
-    const ok = await run('GET', '/api/launcher/tiles', undefined, { origin: 'http://localhost:3000', host: 'localhost:3000' });
-    expect(ok.status).toBe(200);
-    expect(ok.data.tiles).toHaveLength(1);
-  });
-
   it('rejects an invalid tile when saving', async () => {
     const r = await run('POST', '/api/launcher/tiles', { name: 'x', type: 'url', target: 'file:///C:/x' });
     expect(r.status).toBe(400);
-  });
-});
-
-describe('sameOrigin', () => {
-  it('lets requests with no Origin through and compares the host otherwise', () => {
-    expect(sameOrigin({ headers: {} })).toBe(true);
-    expect(sameOrigin({ headers: { origin: 'https://uncbox.example', host: 'uncbox.example' } })).toBe(true);
-    expect(sameOrigin({ headers: { origin: 'https://other.example', host: 'uncbox.example' } })).toBe(false);
-    expect(sameOrigin({ headers: { origin: 'not a url', host: 'uncbox.example' } })).toBe(false);
   });
 });
 

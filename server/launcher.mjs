@@ -185,17 +185,6 @@ function startMenuDirs() {
 
 // ---- the routes ----
 
-/** A page on another site could ask for these URLs from the browser; only our own pages may. */
-export function sameOrigin(req) {
-  const origin = req.headers.origin;
-  if (!origin) return true;
-  try {
-    return new URL(origin).host === req.headers.host;
-  } catch {
-    return false;
-  }
-}
-
 export function createLauncher({ sendJson, isLocal, readJson, dataDir }) {
   const file = path.join(dataDir, 'launcher.json');
   const iconDir = path.join(dataDir, 'launcher-icons');
@@ -261,7 +250,7 @@ export function createLauncher({ sendJson, isLocal, readJson, dataDir }) {
   }
 
   return async function handle(req, res, url) {
-    if (!isLocal(req) || !sameOrigin(req)) return sendJson(res, 403, { error: 'This PC only' });
+    if (!isLocal(req)) return sendJson(res, 403, { error: 'This PC only' });
     const route = url.pathname.slice('/api/launcher'.length);
     try {
       if (req.method === 'GET' && route === '/tiles') return sendJson(res, 200, { tiles: await load() });
