@@ -21,6 +21,7 @@ export const WIDGET_INFO: Record<WidgetType, WidgetInfo> = {
   media: { name: 'Now playing', hint: 'The song or video playing on this PC', icon: 'music', w: 6, h: 3, minW: 4, minH: 2 },
   notifications: { name: 'Notifications', hint: 'Windows notifications as they arrive', icon: 'bell', w: 6, h: 5, minW: 4, minH: 3 },
   system: { name: 'System', hint: 'CPU, graphics card and memory', icon: 'gauge', w: 4, h: 4, minW: 3, minH: 3 },
+  network: { name: 'Ping & FPS', hint: 'Your connection, and frame rate in a game', icon: 'wifi', w: 4, h: 4, minW: 2, minH: 2 },
   countdown: { name: 'Countdown', hint: 'Time left until something', icon: 'timer', w: 4, h: 3, minW: 3, minH: 2 },
   text: { name: 'Text', hint: 'Any words you like', icon: 'type', w: 5, h: 3, minW: 2, minH: 2 },
 };
@@ -38,6 +39,8 @@ export function defaultWidgetSettings(): WidgetSettings {
     showBody: false,
     target: 0,
     text: '',
+    pingTarget: '',
+    showRouter: true,
   };
 }
 

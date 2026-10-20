@@ -165,6 +165,7 @@ browser asks you to pick each window again after a reload.
 | **Now playing** | The song or video playing on this PC, with its cover: anything that shows in Windows' media controls (Spotify, YouTube in a browser…). |
 | **Notifications** | Windows notifications as they arrive. Titles only unless you ask for the message too, and you can limit it to some apps. It's on stream, so leave private apps out. Only shown on this PC. Needs Node.js 22.5 or newer. |
 | **System** | CPU, graphics card (NVIDIA) and memory load. |
+| **Ping & FPS** | Your ping (how long a connection to 1.1.1.1 or any host you choose takes), jitter, packet loss and, if you like, the ping to your router. While SMITE 2 is running it shows the game's own ping and frame rate instead, with the 1% low. Only measures while the widget is on screen. |
 | **Countdown** | Time left until a date you pick. |
 | **Text** | Any words you like. |
 
@@ -284,6 +285,7 @@ server/discord.mjs         Discord voice bridge over the local RPC pipe
 server/open.mjs            opens setup pages in the default browser (fixed list only)
 server/clips.mjs           saves and serves clips, sends them to Discord; server/hotkey.mjs watches the clip key
 server/widgets.mjs         system load, now playing and notifications for the widgets
+server/netstats.mjs        ping, jitter and loss, and a game's frame rate, for the Ping & FPS widget
 server/steam.mjs           the Steam panel, from the Steam app's files
 server/ocr.mjs             Windows text recognition for the Stats panel
 src/widgets/               the widget library

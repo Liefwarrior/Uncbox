@@ -9,7 +9,3 @@ Things to build next, newest first. Move an item out when it ships.
 - **Screen reading for more games.** The Stats panel and the SMITE 2 reader read numbers off the
   game picture with Windows OCR. Ready-made readers for other games, such as a Pokémon party's HP
   and fainted markers or a death counter that ticks itself, would make those presets automatic.
-- **Ping and FPS widget.** SMITE 2 writes a performance timeline while you play
-  (`%LOCALAPPDATA%\SMITE2Alpha\Saved\Logs\PEX_Timeline_*.csv`, one row a second: frame time, GPU
-  time, ping, packets), and its HUD shows an FPS counter the SMITE reader already picks up. A widget
-  could show live ping and frame rate from these, and from other games' equivalents.

@@ -59,7 +59,7 @@ export function isWidgetId(id: string): id is WidgetId {
   return id.startsWith('wdg-');
 }
 
-export const WIDGET_TYPES = ['clock', 'weather', 'media', 'notifications', 'system', 'countdown', 'text'] as const;
+export const WIDGET_TYPES = ['clock', 'weather', 'media', 'notifications', 'system', 'network', 'countdown', 'text'] as const;
 export type WidgetType = (typeof WIDGET_TYPES)[number];
 
 /** Every widget type's settings in one shape; each type reads only its own. */
@@ -81,6 +81,10 @@ export interface WidgetSettings {
   target: number;
   /** Text: what it says. Countdown: what's coming. */
   text: string;
+  /** Ping & FPS: the host (or host:port) to ping, or '' for the default. */
+  pingTarget: string;
+  /** Ping & FPS: also show the ping to this PC's router. */
+  showRouter: boolean;
 }
 
 export interface Widget {

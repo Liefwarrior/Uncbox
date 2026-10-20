@@ -24,6 +24,7 @@ import { createClips } from './clips.mjs';
 import { createDiscordBridge } from './discord.mjs';
 import { openInBrowser, pageFor } from './open.mjs';
 import { createGameSettings } from './gamesettings.mjs';
+import { createNetstats } from './netstats.mjs';
 import { createOcr } from './ocr.mjs';
 import { createSmite } from './smite.mjs';
 import { createSteam } from './steam.mjs';
@@ -179,6 +180,7 @@ const clips = createClips({
 });
 
 const widgets = createWidgets({ broadcastEvent, isLocal, sendJson });
+const netstats = createNetstats({ broadcastEvent, isLocal, sendJson });
 const steam = createSteam({ broadcastEvent, sendJson, isLocal, readJson, dataDir });
 const ocr = createOcr({ isLocal, sendJson, readBody });
 const smite = createSmite({ broadcastEvent, sendJson });
@@ -211,6 +213,7 @@ async function handleApi(req, res, url) {
   if (url.pathname.startsWith('/api/wow/')) return handleWow(req, res, url);
   if (url.pathname === '/api/clips' || url.pathname.startsWith('/api/clips/')) return clips.handle(req, res, url);
   if (['/api/system', '/api/media', '/api/notifications'].includes(url.pathname)) return widgets(req, res, url);
+  if (url.pathname === '/api/netstats') return netstats(req, res, url);
   if (url.pathname === '/api/steam' || url.pathname.startsWith('/api/steam/')) return steam(req, res, url);
   if (url.pathname === '/api/ocr') return ocr(req, res);
   if (url.pathname === '/api/smite') return smite(req, res);

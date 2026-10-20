@@ -1352,6 +1352,100 @@ input[type='color'] {
 .meter small:empty {
   display: none;
 }
+/* Ping & FPS: big numbers and sparklines when there's room, one line when there isn't. */
+.widget-net {
+  --net-good: var(--good);
+  --net-warn: #f5b942;
+  --net-bad: var(--bad);
+  height: 100%;
+}
+.tone--good {
+  color: var(--net-good);
+}
+.tone--warn {
+  color: var(--net-warn);
+}
+.tone--bad {
+  color: var(--net-bad);
+}
+.widget-net__compact {
+  display: none;
+  place-items: center;
+  height: 100%;
+  margin: 0;
+  font-family: var(--font-num);
+  font-size: clamp(16px, min(14cqw, 40cqh), 40px);
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  text-align: center;
+}
+.widget-net__full {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  align-content: safe center;
+  gap: 14px;
+  height: 100%;
+}
+.net-block {
+  display: grid;
+  align-content: safe center;
+  gap: 2px;
+  min-width: 0;
+}
+.net-block__label {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.net-block__big {
+  font-family: var(--font-num);
+  font-size: clamp(28px, min(22cqw, 36cqh), 80px);
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+.net-block__big small {
+  font-size: 0.4em;
+  font-weight: 500;
+}
+.net-block__detail {
+  color: var(--muted);
+  font-size: 12px;
+}
+.net-spark {
+  width: 100%;
+  height: clamp(18px, 20cqh, 56px);
+}
+.net-spark--good {
+  color: var(--net-good);
+}
+.net-spark--warn {
+  color: var(--net-warn);
+}
+.net-spark--bad {
+  color: var(--net-bad);
+}
+.net-spark__lost {
+  stroke: var(--net-bad);
+}
+/* Two blocks side by side need width; narrow panels stack them. */
+@container (max-width: 260px) {
+  .widget-net__full {
+    grid-auto-flow: row;
+    grid-auto-columns: auto;
+  }
+}
+/* Small panels: just "42 ms · 144 fps". */
+@container (max-height: 120px) or (max-width: 140px) {
+  .widget-net__full {
+    display: none;
+  }
+  .widget-net__compact {
+    display: grid;
+  }
+}
 .widget-text {
   display: grid;
   place-items: center;
