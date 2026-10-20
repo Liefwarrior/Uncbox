@@ -109,4 +109,22 @@ describe('hydrate', () => {
     expect(p.layout.length).toBe(PRESETS.pokemon.layout.length - 1);
     expect(state.camera).toEqual({ enabled: true, deviceId: 'cam', mirrored: false });
   });
+
+  it('keeps the Play here game and the clip key, and drops bad ones', () => {
+    const good = hydrate({
+      version: 2,
+      clips: { enabled: false, key: 'F9' },
+      presets: { wow: { game: { source: 'native', nativeGame: { process: 'WowClassic', title: 'World of Warcraft' } } } },
+    });
+    expect(good.clips).toEqual({ enabled: false, key: 'F9' });
+    expect(good.presets.wow.game.nativeGame).toEqual({ process: 'WowClassic', title: 'World of Warcraft' });
+    const bad = hydrate({
+      version: 2,
+      clips: { key: 'KeyW' },
+      presets: { wow: { game: { nativeGame: { title: 'no process' } } }, smite2: { game: { nativeGame: 'x' } } },
+    });
+    expect(bad.clips).toEqual({ enabled: true, key: 'Equal' });
+    expect(bad.presets.wow.game.nativeGame).toBeNull();
+    expect(bad.presets.smite2.game.nativeGame).toBeNull();
+  });
 });

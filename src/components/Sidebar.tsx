@@ -4,6 +4,7 @@ import { defaultPresetData } from '../state/hydrate';
 import type { Mutate, MutatePreset, SyncStatus } from '../state/useAppState';
 import { useArmed } from '../useArmed';
 import { placePanel } from '../layout';
+import { send, shell } from '../native';
 import { PANEL_INFO } from '../panels/catalog';
 import { BackgroundPicker } from './BackgroundPicker';
 import { ClipsSection } from './Clips';
@@ -91,6 +92,11 @@ export function Sidebar({ state, mutate, mutatePreset, status, onStreamMode }: P
             <Icon name="cast" /> Stream mode
           </button>
           <p className="hint">Full screen, edit controls hidden. Esc to come back.</p>
+          {shell && (
+            <button className="side-link side-link--quiet" onClick={() => send({ type: 'minimize' })}>
+              <Icon name="minus" /> Minimize to the tray
+            </button>
+          )}
 
           <ClipsSection settings={state.clips} mutate={mutate} />
 

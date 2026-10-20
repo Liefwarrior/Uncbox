@@ -57,6 +57,14 @@ The **Get set up** list in the sidebar walks you through the rest:
 Something amazing just happened? Press **=** to save the last 60 seconds of your game as a clip.
 See [Clips](#clips).
 
+## The Uncbox app (Windows)
+
+Rather run Uncbox as an app? `npm run app` opens it full screen, starts the server for you, and
+keeps it in the tray when minimized. In the app, the game panel can **Play here**: your game's own
+window moves into the panel, so you play it right inside the dashboard with mouse, keyboard or
+controller, at its full frame rate. It needs the [.NET 10 SDK](https://dotnet.microsoft.com/download)
+to build. See [native/README.md](native/README.md).
+
 ## Going live with OBS
 
 1. Open Uncbox in its own window. In Edge: `start msedge --app=http://localhost:5170`
@@ -166,6 +174,8 @@ server/open.mjs            opens setup pages in the default browser (fixed list 
 server/clips.mjs           saves and serves clips; server/hotkey.mjs watches the clip key
 src/clips/                 instant replay: the encoder worker, its store, the clip keys
 src/events.ts              the page's one live connection to /api/events
+native/UncboxShell/        the Windows app, where the game can be played in its panel
+                           (see native/README.md); src/native.ts is the page's side
 src/panels/catalog.ts      every panel type: title, sidebar hint, default and minimum size
 src/panels/index.tsx       which component draws each panel type
 src/presets.ts             presets: titles, default layouts, starting data

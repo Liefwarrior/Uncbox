@@ -40,7 +40,8 @@ export interface GridItem {
   h: number;
 }
 
-export type VideoSource = 'none' | 'device' | 'window' | 'chroma';
+/** 'native' is the game's own window placed in the panel, in the native shell (src/native.ts). */
+export type VideoSource = 'none' | 'device' | 'window' | 'chroma' | 'native';
 export type VideoFit = 'contain' | 'cover' | 'stretch';
 
 export interface Crop {
@@ -60,6 +61,8 @@ export interface GameSettings {
   crop: Crop;
   /** Solid color for the "chroma slot" source; key it out in OBS and put your capture under it. */
   chroma: string;
+  /** Play here: the game window to put back in the panel when it (or Uncbox) starts again. */
+  nativeGame: { process: string; title: string } | null;
 }
 
 export interface CameraSettings {
