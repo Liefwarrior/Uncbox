@@ -9,6 +9,7 @@ import {
   emptySlot,
   milestone,
   note,
+  type Widget,
 } from './state/model';
 
 export interface PresetDef {
@@ -264,6 +265,53 @@ export const PRESETS: Record<PresetId, PresetDef> = {
       d.counters = [counter('Deaths')];
       d.milestones = { label: 'Goals', items: Array.from({ length: 5 }, () => milestone()) };
       d.notes = [note('Check audio levels'), note('Say hi to chat')];
+      return d;
+    },
+  },
+
+  // Work, browse and plan between games. There is no game panel (add one from the sidebar if you
+  // want it), and the widgets come with the preset, like the Steam preset's clock and system.
+  desk: {
+    id: 'desk',
+    name: 'Desk',
+    blurb: 'Work, browse and plan between games',
+    titles: {},
+    featured: ['notes', 'progress', 'run', 'camera', 'game', 'chat', 'discord'],
+    slots: { variant: 'list', name: 'Name', detail: 'Note', showDown: false },
+    layout: [
+      { i: 'wdg-deskweb', x: 0, y: 0, w: 13, h: 16 },
+      // Drive spans the whole row under the browser for now.
+      // TODO(UBX-9): Calendar takes the right part of this row (x 8 to 13); Drive shrinks to x 0 to 8.
+      { i: 'wdg-deskdrive', x: 0, y: 16, w: 13, h: 8 },
+      { i: 'wdg-deskclock', x: 13, y: 0, w: 6, h: 4 },
+      { i: 'wdg-deskweather', x: 13, y: 4, w: 6, h: 4 },
+      { i: 'wdg-desklauncher', x: 13, y: 8, w: 6, h: 7 },
+      { i: 'notes', x: 13, y: 15, w: 6, h: 9 },
+      { i: 'wdg-deskfocus', x: 19, y: 0, w: 5, h: 7 },
+      { i: 'wdg-deskmedia', x: 19, y: 7, w: 5, h: 4 },
+      { i: 'wdg-desknotifications', x: 19, y: 11, w: 5, h: 13 },
+    ],
+    data: () => {
+      const d = baseData();
+      d.run = { title: 'Desk', subtitle: '', timer: timer() };
+      d.notes = [note('Plan the evening'), note('Reply to messages')];
+      const widget = (id: Widget['id'], type: Widget['type'], settings: Partial<Widget['settings']> = {}): Widget => ({
+        id,
+        type,
+        title: '',
+        settings: { ...defaultWidgetSettings(), ...settings },
+      });
+      d.widgets = [
+        // Wikipedia allows being framed (Google does not), so the Web widget opens with a page.
+        widget('wdg-deskweb', 'web', { homeUrl: 'https://en.wikipedia.org/wiki/Main_Page' }),
+        widget('wdg-deskdrive', 'drive'),
+        widget('wdg-deskclock', 'clock'),
+        widget('wdg-deskweather', 'weather'),
+        widget('wdg-desklauncher', 'launcher'),
+        widget('wdg-deskfocus', 'focus'),
+        widget('wdg-deskmedia', 'media'),
+        widget('wdg-desknotifications', 'notifications'),
+      ];
       return d;
     },
   },

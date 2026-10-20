@@ -27,7 +27,7 @@ Note:  These are planned integrations, they may not work and may result in the s
   </tr>
 </table>
 
-Two more, without screenshots yet:
+Three more, without screenshots yet:
 
 - **Minecraft Dungeons II**: torch-lit stone and emerald. A **Stats** panel reads your emeralds,
   level and more straight off the game's screen, live (see [Stats](#stats-read-off-the-screen)).
@@ -35,6 +35,8 @@ Two more, without screenshots yet:
 - **Steam Big Picture**: Steam's own look. A **Steam** panel shows what you're playing (live from
   the Steam app), its art, your session and total time, and achievements as they unlock. Between
   games, it shows your recent games.
+- **Desk**: a calm slate-and-teal board for working between games, with no game on it. A big Web
+  widget, Drive, Focus timer, Launcher, Now playing, Notifications, Clock, Weather and Notes.
 
 Every panel works in every preset, so any game can borrow from the others. Each preset also picks
 its own background in the sidebar: animated shapes or a pattern, drawn in the preset's colors.

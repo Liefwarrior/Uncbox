@@ -5,7 +5,7 @@ import { type AppState, MAX_CUSTOM, PANEL_IDS, type PanelId, PRESET_IDS, uid, WI
 import { activePreset, addCustom, canAddCustom, copyOfActive, newCustomId, takenNames, uniqueName } from '../state/presets';
 import { showNotice } from '../undo';
 import { newWidget, WIDGET_INFO } from '../widgets/catalog';
-import { defaultPresetData } from '../state/hydrate';
+import { resetLayout as resetPresetLayout } from '../state/hydrate';
 import type { Mutate, MutatePreset, SyncStatus } from '../state/useAppState';
 import { useArmed } from '../useArmed';
 import { callOut } from '../callout';
@@ -60,15 +60,7 @@ export function Sidebar({ state, mutate, mutatePreset, status, onStreamMode }: P
     callOut(w.id);
   };
   const resetLayout = () =>
-    trigger(() =>
-      mutatePreset((d) => {
-        const fresh = defaultPresetData(base);
-        d.layout = fresh.layout;
-        d.windows = [];
-        // The preset's own widgets come back with its layout; ones you added go.
-        d.widgets = fresh.widgets;
-      }),
-    );
+    trigger(() => mutatePreset((d) => resetPresetLayout(d, base)));
   const picker = useRef<HTMLInputElement>(null);
   const importFile = (file: File | undefined) => {
     if (file) void importPresetFile(file, state, mutate);

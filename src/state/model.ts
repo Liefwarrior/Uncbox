@@ -4,7 +4,7 @@ import type { BackgroundId } from '../backgrounds';
 // live between every open window, so a phone or second monitor can drive the streamed one.
 // Each game preset keeps its own layout and data; Twitch and camera settings are shared.
 
-export const PRESET_IDS = ['pokemon', 'smite2', 'wow', 'mcd2', 'steam', 'terminal'] as const;
+export const PRESET_IDS = ['pokemon', 'smite2', 'wow', 'mcd2', 'steam', 'terminal', 'desk'] as const;
 export type PresetId = (typeof PRESET_IDS)[number];
 
 /**

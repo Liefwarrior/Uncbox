@@ -200,6 +200,36 @@
   --panel-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
 }
 
+/* Desk: a calm place to work between games. Soft slate, one muted teal accent with a sage second,
+   the plain body font in sentence case, quiet borders and more room inside every panel. */
+.theme-desk {
+  --bg: #12161b;
+  --glow-1: rgba(111, 183, 171, 0.05);
+  --glow-2: rgba(163, 184, 153, 0.03);
+  --panel: rgba(24, 29, 35, 0.95);
+  --panel-top: rgba(29, 35, 42, 0.95);
+  --panel-2: #262d35;
+  --border: #29313a;
+  --text: #dfe5ea;
+  --muted: #8d98a3;
+  --accent: #6fb7ab;
+  --accent-2: #a3b899;
+  --accent-ink: #0a1714;
+  --good: #7fc29b;
+  --bad: #d9776f;
+  --font-display: var(--font-body);
+  --font-ui: var(--font-body);
+  --font-num: var(--font-body);
+  --title-case: none;
+  --title-tracking: 0.01em;
+  --title-size: 15px;
+  --title-weight: 600;
+  --radius: 12px;
+  --radius-sm: 8px;
+  --art-radius: 8px;
+  --panel-shadow: 0 6px 20px rgba(0, 0, 0, 0.22);
+}
+
 /* ---------- base ---------- */
 
 *,
@@ -576,6 +606,11 @@ input[type='color'] {
   font-family: 'Cascadia Mono Variable', Consolas, monospace;
   font-weight: 500;
   color: #a9a4ff;
+}
+.preset-card--desk strong {
+  font-family: var(--font-body);
+  font-weight: 600;
+  color: #6fb7ab;
 }
 .preset-card.on {
   border-color: var(--accent);
@@ -2567,6 +2602,13 @@ kbd {
 }
 .is-stream .panel__body {
   scrollbar-width: none;
+}
+/* Desk: more room inside. The Web widget keeps its thin edge so its resize handles stay reachable. */
+.theme-desk .panel__head {
+  padding: 14px 14px 6px 20px;
+}
+.theme-desk .panel:not(.panel--bleed):not(.widget--web) .panel__body {
+  padding: 4px 20px 16px;
 }
 
 /* Edge-to-edge content (camera); the header floats over it. */

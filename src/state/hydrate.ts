@@ -41,6 +41,17 @@ export function defaultPresetData(id: PresetId): PresetData {
   return { layout: def.layout.map((item) => ({ ...item })), ...def.data() };
 }
 
+/**
+ * "Reset layout": the preset's own panels and widgets come back where they started; windows and
+ * widgets you added go. Everything else (notes, counters, settings) stays.
+ */
+export function resetLayout(d: PresetData, base: PresetId) {
+  const fresh = defaultPresetData(base);
+  d.layout = fresh.layout;
+  d.windows = [];
+  d.widgets = fresh.widgets;
+}
+
 function eachPreset(make: (id: PresetId) => PresetData): Record<PresetId, PresetData> {
   return Object.fromEntries(PRESET_IDS.map((id) => [id, make(id)])) as Record<PresetId, PresetData>;
 }
