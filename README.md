@@ -103,6 +103,36 @@ The board is a 24 × 24 grid that fills the window, so a layout looks the same a
   brings it back any time.
 - **Reset layout** puts the preset's panels back where they started.
 
+### Sharing presets
+
+Your setup is a file you can hand to someone, and theirs can become one of yours. It's the start
+of a community gallery: presets that people post and others can try.
+
+- **Export.** **Export this preset** in the sidebar (or **Export** in a preset's **⋯** menu)
+  downloads `<Name>.uncbox`.
+- **Import.** **Import a preset** in the sidebar picks a `.uncbox` file, or just drop one anywhere
+  on the dashboard. It arrives as a new preset of its own, in the same style as the game it was
+  made for, with its own name (a number is added if you already have that name). It never
+  replaces anything of yours.
+- **Save as a new preset** copies the preset you're on, with everything in it, so you can try
+  changes without losing the original. Presets of your own show up under the built-in ones, with
+  **Rename**, **Export** and **Delete** (with an **Undo**) in their **⋯** menu.
+
+A shared file has the layout, background, panel titles, slots (names, notes and uploaded
+pictures), counters and milestones (reset to zero and unticked), notes, widgets with their
+settings, app window panels and the game window's fit and crop. What's personal or only true on
+your PC is left out, so a file is safe to post:
+
+- Which camera, capture card or game window you use (the panel asks again), and the run timer.
+- Your match and record history, your K/D/A and any numbers the Stats panel read.
+- The WoW character's name, realm, guild, gold and level, and the quest log. Race, class and
+  hardcore stay, since they set how the character panel looks.
+- A weather widget's place, which is often home.
+- Slot pictures that are links to other sites (only uploaded pictures travel in the file).
+
+Files over 5 MB are refused, and everything in a file is checked like Uncbox's own saved data, so
+a hand-edited one can't put odd values in.
+
 ### The game window
 
 Hover the game window for its toolbar.
@@ -239,8 +269,9 @@ Then visit `http://<your-pc-ip>:5170`. There's no login, so only do this on a ne
 
 ### Your data
 
-Everything saves to `data/state.json` as you go. Saves from version 0.1 (PokéStream) move into
-the Pokémon preset automatically.
+Everything saves to `data/state.json` as you go, including presets of your own (see
+[Sharing presets](#sharing-presets)). Saves from version 0.1 (PokéStream) move into the Pokémon
+preset automatically.
 
 ## For developers
 
@@ -265,7 +296,10 @@ native/UncboxShell/        the Windows app, where the game can be played in its 
 src/panels/catalog.ts      every panel type: title, sidebar hint, default and minimum size
 src/panels/index.tsx       which component draws each panel type
 src/presets.ts             presets: titles, default layouts, starting data
-src/state/                 saved state, loading and migration, the save/sync hook
+src/presetfile.ts          the .uncbox preset file: what is left out, reading and checking one
+src/presetio.ts            downloading a preset, importing one, dropping one on the page
+src/state/                 saved state, loading and migration, the save/sync hook;
+                           state/presets.ts is built-in and custom presets side by side
 src/components/            the board, the sidebar and one file per panel
 src/styles.css             theme tokens and all styling
 ```
@@ -288,6 +322,13 @@ TypeScript flags any step you miss, and the sidebar lists the new panel on its o
    titles, a default layout and its starting data.
 3. Add a `.theme-<id>` block of color, font and radius tokens at the top of `src/styles.css`,
    and a `.preset-card--<id> strong` rule so its sidebar card previews the font and color.
+
+Presets of your own (saved copies and imports) are built on one of these: their `base` decides
+the theme, panel wording and anything game-specific. In code, get the showing preset from
+`activePreset(state)` in `src/state/presets.ts` rather than `PRESETS[state.preset]`, and check
+`base` (not `state.preset`) for anything that belongs to one game. A new preset gets sharing for
+free; if it keeps something personal or tied to this PC in `PresetData`, add it to `forSharing`
+in `src/presetfile.ts`.
 
 ## Support
 

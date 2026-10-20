@@ -127,4 +127,64 @@ describe('hydrate', () => {
     expect(bad.presets.wow.game.nativeGame).toBeNull();
     expect(bad.presets.smite2.game.nativeGame).toBeNull();
   });
+
+  describe('presets of your own', () => {
+    const mine = (over: Record<string, unknown> = {}) => ({ id: 'custom-a', name: 'Mine', base: 'wow', data: {}, ...over });
+
+    it('keeps them, with the base and name, and leaves old saves alone', () => {
+      const saved = defaultState();
+      saved.custom = [{ id: 'custom-a', name: 'Raid night', base: 'wow', data: structuredClone(saved.presets.wow) }];
+      saved.custom[0].data.run.title = 'Kronos';
+      saved.preset = 'custom-a';
+      expect(hydrate(JSON.parse(JSON.stringify(saved)))).toEqual(saved);
+
+      const old = JSON.parse(JSON.stringify(defaultState()));
+      delete old.custom;
+      expect(hydrate(old).custom).toEqual([]);
+    });
+
+    it('cleans their data against the base', () => {
+      const state = hydrate({
+        version: 2,
+        preset: 'custom-a',
+        custom: [mine({ base: 'smite2', data: { match: { role: 'Tank', k: 'lots' }, background: 'lava-lamp' } })],
+      });
+      const p = state.custom[0].data;
+      expect(p.match.role).toBe('');
+      expect(p.match.k).toBe(0);
+      expect(p.background).toBe('plain');
+      expect(p.layout.length).toBe(PRESETS.smite2.layout.length);
+    });
+
+    it('drops bad entries and repeated ids, and tidies names', () => {
+      const state = hydrate({
+        version: 2,
+        custom: [
+          mine(),
+          mine({ name: 'Same id' }),
+          mine({ id: 'builtin-looking' }),
+          mine({ id: 7 }),
+          mine({ id: 'custom-b', base: 'nope' }),
+          'junk',
+          mine({ id: 'custom-c', name: '   ', base: 'steam' }),
+          mine({ id: 'custom-d', name: 'x'.repeat(200) }),
+        ],
+      });
+      expect(state.custom.map((c) => c.id)).toEqual(['custom-a', 'custom-c', 'custom-d']);
+      expect(state.custom[1].name).toBe(PRESETS.steam.name);
+      expect(state.custom[2].name).toHaveLength(60);
+    });
+
+    it('keeps at most 50', () => {
+      const custom = Array.from({ length: 80 }, (_, i) => mine({ id: `custom-${i}` }));
+      expect(hydrate({ version: 2, custom }).custom).toHaveLength(50);
+    });
+
+    it('shows a built-in preset when the one that was showing is gone', () => {
+      expect(hydrate({ version: 2, preset: 'custom-gone', custom: [] }).preset).toBe('pokemon');
+      expect(hydrate({ version: 2, preset: 'custom-a', custom: [mine({ base: 'nope' })] }).preset).toBe('pokemon');
+      expect(hydrate({ version: 2, preset: 'custom-a', custom: [mine()] }).preset).toBe('custom-a');
+      expect(hydrate({ version: 2, preset: 'wow', custom: [mine()] }).preset).toBe('wow');
+    });
+  });
 });

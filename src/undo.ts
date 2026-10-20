@@ -5,7 +5,10 @@ import { useSyncExternalStore } from 'react';
 
 export interface Undoable {
   message: string;
-  undo: () => void;
+  /** None for a plain notice, which has nothing to take back. */
+  undo?: () => void;
+  /** Stays up when the active preset changes (a deleted preset, an import) instead of being dismissed. */
+  keepOnSwitch?: boolean;
 }
 
 const UNDO_MS = 6000;
@@ -14,11 +17,25 @@ let timer: ReturnType<typeof setTimeout> | undefined;
 const listeners = new Set<() => void>();
 const notify = () => listeners.forEach((l) => l());
 
-export function offerUndo(message: string, undo: () => void) {
+export function offerUndo(message: string, undo: () => void, keepOnSwitch = false) {
+  show({ message, undo, keepOnSwitch });
+}
+
+/** A short message in the same spot, for things that happened (an import, an error) rather than things to undo. */
+export function showNotice(message: string) {
+  show({ message, keepOnSwitch: true });
+}
+
+function show(item: Undoable) {
   clearTimeout(timer);
-  current = { message, undo, key: Date.now() };
+  current = { ...item, key: Date.now() };
   timer = setTimeout(dismissUndo, UNDO_MS);
   notify();
+}
+
+/** An undo restores into the active preset, so it must not outlive a switch to another one. */
+export function dismissUndoOnSwitch() {
+  if (!current?.keepOnSwitch) dismissUndo();
 }
 
 export function dismissUndo() {

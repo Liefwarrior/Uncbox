@@ -7,6 +7,23 @@ import type { BackgroundId } from '../backgrounds';
 export const PRESET_IDS = ['pokemon', 'smite2', 'wow', 'mcd2', 'steam', 'terminal'] as const;
 export type PresetId = (typeof PRESET_IDS)[number];
 
+/**
+ * A preset of your own: a saved copy of a built-in one, or one imported from a file. The built-in
+ * it is based on ("base") decides its theme, panel wording and game-specific behavior; the name and
+ * the data are its own.
+ */
+export type CustomId = `custom-${string}`;
+export interface CustomPreset {
+  id: CustomId;
+  name: string;
+  base: PresetId;
+  data: PresetData;
+}
+
+export function isCustomId(id: string): id is CustomId {
+  return id.startsWith('custom-');
+}
+
 export const PANEL_IDS = [
   'game',
   'camera',
@@ -268,13 +285,16 @@ export interface ClipSettings {
 
 export interface AppState {
   version: 2;
-  preset: PresetId;
+  /** The preset on the board: a built-in one, or one of `custom`. */
+  preset: PresetId | CustomId;
   twitch: { channel: string; hideBots: boolean };
   clips: ClipSettings;
   /** Voice channels pinned to the Discord panel for one-click joining. Shared by every preset. */
   discord: { pinned: PinnedChannel[] };
   camera: CameraSettings;
   presets: Record<PresetId, PresetData>;
+  /** Presets of your own, after the built-in ones in the sidebar. */
+  custom: CustomPreset[];
 }
 
 export const GRID_COLS = 24;
@@ -284,6 +304,8 @@ export const MAX_MILESTONES = 24;
 export const MAX_HISTORY = 30;
 export const MAX_QUESTS = 50;
 export const MAX_HUD = 12;
+export const MAX_CUSTOM = 50;
+export const MAX_PRESET_NAME = 60;
 
 export function uid(): string {
   return Math.random().toString(36).slice(2, 10);
