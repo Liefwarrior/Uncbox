@@ -281,8 +281,8 @@ export const PRESETS: Record<PresetId, PresetDef> = {
     layout: [
       { i: 'wdg-deskweb', x: 0, y: 0, w: 13, h: 16 },
       // Drive spans the whole row under the browser for now.
-      // TODO(UBX-9): Calendar takes the right part of this row (x 8 to 13); Drive shrinks to x 0 to 8.
-      { i: 'wdg-deskdrive', x: 0, y: 16, w: 13, h: 8 },
+      { i: 'wdg-deskdrive', x: 0, y: 16, w: 8, h: 8 },
+      { i: 'wdg-deskcalendar', x: 8, y: 16, w: 5, h: 8 },
       { i: 'wdg-deskclock', x: 13, y: 0, w: 6, h: 4 },
       { i: 'wdg-deskweather', x: 13, y: 4, w: 6, h: 4 },
       { i: 'wdg-desklauncher', x: 13, y: 8, w: 6, h: 7 },
@@ -305,6 +305,7 @@ export const PRESETS: Record<PresetId, PresetDef> = {
         // Wikipedia allows being framed (Google does not), so the Web widget opens with a page.
         widget('wdg-deskweb', 'web', { homeUrl: 'https://en.wikipedia.org/wiki/Main_Page' }),
         widget('wdg-deskdrive', 'drive'),
+        widget('wdg-deskcalendar', 'calendar'),
         widget('wdg-deskclock', 'clock'),
         widget('wdg-deskweather', 'weather'),
         widget('wdg-desklauncher', 'launcher'),

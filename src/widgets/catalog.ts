@@ -26,6 +26,8 @@ export const WIDGET_INFO: Record<WidgetType, WidgetInfo> = {
   focus: { name: 'Focus timer', hint: 'Work and break rounds, with a chime', icon: 'timer', w: 4, h: 5, minW: 3, minH: 3 },
   launcher: { name: 'Launcher', hint: 'Quick buttons for apps, folders and sites', icon: 'rocket', w: 6, h: 4, minW: 2, minH: 2 },
   drive: { name: 'Google Drive', hint: 'Your recent, starred and shared files', icon: 'cloud', w: 6, h: 6, minW: 4, minH: 4 },
+  calendar: { name: 'Calendar', hint: 'What’s next, with a Join button for meetings', icon: 'calendar', w: 6, h: 6, minW: 3, minH: 2 },
+  gmail: { name: 'Gmail', hint: 'Unread count and the latest senders', icon: 'mail', w: 5, h: 5, minW: 2, minH: 2 },
   text: { name: 'Text', hint: 'Any words you like', icon: 'type', w: 5, h: 3, minW: 2, minH: 2 },
   obs: { name: 'OBS', hint: 'Stream health, scenes and recording', icon: 'cast', w: 6, h: 6, minW: 3, minH: 2 },
   web: { name: 'Web', hint: 'Any web page: YouTube, a wiki, a dashboard', icon: 'globe', w: 8, h: 7, minW: 3, minH: 3 },
@@ -64,6 +66,11 @@ export function defaultWidgetSettings(): WidgetSettings {
     hideToolbar: false,
     zoom: 100,
     driveView: 'recent',
+    calendarDays: 3,
+    calendarHideAllDay: false,
+    gmailOnlyUnread: false,
+    gmailLabel: 'INBOX',
+    showOnStream: false,
   };
 }
 

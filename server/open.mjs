@@ -34,6 +34,10 @@ export function pageFor(target, { discordAppId } = {}) {
       return 'https://console.cloud.google.com/apis/credentials/consent';
     case 'google-drive-api':
       return 'https://console.cloud.google.com/apis/library/drive.googleapis.com';
+    case 'google-calendar-api':
+      return 'https://console.cloud.google.com/apis/library/calendar-json.googleapis.com';
+    case 'google-gmail-api':
+      return 'https://console.cloud.google.com/apis/library/gmail.googleapis.com';
     case 'twitch-console':
       return 'https://dev.twitch.tv/console/apps';
     case 'twitch-activate':

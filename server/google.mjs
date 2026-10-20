@@ -1,5 +1,5 @@
-// Sign in with Google, for the widgets that read your Google data (Drive now; Calendar and Gmail
-// can reuse it later). It is Google's "installed app" flow: the browser goes to Google, and Google
+// Sign in with Google, for the widgets that read your Google data (Drive, Calendar and Gmail).
+// It is Google's "installed app" flow: the browser goes to Google, and Google
 // sends the answer back to a plain-http address on this PC (127.0.0.1) with a one-time code. The
 // code is exchanged for tokens using PKCE (S256), so a snooped code alone is useless.
 //
@@ -9,7 +9,8 @@
 //
 //   GET  /api/google/status          the page's view of it (also pushed as a "google" event)
 //   POST /api/google/client          { clientId, clientSecret } saves (or, empty, forgets) the client
-//   POST /api/google/signin          starts sign-in: { url, opened }; the browser is opened for you
+//   POST /api/google/signin          starts sign-in: { url, opened }; the browser is opened for you.
+//                                    Optional { scopes: [...] } asks for just those (plus what was granted before)
 //   GET  /api/google/callback        Google's redirect lands here, on this server's own port
 //   POST /api/google/signout         revokes the token at Google and deletes it here
 //
@@ -19,9 +20,10 @@
 // of loopback, 127.0.0.1 would not reach the server and sign-in can't complete.
 //
 // Other modules call `google.fetch(url, init)`, which adds the token and refreshes it when it has
-// run out, and `google.requireScopes([...])` to say what they need. Sign-in asks for the union of
-// everything required, with include_granted_scopes so adding a scope later only asks for the new
-// one (incremental consent).
+// run out, and `google.requireScopes([...])` to say what they need. With no scopes named, sign-in
+// asks for the union of everything required; a widget can name its own so that, say, Drive doesn't
+// also ask for Gmail. include_granted_scopes means adding a scope later only asks for the new one
+// (incremental consent).
 
 import { createHash, randomBytes } from 'node:crypto';
 import { mkdir, readFile, rename, unlink, writeFile } from 'node:fs/promises';
@@ -36,6 +38,9 @@ const REVOKE_URL = 'https://oauth2.googleapis.com/revoke';
 export const GOOGLE_SCOPES = {
   base: ['openid', 'email'],
   drive: ['https://www.googleapis.com/auth/drive.readonly', 'https://www.googleapis.com/auth/drive.file'],
+  calendar: ['https://www.googleapis.com/auth/calendar.readonly'],
+  // Headers and labels only, never the text of a message.
+  gmail: ['https://www.googleapis.com/auth/gmail.metadata'],
 };
 
 /** The access token is renewed this long before it runs out. */
@@ -105,6 +110,29 @@ const page = (title, body) =>
   `<main style="text-align:center;max-width:32em;padding:1em"><h1 style="font-size:22px">${title}</h1><p style="color:#949cad">${body}</p></main>`;
 
 const problem = (message, status = 400) => Object.assign(new Error(message), { status });
+
+/**
+ * Google's refusal from an API (Calendar, Gmail…) in plain words, with a code the page can act on:
+ * signin, api (not turned on in the project), scope (not allowed yet), busy, down or other.
+ * `name` is what the person calls it, like "Google Calendar".
+ */
+export function apiProblem(status, body = {}, name = 'Google') {
+  const err = body.error ?? {};
+  const reason = err.errors?.[0]?.reason || err.details?.[0]?.reason || '';
+  if (status === 401) return { status: 401, code: 'signin', error: 'Google needs you to sign in again.' };
+  if (reason === 'accessNotConfigured' || reason === 'SERVICE_DISABLED' || /has not been used|is disabled/i.test(err.message ?? '')) {
+    return { status: 403, code: 'api', error: `The ${name} API isn’t turned on for your Google project. Turn it on in Google Cloud Console, then try again.` };
+  }
+  if (reason === 'insufficientPermissions' || reason === 'ACCESS_TOKEN_SCOPE_INSUFFICIENT') {
+    return { status: 403, code: 'scope', error: `Uncbox wasn’t allowed to see your ${name}. Sign in again and allow access.` };
+  }
+  if (status === 429 || (status === 403 && /rate|quota/i.test(`${reason} ${err.message ?? ''}`))) {
+    return { status: 429, code: 'busy', error: 'Google says that’s too many requests. Try again in a minute.' };
+  }
+  if (status >= 500) return { status: 502, code: 'down', error: `${name} is having trouble right now. Try again in a minute.` };
+  const said = String(err.message ?? '').trim().slice(0, 200);
+  return { status: status === 400 ? 400 : 502, code: 'other', error: said ? `${name} said: ${said}` : `${name} said no (${status}).` };
+}
 
 /**
  * @param {object} o
@@ -280,7 +308,19 @@ export function createGoogle({ broadcastEvent, sendJson, isLocal, readJson, data
     return snapshot();
   }
 
-  async function startSignIn({ open = true } = {}) {
+  /** The scopes sign-in asks for: everything required, or just the ones a widget named (and what it has). */
+  function scopesToAsk(d, wanted) {
+    const asked = Array.isArray(wanted) ? wanted.filter((s) => required.has(s)) : [];
+    if (!asked.length) return [...required];
+    const base = [...GOOGLE_SCOPES.base];
+    return [...new Set([...base, ...(d.refreshToken ? (d.scopes ?? []).filter((s) => required.has(s)) : []), ...asked])];
+  }
+
+  /**
+   * Starts a sign-in. A widget names the scopes it wants (`wanted`) so that signing in for Drive
+   * doesn't also ask for Calendar and Gmail; what was granted before is kept (incremental consent).
+   */
+  async function startSignIn({ open = true, wanted } = {}) {
     const d = await load();
     if (!d.clientId || !d.clientSecret) throw problem('Add your Google client first.');
     for (const [state, p] of pending) if (now() - p.at > PENDING_MS) pending.delete(state);
@@ -292,7 +332,7 @@ export function createGoogle({ broadcastEvent, sendJson, isLocal, readJson, data
       redirectUri: redirectUriFor(port),
       state,
       challenge,
-      scopes: [...required],
+      scopes: scopesToAsk(d, wanted),
       loginHint: d.email,
     });
     let opened = false;
@@ -359,7 +399,11 @@ export function createGoogle({ broadcastEvent, sendJson, isLocal, readJson, data
       if (req.method === 'GET' && action === '/callback') return await callback(res, url);
       if (req.method !== 'POST') return sendJson(res, action === '/status' || action === '/callback' ? 405 : 404, { error: 'Not found' });
       if (action === '/client') return sendJson(res, 200, await saveClient(await readJson(req)));
-      if (action === '/signin') return sendJson(res, 200, await startSignIn());
+      if (action === '/signin') {
+        // The widget says which scopes it wants; no body (or none that make sense) asks for all.
+        const asked = await readJson(req).catch(() => null);
+        return sendJson(res, 200, await startSignIn({ wanted: asked?.scopes }));
+      }
       if (action === '/signout') return sendJson(res, 200, await signOut());
       return sendJson(res, 404, { error: 'Not found' });
     } catch (err) {

@@ -7,7 +7,9 @@ import type { MutatePreset } from '../state/useAppState';
 import { type ObsSnapshot, useObs } from '../obs';
 import { WIDGET_INFO, widgetTitle } from './catalog';
 import { TwitchBody } from './TwitchBody';
+import { CalendarBody, CalendarSettings } from './CalendarWidget';
 import { DriveBody, DriveSettings } from './DriveWidget';
+import { GmailBody, GmailSettings } from './GmailWidget';
 import { describeWeather, findPlace, useMedia, useNetstats, useNotifications, useSystem, useWeather, type PingStats, mediaArtUrl, type MediaNow, sendMediaControl, useMediaPosition } from './data';
 import { fpsTone, pingTone, SPARK_H, SPARK_W, sparkline, type Tone } from './netstats';
 import { ObsBody } from './ObsWidget';
@@ -136,6 +138,10 @@ function Body({ widget, set, editing, tilesEditing, obs, setup, onSetupDone }: B
       return null; // its own panel, see WebWidget.tsx
     case 'drive':
       return <DriveBody s={s} set={set} />;
+    case 'calendar':
+      return <CalendarBody s={s} />;
+    case 'gmail':
+      return <GmailBody s={s} />;
     case 'twitch':
       return <TwitchBody />;
   }
@@ -495,6 +501,8 @@ function Settings({ widget, set, onDone }: { widget: Widget; set: SetSettings; o
         </>
       )}
       {widget.type === 'focus' && <FocusSettings s={s} set={set} />}
+      {widget.type === 'calendar' && <CalendarSettings s={s} set={set} />}
+      {widget.type === 'gmail' && <GmailSettings s={s} set={set} />}
       {widget.type === 'text' && (
         <label>
           Text

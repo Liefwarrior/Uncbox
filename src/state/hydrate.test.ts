@@ -235,3 +235,33 @@ describe('hydrate: Google Drive widget', () => {
     expect(withDrive({ driveView: 7 }).settings.driveView).toBe('recent');
   });
 });
+
+describe('hydrate: Calendar and Gmail widgets', () => {
+  const load = (type: string, settings: unknown) => {
+    const saved = JSON.parse(JSON.stringify(defaultState()));
+    saved.presets.wow.widgets = [{ id: 'wdg-g1', type, title: '', settings }];
+    saved.presets.wow.layout.push({ i: 'wdg-g1', x: 0, y: 30, w: 6, h: 6 });
+    return hydrate(saved).presets.wow.widgets[0];
+  };
+
+  it('accepts both types and fills in missing settings, keeping stream details off', () => {
+    for (const type of ['calendar', 'gmail']) {
+      const w = load(type, {});
+      expect(w.type).toBe(type);
+      expect(w.settings).toMatchObject({ calendarDays: 3, calendarHideAllDay: false, gmailOnlyUnread: false, gmailLabel: 'INBOX', showOnStream: false });
+    }
+  });
+
+  it('keeps what was chosen', () => {
+    const s = load('calendar', { calendarDays: 7, calendarHideAllDay: true, showOnStream: true }).settings;
+    expect(s).toMatchObject({ calendarDays: 7, calendarHideAllDay: true, showOnStream: true });
+    expect(load('gmail', { gmailLabel: 'Label_12', gmailOnlyUnread: true }).settings).toMatchObject({ gmailLabel: 'Label_12', gmailOnlyUnread: true });
+  });
+
+  it('repairs a number of days or a label that is not one', () => {
+    expect(load('calendar', { calendarDays: 5 }).settings.calendarDays).toBe(3);
+    expect(load('calendar', { calendarDays: 'many' }).settings.calendarDays).toBe(3);
+    expect(load('gmail', { gmailLabel: '../threads' }).settings.gmailLabel).toBe('INBOX');
+    expect(load('gmail', { gmailLabel: '' }).settings.gmailLabel).toBe('INBOX');
+  });
+});

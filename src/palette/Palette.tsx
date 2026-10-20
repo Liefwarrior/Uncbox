@@ -9,7 +9,8 @@ import type { Mutate, MutatePreset } from '../state/useAppState';
 import { showNotice } from '../undo';
 import { requestWebOpen } from '../web';
 import { primeAudio } from '../widgets/chime';
-import { type DriveFile, openFile, searchDriveFiles, useGoogle } from '../widgets/drive';
+import { type DriveFile, openFile, searchDriveFiles } from '../widgets/drive';
+import { DRIVE_FEATURE, hasGoogleScopes, useGoogle } from '../widgets/google';
 import { launchTile, useTiles } from '../widgets/launcher';
 import { arrange, buildCommands, DRIVE_MIN_QUERY, type PaletteActions, type PaletteContext, type Row } from './commands';
 import { opensPalette } from './keys';
@@ -92,7 +93,8 @@ function Dialog({ state, mutate, mutatePreset, onToggleStream, onClose }: Props 
   const clips = useClips();
   const tiles = useTiles();
   const { status } = useGoogle();
-  const signedIn = Boolean(status?.signedIn && !status.needsConsent);
+  // Drive's own access, not every Google widget's: a Calendar not yet allowed shouldn't hide Drive.
+  const signedIn = Boolean(status?.signedIn && hasGoogleScopes(status, DRIVE_FEATURE.scopes));
   const results = useDriveResults(query, signedIn);
   // Reading OBS is what makes the server connect to it, so only where a widget already does.
   const usesObs = [...Object.values(state.presets), ...state.custom.map((c) => c.data)].some((d) => d.widgets.some((w) => w.type === 'obs'));

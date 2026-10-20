@@ -59,7 +59,7 @@ export function isWidgetId(id: string): id is WidgetId {
   return id.startsWith('wdg-');
 }
 
-export const WIDGET_TYPES = ['clock', 'weather', 'media', 'notifications', 'system', 'network', 'countdown', 'text', 'obs', 'focus', 'launcher', 'web', 'drive', 'twitch'] as const;
+export const WIDGET_TYPES = ['clock', 'weather', 'media', 'notifications', 'system', 'network', 'countdown', 'text', 'obs', 'focus', 'launcher', 'web', 'drive', 'twitch', 'calendar', 'gmail'] as const;
 export type WidgetType = (typeof WIDGET_TYPES)[number];
 
 /** Every widget type's settings in one shape; each type reads only its own. */
@@ -111,6 +111,14 @@ export interface WidgetSettings {
   zoom: number;
   /** Drive: which list is showing (recent, starred, shared or search). */
   driveView: string;
+  /** Calendar: how many days ahead to show (1, 3 or 7), and whether all-day events are left out. */
+  calendarDays: number;
+  calendarHideAllDay: boolean;
+  /** Gmail: only unread messages, and the label to watch (a Gmail label id; INBOX by default). */
+  gmailOnlyUnread: boolean;
+  gmailLabel: string;
+  /** Calendar and Gmail: show the details in stream mode too. Off by default: they're private. */
+  showOnStream: boolean;
 }
 
 export interface Widget {

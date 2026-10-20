@@ -23,8 +23,10 @@ import {
 import { createClips } from './clips.mjs';
 import { createUpdate } from './update.mjs';
 import { createDiscordBridge } from './discord.mjs';
+import { createCalendar } from './calendar.mjs';
 import { createDrive } from './drive.mjs';
 import { createDriveUpload } from './driveupload.mjs';
+import { createGmail } from './gmail.mjs';
 import { createGoogle } from './google.mjs';
 import { openInBrowser, pageFor } from './open.mjs';
 import { createGameSettings } from './gamesettings.mjs';
@@ -199,6 +201,8 @@ const google = createGoogle({ broadcastEvent, sendJson, isLocal, readJson, dataD
 const drive = createDrive({ google, isLocal, sendJson, readJson, localFolder: process.env.UNCBOX_DRIVE_FOLDER || '' });
 const driveUpload = createDriveUpload({ google, dir: clips.folder(), dataDir, broadcastEvent, isLocal, sendJson, readJson });
 clips.onSaved((name, options) => void driveUpload.queue(name, options));
+const calendar = createCalendar({ google, isLocal, sendJson, readJson });
+const gmail = createGmail({ google, isLocal, sendJson, readJson });
 const twitch = createTwitch({ broadcastEvent, sendJson, isLocal, readJson, dataDir });
 const ocr = createOcr({ isLocal, sendJson, readBody });
 const smite = createSmite({ broadcastEvent, sendJson });
@@ -240,6 +244,8 @@ async function handleApi(req, res, url) {
   if (url.pathname.startsWith('/api/google/')) return google.handle(req, res, url);
   if (url.pathname === '/api/drive/upload' || url.pathname === '/api/drive/upload/cancel') return driveUpload.handle(req, res, url);
   if (url.pathname.startsWith('/api/drive/')) return drive(req, res, url);
+  if (url.pathname.startsWith('/api/calendar/')) return calendar(req, res, url);
+  if (url.pathname.startsWith('/api/gmail/')) return gmail(req, res, url);
   if (url.pathname.startsWith('/api/twitch/')) return twitch.handle(req, res, url);
   if (url.pathname === '/api/ocr') return ocr(req, res);
   if (url.pathname === '/api/smite') return smite(req, res);

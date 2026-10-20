@@ -5127,6 +5127,256 @@ p.chat-empty {
 }
 
 
+/* ---------- Calendar and Gmail widgets ---------- */
+
+.cal,
+.gmail {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  font-size: 14px;
+}
+.cal__full,
+.gmail__full {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
+.cal__compact,
+.gmail__compact {
+  display: none;
+}
+.cal--private {
+  justify-content: center;
+}
+.cal__busy {
+  margin: 0;
+  font-family: var(--font-num);
+  font-size: clamp(16px, min(9cqw, 30cqh), 36px);
+  font-weight: 700;
+  text-align: center;
+}
+.cal__group h4 {
+  margin: 0 0 2px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.cal__group ul,
+.gmail__list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.cal__event {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 6px;
+  padding-right: 4px;
+  border-radius: var(--radius-sm);
+}
+.cal__event.is-hot {
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+.cal__open,
+.cal__next,
+.gmail__row {
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.cal__open {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 5px 6px;
+  border-radius: var(--radius-sm);
+}
+.cal__open:hover:not(:disabled),
+.gmail__row:hover {
+  background: var(--panel-2);
+}
+.cal__open:disabled,
+.cal__next:disabled {
+  cursor: default;
+}
+.cal__dot {
+  flex: none;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+}
+.cal__time {
+  flex: none;
+  min-width: 4.6em;
+  color: var(--muted);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+.is-hot .cal__time {
+  color: var(--text);
+  font-weight: 650;
+}
+.cal__what {
+  display: grid;
+  flex: 1;
+  min-width: 0;
+}
+.cal__what strong {
+  overflow: hidden;
+  font-weight: 550;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cal__what small {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cal__join {
+  flex: none;
+}
+.cal__progress {
+  flex-basis: 100%;
+  height: 3px;
+  margin: 0 6px 4px;
+  border-radius: 2px;
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
+  overflow: hidden;
+}
+.cal__progress i {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+}
+.cal__next {
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 2px;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  text-align: center;
+}
+.cal__next strong {
+  max-width: 100%;
+  overflow: hidden;
+  font-size: clamp(14px, min(8cqw, 30cqh), 22px);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cal__next span {
+  color: var(--accent);
+  font-family: var(--font-num);
+  font-size: clamp(13px, min(7cqw, 26cqh), 20px);
+  font-weight: 650;
+}
+
+.gmail__head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+.gmail__count {
+  font-family: var(--font-num);
+  font-size: clamp(30px, min(18cqw, 28cqh), 64px);
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+.gmail__head span {
+  color: var(--muted);
+}
+.gmail__head small {
+  font-size: inherit;
+}
+.gmail__row {
+  display: grid;
+  grid-template-columns: minmax(0, 28%) minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: 10px;
+  width: 100%;
+  padding: 5px 6px;
+  border-radius: var(--radius-sm);
+}
+.gmail__row > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.gmail__subject,
+.gmail__when {
+  color: var(--muted);
+}
+.gmail__when {
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.gmail__row.is-unread .gmail__from,
+.gmail__row.is-unread .gmail__subject {
+  color: var(--text);
+  font-weight: 700;
+}
+.gmail__compact {
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 100%;
+  font-family: var(--font-num);
+  font-size: clamp(14px, min(9cqw, 34cqh), 28px);
+}
+.gmail__compact svg {
+  flex: none;
+  color: var(--accent);
+}
+/* Narrow panels: sender above subject. */
+@container (max-width: 300px) {
+  .gmail__row {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+  .gmail__subject {
+    grid-column: 1;
+    grid-row: 2;
+  }
+  .gmail__when {
+    grid-column: 2;
+    grid-row: 1;
+  }
+}
+/* Small panels: just the next event, or "12 unread". */
+@container (max-height: 110px) or (max-width: 170px) {
+  .cal__full,
+  .gmail__full {
+    display: none;
+  }
+  .cal__compact {
+    display: block;
+    flex: 1;
+    min-height: 0;
+  }
+  .gmail__compact {
+    display: flex;
+  }
+}
+
+
 /* The Twitch widget */
 .twitch {
   display: grid;

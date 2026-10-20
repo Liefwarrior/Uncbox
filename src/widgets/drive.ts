@@ -1,19 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { IconName } from '../components/Icon';
-import { listen } from '../events';
+import { post } from './google';
 
 // The Google Drive widget's data, from the Uncbox server (server/google.mjs and server/drive.mjs).
 // The page never holds a Google token or the client secret: it only learns whether sign-in is set
 // up and done, and asks the server for the files.
-
-export interface GoogleStatus {
-  configured: boolean;
-  signedIn: boolean;
-  email: string;
-  /** Scopes the sign-in covers, and whether a widget needs one it doesn't (sign in again to add it). */
-  scopes: string[];
-  needsConsent: boolean;
-}
 
 export type DriveView = 'recent' | 'starred' | 'shared' | 'search';
 export const DRIVE_VIEWS: { id: DriveView; label: string }[] = [
@@ -46,50 +37,10 @@ export interface DriveError {
 /** Where the files come from: your Google account, or the Google Drive for desktop folder. */
 export type DriveSource = 'cloud' | 'local';
 
-async function post<T>(url: string, body: unknown = {}): Promise<T> {
-  const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-  const data = await r.json().catch(() => ({}));
-  if (!r.ok) throw new Error(data.error || 'Something went wrong. Try again.');
-  return data as T;
-}
-
-export const google = {
-  saveClient: (clientId: string, clientSecret: string) => post<GoogleStatus>('/api/google/client', { clientId, clientSecret }),
-  signOut: () => post<GoogleStatus>('/api/google/signout'),
-  /** The server opens Google's page in your browser; if it couldn't, the page opens it itself. */
-  async signIn() {
-    const { url, opened } = await post<{ url: string; opened: boolean }>('/api/google/signin');
-    if (!opened) window.open(url, '_blank', 'noopener');
-  },
-};
-
 /** Opens a file: its Drive page in the browser, or (Drive for desktop) the file itself. */
 export function openFile(file: DriveFile, source: DriveSource) {
   const body = source === 'local' ? { path: file.id } : { url: file.webViewLink };
   void post('/api/drive/open', body).catch(() => {});
-}
-
-/** Sign-in state. null until the server answers; `reachable` is false when it can't be asked (or isn't this PC). */
-export function useGoogle(): { status: GoogleStatus | null; reachable: boolean } {
-  const [status, setStatus] = useState<GoogleStatus | null>(null);
-  const [reachable, setReachable] = useState(true);
-  useEffect(() => {
-    let alive = true;
-    fetch('/api/google/status')
-      .then((r) => (r.ok ? r.json() : Promise.reject(new Error('unreachable'))))
-      .then((s) => alive && (setStatus(s), setReachable(true)))
-      .catch(() => alive && setReachable(false));
-    // Sign-in finishes in another browser tab; the server tells us when it does.
-    const stop = listen('google', (data) => {
-      setStatus(JSON.parse(data));
-      setReachable(true);
-    });
-    return () => {
-      alive = false;
-      stop();
-    };
-  }, []);
-  return { status, reachable };
 }
 
 /** Whether Google Drive for desktop is on this PC (null while asking). */

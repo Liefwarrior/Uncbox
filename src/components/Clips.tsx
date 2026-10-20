@@ -9,7 +9,7 @@ import { useCover } from '../native';
 import type { ClipSettings, PresetData } from '../state/model';
 import type { Mutate, MutatePreset } from '../state/useAppState';
 import { newWidget } from '../widgets/catalog';
-import { useGoogle } from '../widgets/drive';
+import { useGoogle } from '../widgets/google';
 import { StatusLine, VerticalEditor, useJob } from './ClipEditor';
 import { Icon } from './Icon';
 

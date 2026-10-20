@@ -34,7 +34,7 @@ describe('every built-in preset', () => {
 });
 
 describe('the Desk preset', () => {
-  const widgetTypes: WidgetType[] = ['web', 'drive', 'focus', 'launcher', 'media', 'notifications', 'clock', 'weather'];
+  const widgetTypes: WidgetType[] = ['web', 'drive', 'calendar', 'focus', 'launcher', 'media', 'notifications', 'clock', 'weather'];
 
   it('fills the whole board with no gaps', () => {
     const area = PRESETS.desk.layout.reduce((sum, item) => sum + item.w * item.h, 0);

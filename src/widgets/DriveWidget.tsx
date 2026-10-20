@@ -1,4 +1,4 @@
-import { type FormEvent, type ReactNode, useEffect, useState } from 'react';
+import { type ReactNode, useEffect, useState } from 'react';
 import { openPage } from '../discord';
 import { Icon } from '../components/Icon';
 import type { WidgetSettings } from '../state/model';
@@ -11,12 +11,12 @@ import {
   fileIcon,
   fileKind,
   formatModified,
-  google,
   openFile,
   useDriveFiles,
-  useGoogle,
   useLocalDrive,
 } from './drive';
+import { DRIVE_FEATURE, google, hasGoogleScopes, useGoogle } from './google';
+import { SetupClient, SignIn } from './GoogleSetup';
 
 type SetSettings = (patch: Partial<WidgetSettings>) => void;
 
@@ -32,7 +32,8 @@ export function DriveBody({ s, set }: { s: WidgetSettings; set: SetSettings }) {
   if (!reachable) return <p className="muted">Google Drive needs Uncbox running on this PC.</p>;
   if (!status || !local) return <p className="muted">Getting your Drive…</p>;
 
-  if (status.signedIn && !status.needsConsent) {
+  // Other widgets may have asked for more than Drive needs; only Drive's own permission counts here.
+  if (hasGoogleScopes(status, DRIVE_FEATURE.scopes)) {
     return <Files s={s} set={set} source="cloud" note={status.email} />;
   }
   if (local.available && !wantsGoogle) {
@@ -50,119 +51,9 @@ export function DriveBody({ s, set }: { s: WidgetSettings; set: SetSettings }) {
       />
     );
   }
-  if (!status.configured) return <SetupClient onCancel={local.available ? () => setWantsGoogle(false) : undefined} />;
-  return <SignIn needsConsent={status.needsConsent} onCancel={local.available ? () => setWantsGoogle(false) : undefined} />;
-}
-
-// ---- setup ----
-
-const STEPS: { text: string; page: 'google-credentials' | 'google-consent' | 'google-drive-api'; button: string }[] = [
-  { text: 'Open Google Cloud Console and create a project (or pick one you have).', page: 'google-credentials', button: 'Open Cloud Console' },
-  { text: 'Turn on the Google Drive API for that project.', page: 'google-drive-api', button: 'Open Drive API' },
-  { text: 'Set up the consent screen: choose External, then add your own Google address under Test users.', page: 'google-consent', button: 'Open consent screen' },
-  { text: 'Create credentials: OAuth client ID, with the type Desktop app.', page: 'google-credentials', button: 'Open Credentials' },
-];
-
-/** The first step: paste the client ID and secret from Google Cloud Console. */
-export function SetupClient({ onCancel, onSaved }: { onCancel?: () => void; onSaved?: () => void }) {
-  const [clientId, setClientId] = useState('');
-  const [clientSecret, setClientSecret] = useState('');
-  const [error, setError] = useState('');
-  const [saving, setSaving] = useState(false);
-
-  const submit = async (e: FormEvent) => {
-    e.preventDefault();
-    setSaving(true);
-    setError('');
-    try {
-      await google.saveClient(clientId, clientSecret);
-      setClientSecret('');
-      onSaved?.();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Couldn’t save that.');
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  return (
-    <div className="drive drive--setup no-drag">
-      <h3>Connect Google Drive</h3>
-      <p className="muted">Uncbox signs in with your own Google client, so your files never go through anyone else. It takes a few minutes, once.</p>
-      <ol className="drive__steps">
-        {STEPS.map((step) => (
-          <li key={step.text}>
-            {step.text}{' '}
-            <button type="button" className="btn btn--small" onClick={() => openPage(step.page)}>
-              {step.button}
-            </button>
-          </li>
-        ))}
-        <li>Paste the client ID and client secret here.</li>
-      </ol>
-      <form className="widget-settings" onSubmit={(e) => void submit(e)}>
-        <label>
-          Client ID
-          <input data-setup="" value={clientId} placeholder="123456-abc.apps.googleusercontent.com" autoComplete="off" spellCheck={false} onChange={(e) => setClientId(e.target.value)} />
-        </label>
-        <label>
-          Client secret
-          <input type="password" value={clientSecret} placeholder="GOCSPX-…" autoComplete="off" spellCheck={false} onChange={(e) => setClientSecret(e.target.value)} />
-        </label>
-        {error && <p className="error">{error}</p>}
-        <span className="row">
-          <button className="btn btn--small btn--accent" type="submit" disabled={saving || !clientId.trim() || !clientSecret.trim()}>
-            Save
-          </button>
-          {onCancel && (
-            <button className="btn btn--small" type="button" onClick={onCancel}>
-              Back
-            </button>
-          )}
-        </span>
-        <p className="hint">The secret stays in Uncbox’s data folder on this PC. It isn’t saved with your presets.</p>
-      </form>
-    </div>
-  );
-}
-
-/** The second step: Google's own page opens in the browser; this updates when it's done. */
-function SignIn({ needsConsent, onCancel }: { needsConsent: boolean; onCancel?: () => void }) {
-  const [waiting, setWaiting] = useState(false);
-  const [error, setError] = useState('');
-
-  const start = async () => {
-    setError('');
-    try {
-      await google.signIn();
-      setWaiting(true);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Couldn’t start sign-in.');
-    }
-  };
-
-  return (
-    <div className="drive drive--setup no-drag">
-      <h3>{needsConsent ? 'Allow access to your files' : 'Sign in with Google'}</h3>
-      <p className="muted">
-        {needsConsent
-          ? 'Uncbox needs permission to see your Drive files. Sign in again and tick the Drive box.'
-          : 'Your browser opens Google’s sign-in. Choose the account you added as a test user, and allow Drive.'}
-      </p>
-      <span className="row">
-        <button className="btn btn--accent" onClick={() => void start()}>
-          <Icon name="cloud" size={16} /> Sign in with Google
-        </button>
-        {onCancel && (
-          <button className="btn" onClick={onCancel}>
-            Back
-          </button>
-        )}
-      </span>
-      {waiting && <p className="muted">Finish in your browser. This updates by itself when you’re done.</p>}
-      {error && <p className="error">{error}</p>}
-    </div>
-  );
+  const back = local.available ? () => setWantsGoogle(false) : undefined;
+  if (!status.configured) return <SetupClient feature={DRIVE_FEATURE} onCancel={back} />;
+  return <SignIn feature={DRIVE_FEATURE} needsConsent={status.signedIn} onCancel={back} />;
 }
 
 // ---- the files ----
@@ -189,7 +80,7 @@ function Files({ s, set, source, note, footer }: { s: WidgetSettings; set: SetSe
   };
 
   // These need the person to do something, not just wait.
-  if (error?.code === 'scope') return <SignIn needsConsent onCancel={undefined} />;
+  if (error?.code === 'scope') return <SignIn feature={DRIVE_FEATURE} needsConsent />;
 
   return (
     <div className="drive no-drag">
@@ -297,7 +188,7 @@ export function DriveSettings({ onDone }: { onDone: () => void }) {
         </p>
       )}
       {replacing || (status && !status.configured) ? (
-        <SetupClient onCancel={status?.configured ? () => setReplacing(false) : undefined} onSaved={() => setReplacing(false)} />
+        <SetupClient feature={DRIVE_FEATURE} onCancel={status?.configured ? () => setReplacing(false) : undefined} onSaved={() => setReplacing(false)} />
       ) : (
         <span className="row">
           {status?.signedIn && (
