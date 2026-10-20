@@ -29,6 +29,7 @@ export const WIDGET_INFO: Record<WidgetType, WidgetInfo> = {
   text: { name: 'Text', hint: 'Any words you like', icon: 'type', w: 5, h: 3, minW: 2, minH: 2 },
   obs: { name: 'OBS', hint: 'Stream health, scenes and recording', icon: 'cast', w: 6, h: 6, minW: 3, minH: 2 },
   web: { name: 'Web', hint: 'Any web page: YouTube, a wiki, a dashboard', icon: 'globe', w: 8, h: 7, minW: 3, minH: 3 },
+  twitch: { name: 'Twitch stream', hint: 'Viewers, followers and your title', icon: 'twitch', w: 6, h: 7, minW: 4, minH: 3 },
 };
 
 export function defaultWidgetSettings(): WidgetSettings {

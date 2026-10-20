@@ -33,6 +33,7 @@ import { createSmite } from './smite.mjs';
 import { createSteam } from './steam.mjs';
 import { createLauncher } from './launcher.mjs';
 import { createWeb } from './web.mjs';
+import { createTwitch } from './twitch.mjs';
 import { createWidgets } from './widgets.mjs';
 import { DOMAIN, loadTls } from './tls.mjs';
 
@@ -194,6 +195,7 @@ const launcher = createLauncher({ sendJson, isLocal, readJson, dataDir });
 const google = createGoogle({ broadcastEvent, sendJson, isLocal, readJson, dataDir, port });
 // UNCBOX_DRIVE_FOLDER stands in for the Drive for desktop folder, to try the widget without it.
 const drive = createDrive({ google, isLocal, sendJson, readJson, localFolder: process.env.UNCBOX_DRIVE_FOLDER || '' });
+const twitch = createTwitch({ broadcastEvent, sendJson, isLocal, readJson, dataDir });
 const ocr = createOcr({ isLocal, sendJson, readBody });
 const smite = createSmite({ broadcastEvent, sendJson });
 const gameSettings = createGameSettings({ isLocal, sendJson, readJson });
@@ -232,6 +234,7 @@ async function handleApi(req, res, url) {
   if (url.pathname.startsWith('/api/launcher/')) return launcher(req, res, url);
   if (url.pathname.startsWith('/api/google/')) return google.handle(req, res, url);
   if (url.pathname.startsWith('/api/drive/')) return drive(req, res, url);
+  if (url.pathname.startsWith('/api/twitch/')) return twitch.handle(req, res, url);
   if (url.pathname === '/api/ocr') return ocr(req, res);
   if (url.pathname === '/api/smite') return smite(req, res);
   if (url.pathname === '/api/game-settings') return gameSettings(req, res);

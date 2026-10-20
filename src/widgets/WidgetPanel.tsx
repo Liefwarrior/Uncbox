@@ -6,6 +6,7 @@ import type { Widget, WidgetSettings } from '../state/model';
 import type { MutatePreset } from '../state/useAppState';
 import { type ObsSnapshot, useObs } from '../obs';
 import { WIDGET_INFO, widgetTitle } from './catalog';
+import { TwitchBody } from './TwitchBody';
 import { DriveBody, DriveSettings } from './DriveWidget';
 import { describeWeather, findPlace, useMedia, useNetstats, useNotifications, useSystem, useWeather, type PingStats, mediaArtUrl, type MediaNow, sendMediaControl, useMediaPosition } from './data';
 import { fpsTone, pingTone, SPARK_H, SPARK_W, sparkline, type Tone } from './netstats';
@@ -41,7 +42,7 @@ function SimpleWidgetPanel({ widget, mutatePreset }: Props) {
   const set: SetSettings = (patch) => edit((w) => void Object.assign(w.settings, patch));
   // OBS keeps its connection settings on the server, so its form is its own ("OBS connection" in the menu).
   const obs = useObs(widget.type === 'obs');
-  const hasSettings = !['media', 'system', 'obs', 'launcher'].includes(widget.type);
+  const hasSettings = !['media', 'system', 'obs', 'launcher', 'twitch'].includes(widget.type);
   const unset =
     (widget.type === 'weather' && !s.lat && !s.lon) ||
     (widget.type === 'countdown' && !s.target) ||
@@ -135,6 +136,8 @@ function Body({ widget, set, editing, tilesEditing, obs, setup, onSetupDone }: B
       return null; // its own panel, see WebWidget.tsx
     case 'drive':
       return <DriveBody s={s} set={set} />;
+    case 'twitch':
+      return <TwitchBody />;
   }
 }
 

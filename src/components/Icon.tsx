@@ -71,6 +71,7 @@ const PATHS = {
   external: ['M15 3h6v6', 'M10 14 21 3', 'M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6'],
   home: ['m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z', 'M9 22V12h6v10'],
   cloud: ['M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9z'],
+  twitch: ['M21 2H3v16h5v4l4-4h5l4-4V2z', 'M11 11V7', 'M16 11V7'],
   skipForward: ['M5 4l10 8-10 8z', 'M19 5v14'],
 } as const;
 

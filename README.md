@@ -168,6 +168,7 @@ browser asks you to pick each window again after a reload.
 | **Ping & FPS** | Your ping (how long a connection to 1.1.1.1 or any host you choose takes), jitter, packet loss and, if you like, the ping to your router. While SMITE 2 is running it shows the game's own ping and frame rate instead, with the 1% low. Only measures while the widget is on screen. |
 | **Countdown** | Time left until a date you pick. |
 | **Text** | Any words you like. |
+| **Twitch stream** | Live or offline with uptime, viewers (and a small graph), followers, subs and your newest followers. In edit mode you can change the stream's title and category from it. Needs a one-time sign-in, see [Twitch stream widget](#twitch-stream-widget). |
 
 Settings are in each widget's **⋯** menu, and you can rename any of them.
 
@@ -238,6 +239,22 @@ Type your channel name into the chat panel. It connects anonymously and read-onl
 nothing to log in to. Bots like Nightbot and StreamElements are hidden; turn them back on from
 the chat panel's **⋯**.
 
+### Twitch stream widget
+
+The **Twitch stream** widget signs in to your own channel (chat above stays anonymous and
+separate). One-time setup:
+
+1. At [dev.twitch.tv/console](https://dev.twitch.tv/console) click **Register Your Application**.
+   Any name; OAuth Redirect URL `http://localhost`; Category **Application Integration** (or
+   Other); Client Type **Public**.
+2. Create it, click **Manage**, and copy the **Client ID**.
+3. In the widget (edit mode) paste the Client ID, click **Sign in**, then go to
+   twitch.tv/activate and enter the code shown.
+
+The client ID and tokens stay in `data/twitch.json` on your PC and never reach the browser. The
+server only reads Twitch (every 30 seconds) while a Twitch widget is on screen. Stream mode shows
+the numbers only; editing is in edit mode.
+
 ### Discord voice
 
 The Discord panel shows who's in your voice channel and lights people up as they talk, with
@@ -286,6 +303,7 @@ server/open.mjs            opens setup pages in the default browser (fixed list 
 server/clips.mjs           saves and serves clips, sends them to Discord; server/hotkey.mjs watches the clip key
 server/widgets.mjs         system load, now playing and notifications for the widgets
 server/netstats.mjs        ping, jitter and loss, and a game's frame rate, for the Ping & FPS widget
+server/twitch.mjs          Twitch sign-in and stream info for the Twitch widget
 server/steam.mjs           the Steam panel, from the Steam app's files
 server/ocr.mjs             Windows text recognition for the Stats panel
 src/widgets/               the widget library
