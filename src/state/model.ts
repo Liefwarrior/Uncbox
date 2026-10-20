@@ -59,7 +59,7 @@ export function isWidgetId(id: string): id is WidgetId {
   return id.startsWith('wdg-');
 }
 
-export const WIDGET_TYPES = ['clock', 'weather', 'media', 'notifications', 'system', 'network', 'countdown', 'text', 'obs', 'focus', 'launcher'] as const;
+export const WIDGET_TYPES = ['clock', 'weather', 'media', 'notifications', 'system', 'network', 'countdown', 'text', 'obs', 'focus', 'launcher', 'web'] as const;
 export type WidgetType = (typeof WIDGET_TYPES)[number];
 
 /** Every widget type's settings in one shape; each type reads only its own. */
@@ -100,6 +100,15 @@ export interface WidgetSettings {
   focusLeft: number;
   /** Launcher: the ids of the saved tiles it shows, in order. The tiles themselves live on this PC (server/launcher.mjs). */
   launcherTiles: string[];
+  /** Web: the page it is on now (saved, so it comes back after a reload), and the one it starts on. */
+  url: string;
+  homeUrl: string;
+  /** Web: what an address that isn't a web address is searched with (an id from src/web.ts). */
+  searchEngine: string;
+  /** Web: leave the back / address / reload bar out, for a clean view on stream. */
+  hideToolbar: boolean;
+  /** Web: page zoom in percent, 50 to 200. */
+  zoom: number;
 }
 
 export interface Widget {

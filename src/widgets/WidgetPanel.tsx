@@ -12,6 +12,7 @@ import { ObsBody } from './ObsWidget';
 import { FocusBody, FocusSettings } from './FocusWidget';
 import { LauncherBody } from './LauncherWidget';
 import { useNow } from './useNow';
+import { WebPanel } from './WebWidget';
 
 interface Props {
   widget: Widget;
@@ -21,7 +22,11 @@ interface Props {
 type SetSettings = (patch: Partial<WidgetSettings>) => void;
 
 /** One widget from the library, in a panel like any other. Settings open from its ⋯ menu. */
-export function WidgetPanel({ widget, mutatePreset }: Props) {
+export function WidgetPanel(props: Props) {
+  return props.widget.type === 'web' ? <WebPanel {...props} /> : <SimpleWidgetPanel {...props} />;
+}
+
+function SimpleWidgetPanel({ widget, mutatePreset }: Props) {
   const { editing } = useBoard();
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [tilesEditing, setTilesEditing] = useState(false);
@@ -121,6 +126,8 @@ function Body({ widget, set, editing, tilesEditing, obs, setup, onSetupDone }: B
       return <p className="widget-text">{s.text}</p>;
     case 'obs':
       return <ObsBody obs={obs} setup={setup} onSetupDone={onSetupDone} />;
+    case 'web':
+      return null; // its own panel, see WebWidget.tsx
   }
 }
 

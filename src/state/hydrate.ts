@@ -1,5 +1,6 @@
 import { isBackgroundId } from '../backgrounds';
 import { DEFAULT_CLIP_KEY, isClipKey } from '../clips/keys';
+import { clampZoom, cleanUrl, isSearchEngine } from '../web';
 import { defaultWidgetSettings } from '../widgets/catalog';
 import { sizeOf } from '../panels/catalog';
 import { PRESETS } from '../presets';
@@ -83,6 +84,15 @@ const objects = (v: unknown[]) => v.filter(isObj);
 const str = (v: unknown) => (typeof v === 'string' ? v : null);
 const int = (v: unknown, fallback = 0) => (typeof v === 'number' && Number.isFinite(v) ? Math.round(v) : fallback);
 
+/** Web widgets: a hand-edited or shared file can't make one open anything but a web page. */
+function cleanWidgetSettings(s: Widget['settings']): Widget['settings'] {
+  s.url = cleanUrl(s.url);
+  s.homeUrl = cleanUrl(s.homeUrl);
+  if (!isSearchEngine(s.searchEngine)) s.searchEngine = 'google';
+  s.zoom = clampZoom(s.zoom);
+  return s;
+}
+
 function cleanLayout(saved: unknown, fallback: GridItem[], windows: AppWindow[], widgets: Widget[]): GridItem[] {
   if (!Array.isArray(saved)) return fallback;
   const seen = new Set<string>();
@@ -143,7 +153,7 @@ export function hydratePreset(id: PresetId, saved: unknown): PresetData {
       id: w.id as Widget['id'],
       type: w.type as Widget['type'],
       title: str(w.title) ?? '',
-      settings: overlay(defaultWidgetSettings(), w.settings),
+      settings: cleanWidgetSettings(overlay(defaultWidgetSettings(), w.settings)),
     }));
   for (const w of p.widgets) {
     const f = w.settings;

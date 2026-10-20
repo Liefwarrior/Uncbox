@@ -4662,3 +4662,113 @@ p.chat-empty {
   background: color-mix(in srgb, var(--accent) 14%, transparent);
 }
 
+
+/* ---------- web widget ---------- */
+
+/* Side room is left free so the panel's resize handles (10px along the edges) stay reachable over the page. */
+.widget--web .panel__body {
+  display: flex;
+  flex-direction: column;
+  padding: 0 10px 10px;
+  overflow: hidden;
+}
+.web {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 6px;
+  min-height: 0;
+}
+.web-bar {
+  position: relative;
+  display: flex;
+  flex: none;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px;
+}
+.web-bar__address {
+  flex: 1;
+  min-width: 80px;
+  margin: 0 4px;
+  padding: 5px 10px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--panel-2);
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+}
+.web-bar__address:focus {
+  border-color: var(--accent);
+  outline: none;
+}
+.web-bar__problem {
+  flex-basis: 100%;
+  margin: 2px 0 0;
+  color: var(--bad);
+  font-size: 12px;
+}
+.web-bar.is-loading::after {
+  content: '';
+  position: absolute;
+  right: 0;
+  bottom: -4px;
+  left: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, var(--accent), transparent);
+  background-size: 40% 100%;
+  background-repeat: no-repeat;
+  animation: web-loading 1.1s linear infinite;
+}
+@keyframes web-loading {
+  from {
+    background-position: -40% 0;
+  }
+  to {
+    background-position: 140% 0;
+  }
+}
+.web__page {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  border-radius: var(--radius-sm);
+}
+.web__native {
+  position: absolute;
+  inset: 0;
+}
+.web__frame {
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: block;
+  border: 0;
+  background: #fff;
+  transform-origin: 0 0;
+}
+.web__start,
+.web__note {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 8px;
+  margin: 0;
+  padding: 12px;
+  text-align: center;
+}
+.web__start {
+  pointer-events: none;
+}
+.web__blocked h3 {
+  margin: 0;
+}
+.web__blocked p {
+  max-width: 34ch;
+  margin: 0;
+}
+

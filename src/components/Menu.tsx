@@ -1,5 +1,6 @@
 import { type CSSProperties, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { useCover } from '../native';
 import { Icon, type IconName } from './Icon';
 
 export interface MenuItem {
@@ -26,6 +27,8 @@ export function Menu({ items, label = 'Options' }: { items: MenuEntry[]; label?:
   const [pos, setPos] = useState<CSSProperties>({});
   const button = useRef<HTMLButtonElement>(null);
   const list = useRef<HTMLDivElement>(null);
+  // An open menu is drawn by the page, so a web widget's real view (in the app) must not cover it.
+  useCover(open, true);
   const entries = items.filter((e): e is MenuItem | 'divider' => Boolean(e));
 
   useLayoutEffect(() => {

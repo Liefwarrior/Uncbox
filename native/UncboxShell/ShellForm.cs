@@ -27,11 +27,15 @@ namespace UncboxShell;
 ///               { type: "play" }                          hand the keyboard to the game
 ///               { type: "fullscreen" }                    the game gets the whole screen until Ctrl+Shift+F12
 ///               { type: "minimize" }                      to the tray
+///               { type: "web" | "webrect" | "webnav" | "webzoom" | "webclose", id, ... }
+///                    the web widgets' pages, each a WebView2 over its panel (see WebViews.cs)
 ///   app → page  { type: "windows", windows: [{ id, title, process }] }
 ///               { type: "attached", id, title, process, followed } | { type: "detached" }
 ///                    followed: the app took it by itself (see follow), so it isn't the saved game
 ///               { type: "picture", on, launchOption }  the game won't be resized, so it's shown as a
 ///                    live picture; launchOption, if known, is what makes it resizable
+///               { type: "webstate", id, url, title, canGoBack, canGoForward, loading }
+///                    where a web widget's page is (see WebViews.cs)
 /// </summary>
 internal sealed class ShellForm : Form
 {
@@ -60,6 +64,8 @@ internal sealed class ShellForm : Form
     private readonly ToolStripMenuItem _screenMenu = new("Monitor");
     private readonly System.Windows.Forms.Timer _keepPlaced = new() { Interval = 250 };
     private readonly ServerHost _server = new();
+    /// <summary>The web widgets' pages; made once the dashboard's own WebView2 is up.</summary>
+    private WebViews? _webViews;
     private RegisteredWaitHandle? _wakeWait;
     private Screen _screen;
     private bool _windowedFull;
@@ -166,9 +172,10 @@ internal sealed class ShellForm : Form
         // never share one; the usual address keeps the plain folder it always had.
         string data = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Uncbox", "WebView2");
         if (_options.Url.Host != "localhost" || _options.Url.Port != 5170) data += $".{_options.Url.Host}.{_options.Url.Port}";
+        CoreWebView2Environment env;
         try
         {
-            var env = await CoreWebView2Environment.CreateAsync(userDataFolder: data);
+            env = await CoreWebView2Environment.CreateAsync(userDataFolder: data);
             await _web.EnsureCoreWebView2Async(env);
         }
         catch (Exception err) when (err is COMException or WebView2RuntimeNotFoundException)
@@ -179,6 +186,9 @@ internal sealed class ShellForm : Form
             return;
         }
         var core = _web.CoreWebView2;
+        _webViews = new WebViews(this, _web, env, Send);
+        // The dashboard reloaded: its web widgets start over and ask for their pages again.
+        core.ContentLoading += (_, _) => _webViews.CloseAll();
         core.Settings.IsStatusBarEnabled = false;
         core.Settings.IsZoomControlEnabled = false;
         core.WebMessageReceived += (_, args) => OnMessage(args.WebMessageAsJson);
@@ -300,6 +310,7 @@ internal sealed class ShellForm : Form
         foreach (var hook in _hooks) Native.UnhookWinEvent(hook);
         _hooks.Clear();
         _game?.Restore();
+        _webViews?.Dispose();
         _tray.Visible = false;
         _tray.Dispose();
         _server.Dispose();
@@ -352,6 +363,9 @@ internal sealed class ShellForm : Form
                 break;
             case "minimize":
                 ToTray();
+                break;
+            case "web" or "webrect" or "webnav" or "webzoom" or "webclose":
+                if (msg is not null) _webViews?.OnMessage((string)msg["type"]!, msg);
                 break;
         }
     }
