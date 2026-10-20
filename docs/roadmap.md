@@ -54,7 +54,7 @@ Uncbox when Windows starts", and a quiet "a new version is out" notice from GitH
 A built-in "Desk" preset for working between games: Drive, Web, Focus, Launcher, Calendar, Now
 playing, Notifications, Clock/Weather, with its own calm theme.
 
-### UBX-9 · Google Calendar widget — Building
+### UBX-9 · Google Calendar widget — Shipped (b21b4ae)
 Today and the next few days from your calendars, "starts in 10 min" highlight, join-meeting
 button for Meet links; reuses the Google sign-in with incremental consent.
 
@@ -62,7 +62,7 @@ button for Meet links; reuses the Google sign-in with incremental consent.
 A "Save to Drive" button in the clip player (and an option to upload every clip automatically)
 into an "Uncbox Clips" folder, resumable uploads, a share link copied when done.
 
-### UBX-11 · Gmail glance — Building
+### UBX-11 · Gmail glance — Shipped (b21b4ae)
 Unread count and the latest few subjects/senders, click to open in the Web widget or browser.
 
 ### UBX-12 · Command palette — Shipped (b19c36f)
