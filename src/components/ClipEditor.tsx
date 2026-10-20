@@ -50,7 +50,7 @@ export function useJob(): Job {
 export function StatusLine({ job }: { job: Job }) {
   const { status } = job;
   if (status.kind === 'idle') return null;
-  if (status.kind === 'error') return <p className="clip-status error" role="alert">{status.text}</p>;
+  if (status.kind === 'error') return <p className="clip-status error" role="alert" aria-live="assertive">{status.text}</p>;
   if (status.kind === 'done') {
     return (
       <p className="clip-status clip-status--done" role="status">

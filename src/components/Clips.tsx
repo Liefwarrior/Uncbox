@@ -8,6 +8,7 @@ import { placePanel } from '../layout';
 import { useCover } from '../native';
 import type { ClipSettings, PresetData } from '../state/model';
 import type { Mutate, MutatePreset } from '../state/useAppState';
+import { useDialog } from '../useDialog';
 import { newWidget } from '../widgets/catalog';
 import { useGoogle } from '../widgets/google';
 import { StatusLine, VerticalEditor, useJob } from './ClipEditor';
@@ -251,7 +252,7 @@ export function ClipToast({ driveAuto }: { driveAuto: boolean }) {
 
   if (!key || hidden === key) return null;
   return (
-    <div className="toast toast--clip" role="status">
+    <div className="toast toast--clip" role={saved ? 'status' : 'alert'} aria-live={saved ? 'polite' : 'assertive'}>
       {saved ? (
         <>
           <span>
@@ -317,10 +318,14 @@ function Player({ playing, share, onSetUpDrive }: { playing: string; share: bool
     return () => window.removeEventListener('keydown', onKey, true);
   }, []);
 
+  // Focus moves into the player, stays there, and goes back to what opened it. Esc is handled above.
+  const box = useRef<HTMLDivElement>(null);
+  useDialog(box);
+
   const vertical = playing.includes(' vertical');
   return (
-    <div className="clip-player" role="dialog" aria-label="Clip" onClick={close}>
-      <div className={`clip-player__box ${editing ? 'is-editing' : ''}`} onClick={(e) => e.stopPropagation()}>
+    <div className="clip-player" role="dialog" aria-modal="true" aria-label={`Clip ${playing.replace(/\.mp4$/, '')}`} onClick={close}>
+      <div ref={box} className={`clip-player__box ${editing ? 'is-editing' : ''}`} onClick={(e) => e.stopPropagation()}>
         {editing ? (
           <VerticalEditor name={playing} job={job} discord={discord} />
         ) : (
@@ -375,7 +380,7 @@ function Player({ playing, share, onSetUpDrive }: { playing: string; share: bool
           <button className="btn btn--small" onClick={() => revealClip(playing)}>
             <Icon name="folder" size={14} /> Show in folder
           </button>
-          <button className="icon-btn" title="Close" onClick={close}>
+          <button className="icon-btn" title="Close" aria-label="Close the clip" onClick={close}>
             <Icon name="x" size={14} />
           </button>
         </div>

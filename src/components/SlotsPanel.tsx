@@ -169,6 +169,7 @@ function Slot({ index, item, hinted, def, highlighted, onEdit, onClear, onDragOv
           <input
             className="ghost-input slot__name"
             value={item.name}
+            aria-label={def.name}
             placeholder={hinted ? def.name : ''}
             onChange={(e) => onEdit({ name: e.target.value })}
           />
@@ -177,6 +178,7 @@ function Slot({ index, item, hinted, def, highlighted, onEdit, onClear, onDragOv
           <input
             className="ghost-input slot__detail"
             value={item.detail}
+            aria-label={def.detail}
             placeholder={hinted ? def.detail : ''}
             onChange={(e) => onEdit({ detail: e.target.value })}
           />
@@ -188,14 +190,14 @@ function Slot({ index, item, hinted, def, highlighted, onEdit, onClear, onDragOv
         {def.showDown && !empty && (
           <button
             className={`icon-btn ${item.down ? 'on' : ''}`}
-            title={item.down ? 'Revive' : `Mark ${downLabel.toLowerCase()}`}
+            title={item.down ? 'Revive' : `Mark ${downLabel.toLowerCase()}`} aria-label={item.down ? 'Revive' : `Mark ${downLabel.toLowerCase()}`}
             onClick={() => onEdit({ down: !item.down })}
           >
             <Icon name="skull" size={15} />
           </button>
         )}
         {!empty && (
-          <button className="icon-btn" title="Clear slot" onClick={onClear}>
+          <button className="icon-btn" title="Clear slot" aria-label="Clear slot" onClick={onClear}>
             <Icon name="x" size={14} />
           </button>
         )}

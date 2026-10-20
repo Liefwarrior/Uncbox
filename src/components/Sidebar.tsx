@@ -63,7 +63,7 @@ export function Sidebar({ state, mutate, mutatePreset, status, onStreamMode }: P
     if (file) void importPresetFile(file, state, mutate);
   };
   const saveCopy = () => {
-    if (!canAddCustom(state)) return showNotice(FULL_MESSAGE);
+    if (!canAddCustom(state)) return showNotice(FULL_MESSAGE, true);
     const copy = copyOfActive(state);
     const id = newCustomId();
     const name = uniqueName(def.name, takenNames(state));

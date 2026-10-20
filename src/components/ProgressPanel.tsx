@@ -51,11 +51,12 @@ export function ProgressPanel({ milestones, counters, title, mutatePreset }: Pro
                 <input
                   value={m.name}
                   placeholder="No name (shows as a dot)"
+                  aria-label={`Goal ${i + 1}`}
                   onChange={(e) => mutatePreset((d) => void (d.milestones.items[i].name = e.target.value))}
                 />
                 <button
                   className="icon-btn"
-                  title="Remove"
+                  title="Remove" aria-label="Remove"
                   disabled={milestones.items.length <= 1}
                   onClick={() => mutatePreset((d) => void d.milestones.items.splice(i, 1))}
                 >
@@ -111,21 +112,22 @@ export function ProgressPanel({ milestones, counters, title, mutatePreset }: Pro
           <li key={c.id} className="counter">
             <input
               className="ghost-input counter__label"
+              aria-label="Counter name"
               value={c.label}
               onChange={(e) => mutatePreset((d) => void (d.counters[i].label = e.target.value))}
             />
             <button
               className="icon-btn ctl"
-              title="Minus one"
+              title="Minus one" aria-label="Minus one"
               onClick={() => mutatePreset((d) => void (d.counters[i].value = Math.max(0, d.counters[i].value - 1)))}
             >
               <Icon name="minus" size={14} />
             </button>
             <Digits key={c.value} className="counter__value bump" value={c.value} />
-            <button className="icon-btn ctl" title="Plus one" onClick={() => mutatePreset((d) => void d.counters[i].value++)}>
+            <button className="icon-btn ctl" title="Plus one" aria-label="Plus one" onClick={() => mutatePreset((d) => void d.counters[i].value++)}>
               <Icon name="plus" size={14} />
             </button>
-            <button className="icon-btn ctl counter__remove" title="Remove counter" onClick={() => removeCounter(c, i)}>
+            <button className="icon-btn ctl counter__remove" title="Remove counter" aria-label="Remove counter" onClick={() => removeCounter(c, i)}>
               <Icon name="x" size={14} />
             </button>
           </li>

@@ -53,17 +53,18 @@ export function NotesPanel({ notes, title, mutatePreset }: { notes: NoteItem[]; 
           <li key={n.id} className={`note ${n.done ? 'is-done' : ''}`}>
             <button
               className={`check ${n.done ? 'on' : ''}`}
-              title={n.done ? 'Uncheck' : 'Check off'}
+              title={n.done ? 'Uncheck' : 'Check off'} aria-label={n.done ? 'Uncheck' : 'Check off'}
               onClick={() => mutatePreset((d) => void (d.notes[i].done = !d.notes[i].done))}
             >
               <Icon name="check" size={12} />
             </button>
             <input
               className="ghost-input"
+              aria-label={`Note ${i + 1}`}
               value={n.text}
               onChange={(e) => mutatePreset((d) => void (d.notes[i].text = e.target.value))}
             />
-            <button className="icon-btn ctl" title="Delete" onClick={() => remove(n, i)}>
+            <button className="icon-btn ctl" title="Delete" aria-label="Delete" onClick={() => remove(n, i)}>
               <Icon name="x" size={14} />
             </button>
           </li>
@@ -77,7 +78,7 @@ export function NotesPanel({ notes, title, mutatePreset }: { notes: NoteItem[]; 
         }}
       >
         <input value={draft} placeholder="Add a line…" onChange={(e) => setDraft(e.target.value)} />
-        <button className="icon-btn" type="submit" title="Add" disabled={!draft.trim()}>
+        <button className="icon-btn" type="submit" title="Add" aria-label="Add" disabled={!draft.trim()}>
           <Icon name="plus" size={14} />
         </button>
       </form>

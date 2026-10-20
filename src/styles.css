@@ -36,6 +36,7 @@
   --muted: #959daf;
   --accent: #ff6b6b;
   --accent-2: #ffd23f;
+  --focus: var(--accent-2);
   --accent-ink: #1b0e0f;
   --good: #5fd38d;
   --bad: #ff6b6b;
@@ -64,6 +65,7 @@
   --muted: #9095ab;
   --accent: #e3b955;
   --accent-2: #5b8cff;
+  --focus: var(--accent-2);
   --accent-ink: #171107;
   --good: #4fd1a1;
   --bad: #ff5c6c;
@@ -92,6 +94,7 @@
   --muted: #ab9a7e;
   --accent: #f2b443;
   --accent-2: #b86af5;
+  --focus: var(--accent-2);
   --accent-ink: #1c1306;
   --good: #7ad45a;
   --bad: #e05a47;
@@ -125,6 +128,7 @@
   --muted: #8a8a8a;
   --accent: #a9a4ff;
   --accent-2: #61d6d6;
+  --focus: var(--accent-2);
   --accent-ink: #0c0c0c;
   --good: #16c60c;
   --bad: #e74856;
@@ -155,9 +159,10 @@
   --muted: #a99a87;
   --accent: #3fd96a;
   --accent-2: #f2c14e;
+  --focus: var(--accent-2);
   --accent-ink: #062210;
   --good: #3fd96a;
-  --bad: #e2483d;
+  --bad: #e64c41;
   --font-display: 'Pixelify Sans Variable', var(--font-body);
   --font-ui: var(--font-body);
   --font-num: 'Pixelify Sans Variable', var(--font-body);
@@ -181,12 +186,13 @@
   --panel-2: #2a3442;
   --border: #323d4c;
   --text: #e1e5ea;
-  --muted: #8f99a5;
+  --muted: #929ca8;
   --accent: #1a9fff;
   --accent-2: #66c0f4;
+  --focus: var(--accent-2);
   --accent-ink: #03111d;
   --good: #5ba32b;
-  --bad: #e0464b;
+  --bad: #e74d52;
   --font-display: var(--font-body);
   --font-ui: var(--font-body);
   --font-num: var(--font-body);
@@ -214,6 +220,7 @@
   --muted: #8d98a3;
   --accent: #6fb7ab;
   --accent-2: #a3b899;
+  --focus: var(--accent-2);
   --accent-ink: #0a1714;
   --good: #7fc29b;
   --bad: #d9776f;
@@ -262,6 +269,16 @@ input,
 select {
   font: inherit;
   color: inherit;
+}
+
+/* Keyboard focus: a ring in each theme's --focus (its second accent, checked against the panels in
+   a11y.test.tsx). Never removed without a replacement. */
+:focus-visible {
+  outline: 2px solid var(--focus, #ffd23f);
+  outline-offset: 2px;
+}
+:focus:not(:focus-visible) {
+  outline: none;
 }
 
 h2,
@@ -378,7 +395,6 @@ select,
 select:focus,
 .note-add input:focus,
 .chat-channel input:focus {
-  outline: none;
   border-color: var(--accent);
 }
 select {
@@ -411,7 +427,6 @@ input[type='checkbox'] {
   border-color: var(--border);
 }
 .ghost-input:focus {
-  outline: none;
   border-color: var(--accent);
   background: rgba(0, 0, 0, 0.25);
 }
@@ -649,7 +664,6 @@ input[type='color'] {
   color: inherit;
   font: inherit;
   letter-spacing: inherit;
-  outline: none;
 }
 
 .stream-btn {
@@ -2479,7 +2493,6 @@ kbd {
   font-size: 14px;
 }
 .clips__discord input:focus {
-  outline: none;
   border-color: var(--accent);
 }
 .clips__discord .hint {
@@ -2782,7 +2795,6 @@ kbd {
 }
 .source-card:hover,
 .source-card:focus-visible {
-  outline: none;
   border-color: var(--accent);
 }
 .source-card:active {
@@ -3272,7 +3284,6 @@ kbd {
   font-size: 14px;
 }
 .list-editor input:focus {
-  outline: none;
   border-color: var(--accent);
 }
 .list-editor .list-editor__label {
@@ -4115,7 +4126,10 @@ p.chat-empty {
   *::after {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
+    animation-delay: 0s !important;
     transition-duration: 0.01ms !important;
+    transition-delay: 0s !important;
+    scroll-behavior: auto !important;
   }
 }
 
@@ -4386,7 +4400,6 @@ p.chat-empty {
   font-size: 14px;
 }
 .voice__setup input:focus {
-  outline: none;
   border-color: var(--accent);
 }
 .voice__setup .btn {
@@ -4956,7 +4969,6 @@ p.chat-empty {
 }
 .web-bar__address:focus {
   border-color: var(--accent);
-  outline: none;
 }
 .web-bar__problem {
   flex-basis: 100%;
@@ -5078,6 +5090,15 @@ p.chat-empty {
   border-radius: var(--radius-sm);
   background: var(--panel-2);
   color: var(--muted);
+}
+.drive__search:focus-within,
+.gallery__search:focus-within,
+.palette__search:focus-within {
+  outline: 2px solid var(--focus, #ffd23f);
+  outline-offset: 2px;
+}
+.palette__search:focus-within {
+  outline-offset: -2px;
 }
 .drive__search input {
   flex: 1;

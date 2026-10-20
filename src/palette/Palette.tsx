@@ -107,9 +107,9 @@ function Dialog({ state, mutate, mutatePreset, onToggleStream, onClose }: Props 
       saveClip: () => void saveClip(),
       watchClip,
       revealClips: () => revealClip(),
-      launchTile: (tile) => void launchTile(tile.id).catch((err) => showNotice(err instanceof Error ? err.message : `Couldn’t open ${tile.name}.`)),
+      launchTile: (tile) => void launchTile(tile.id).catch((err) => showNotice(err instanceof Error ? err.message : `Couldn’t open ${tile.name}.`, true)),
       openDriveFile: (file) => openFile(file, 'cloud'),
-      obs: (action) => void obsAction(action).then((problem) => problem && showNotice(problem)),
+      obs: (action) => void obsAction(action).then((problem) => problem && showNotice(problem, true)),
       openWeb: requestWebOpen,
       primeAudio,
       callOut,
@@ -229,7 +229,9 @@ function Dialog({ state, mutate, mutatePreset, onToggleStream, onClose }: Props 
           {rows.length === 0 && <p className="palette__empty muted">Nothing matches “{query.trim()}”.</p>}
           {sections.map((section) => (
             <div key={section.group} role="group" aria-label={section.group}>
-              <h4 className="palette__heading">{section.group}</h4>
+              <h4 className="palette__heading" aria-hidden="true">
+                {section.group}
+              </h4>
               {section.rows.map((row) => {
                 const i = ++index;
                 return (

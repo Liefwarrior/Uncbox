@@ -6,6 +6,7 @@ import { PRESETS } from '../presets';
 import type { AppState } from '../state/model';
 import { activePreset, installedFrom } from '../state/presets';
 import type { Mutate } from '../state/useAppState';
+import { useDialog } from '../useDialog';
 import { Icon } from './Icon';
 
 interface Props {
@@ -36,14 +37,9 @@ function Dialog({ state, mutate, onClose }: Props & { onClose: () => void }) {
   const [busy, setBusy] = useState<string | null>(null);
   const search = useRef<HTMLInputElement>(null);
 
-  // Put focus back where it was when the gallery goes.
-  useEffect(() => {
-    const before = document.activeElement as HTMLElement | null;
-    search.current?.focus();
-    return () => {
-      if (before?.isConnected) before.focus({ preventScroll: true });
-    };
-  }, []);
+  // Focus starts in the search box, stays inside, and goes back to the opener when the gallery goes.
+  const box = useRef<HTMLDivElement>(null);
+  useDialog(box, { initial: () => search.current });
 
   // Handled ahead of the page's own keys, so Esc doesn't also leave stream mode.
   const close = useRef(onClose);
@@ -80,7 +76,7 @@ function Dialog({ state, mutate, onClose }: Props & { onClose: () => void }) {
 
   return (
     <div className="gallery" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
-      <div className="gallery__box" role="dialog" aria-label="Preset gallery" aria-modal="true">
+      <div ref={box} className="gallery__box" role="dialog" aria-label="Preset gallery" aria-modal="true">
         <header className="gallery__head">
           <h2>Preset gallery</h2>
           <p className="muted">Presets other people made. Installing adds a copy to your list; your own presets are never touched.</p>

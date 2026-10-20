@@ -52,7 +52,7 @@ export function CharacterPanel({ character: c, title, mutatePreset }: Props) {
 
         <div className="character__line">
           <span className="character__level">
-            <button className="icon-btn ctl" title="Level down" onClick={() => set({ level: Math.max(1, c.level - 1), xp: 0 })}>
+            <button className="icon-btn ctl" title="Level down" aria-label="Level down" onClick={() => set({ level: Math.max(1, c.level - 1), xp: 0 })}>
               <Icon name="minus" size={12} />
             </button>
             <span>
@@ -60,7 +60,7 @@ export function CharacterPanel({ character: c, title, mutatePreset }: Props) {
             </span>
             <button
               className="icon-btn ctl"
-              title="Level up"
+              title="Level up" aria-label="Level up"
               onClick={() => set({ level: Math.min(c.maxLevel, c.level + 1), xp: 0 })}
             >
               <Icon name="plus" size={12} />
@@ -68,12 +68,12 @@ export function CharacterPanel({ character: c, title, mutatePreset }: Props) {
           </span>
           {editing ? (
             <>
-              <select value={c.race} onChange={(e) => set({ race: e.target.value })} title="Race">
+              <select value={c.race} onChange={(e) => set({ race: e.target.value })} title="Race" aria-label="Race">
                 {WOW_RACES.map((r) => (
                   <option key={r}>{r}</option>
                 ))}
               </select>
-              <select value={c.cls} onChange={(e) => set({ cls: e.target.value })} title="Class">
+              <select value={c.cls} onChange={(e) => set({ cls: e.target.value })} title="Class" aria-label="Class">
                 {Object.keys(WOW_CLASSES).map((k) => (
                   <option key={k}>{k}</option>
                 ))}

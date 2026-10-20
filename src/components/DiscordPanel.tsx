@@ -116,19 +116,19 @@ export function DiscordPanel({ pinned, title, mutate }: Props) {
               <div className="voice__controls ctl">
                 <button
                   className={`icon-btn ${d.self.mute ? 'is-off' : ''}`}
-                  title={d.self.mute ? 'Unmute' : 'Mute'}
+                  title={d.self.mute ? 'Unmute' : 'Mute'} aria-label={d.self.mute ? 'Unmute' : 'Mute'}
                   onClick={() => run(() => discordApi.voice({ mute: !d.self.mute }))}
                 >
                   <Icon name={d.self.mute ? 'micOff' : 'mic'} size={15} />
                 </button>
                 <button
                   className={`icon-btn ${d.self.deaf ? 'is-off' : ''}`}
-                  title={d.self.deaf ? 'Undeafen' : 'Deafen'}
+                  title={d.self.deaf ? 'Undeafen' : 'Deafen'} aria-label={d.self.deaf ? 'Undeafen' : 'Deafen'}
                   onClick={() => run(() => discordApi.voice({ deaf: !d.self.deaf }))}
                 >
                   <Icon name={d.self.deaf ? 'headphonesOff' : 'headphones'} size={15} />
                 </button>
-                <button className="icon-btn" title="Leave voice" onClick={() => run(discordApi.leave)}>
+                <button className="icon-btn" title="Leave voice" aria-label="Leave voice" onClick={() => run(discordApi.leave)}>
                   <Icon name="leave" size={15} />
                 </button>
               </div>
@@ -151,7 +151,7 @@ export function DiscordPanel({ pinned, title, mutate }: Props) {
                     {editing && (
                       <button
                         className="icon-btn"
-                        title="Unpin"
+                        title="Unpin" aria-label="Unpin"
                         onClick={() =>
                           mutate((s) => void (s.discord.pinned = s.discord.pinned.filter((p) => p.id !== c.id)))
                         }
@@ -285,6 +285,7 @@ function ChannelPicker({
     <div className="picker no-drag">
       <div className="picker__head">
         <select
+          aria-label="Server"
           value={guild?.id ?? ''}
           onChange={(e) => setGuild(guilds?.find((g) => g.id === e.target.value) ?? null)}
         >
@@ -295,7 +296,7 @@ function ChannelPicker({
             </option>
           ))}
         </select>
-        <button className="icon-btn" title="Done" onClick={onClose}>
+        <button className="icon-btn" title="Done" aria-label="Done" onClick={onClose}>
           <Icon name="x" size={14} />
         </button>
       </div>

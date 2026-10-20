@@ -127,7 +127,7 @@ function TriggerList({ data, stream, mutatePreset, onSetup }: ListProps) {
     <section className="triggers ctl" aria-label="Screen triggers">
       <h3 className="triggers__head">
         Screen triggers
-        <button className="icon-btn" title="Set up screen triggers" disabled={!stream} onClick={onSetup}>
+        <button className="icon-btn" title="Set up screen triggers" aria-label="Set up screen triggers" disabled={!stream} onClick={onSetup}>
           <Icon name="pencil" size={13} />
         </button>
       </h3>
@@ -242,11 +242,11 @@ function TriggerEditor({ stream, data, recipes, mutatePreset, onClose }: Trigger
         const problem = t.phrase || t.regex ? phraseProblem(t.phrase, t.regex) : null;
         const recipe = orderedRecipes().find((r) => r.phrase === t.phrase);
         return (
-          <li key={t.id} className={`trigger-edit ${selected === t.id ? 'is-selected' : ''}`} onClick={() => setSelected(t.id)}>
+          <li key={t.id} className={`trigger-edit ${selected === t.id ? 'is-selected' : ''}`} onClick={() => setSelected(t.id)} onFocus={() => setSelected(t.id)}>
             <input value={t.label} placeholder="Name" onChange={(e) => edit(t.id, { label: e.target.value })} />
             <button
               className="icon-btn"
-              title="Remove this trigger"
+              title="Remove this trigger" aria-label="Remove this trigger"
               onClick={() => mutatePreset((d) => void (d.triggers = d.triggers.filter((x) => x.id !== t.id)))}
             >
               <Icon name="x" size={14} />
@@ -358,7 +358,7 @@ function HudEditor({ stream, hud, suggestions, mutatePreset, onClose }: EditorPr
       onClose={onClose}
     >
       {hud.map((r) => (
-        <li key={r.id} className={selected === r.id ? 'is-selected' : ''} onClick={() => setSelected(r.id)}>
+        <li key={r.id} className={selected === r.id ? 'is-selected' : ''} onClick={() => setSelected(r.id)} onFocus={() => setSelected(r.id)}>
           <input value={r.label} placeholder="Name" onChange={(e) => edit(r.id, { label: e.target.value })} />
           <label className="inline" title="Reads digits only, which is more reliable for counts">
             <input type="checkbox" checked={r.numeric} onChange={(e) => edit(r.id, { numeric: e.target.checked })} /> Number
@@ -366,7 +366,7 @@ function HudEditor({ stream, hud, suggestions, mutatePreset, onClose }: EditorPr
           <span className="hud-editor__reading">{r.value || 'Reading…'}</span>
           <button
             className="icon-btn"
-            title="Remove this box"
+            title="Remove this box" aria-label="Remove this box"
             onClick={() => mutatePreset((d) => void (d.hud = d.hud.filter((x) => x.id !== r.id)))}
           >
             <Icon name="x" size={14} />

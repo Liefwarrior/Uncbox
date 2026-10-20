@@ -127,6 +127,7 @@ export function GamePanel({ game, preset, wow, clips, mutatePreset }: Props) {
 
   return (
     <section
+      aria-label="Game"
       className={`panel panel--game ${game.source === 'chroma' ? 'is-chroma' : ''} ${game.source === 'native' ? 'is-native' : ''} ${!stream && game.source !== 'chroma' && !(game.source === 'native' && native.attached) ? 'is-empty' : ''}`}
       style={game.source === 'chroma' ? { background: game.chroma } : undefined}
     >
@@ -211,7 +212,7 @@ export function GamePanel({ game, preset, wow, clips, mutatePreset }: Props) {
           </div>
 
           {game.source === 'device' && (
-            <select value={game.deviceId ?? ''} onChange={(e) => set({ deviceId: e.target.value || null })} title="Video input">
+            <select value={game.deviceId ?? ''} onChange={(e) => set({ deviceId: e.target.value || null })} title="Video input" aria-label="Video input">
               <option value="">System default</option>
               {devices.map((d, i) => (
                 <option key={d.deviceId || i} value={d.deviceId}>
@@ -306,7 +307,7 @@ export function GamePanel({ game, preset, wow, clips, mutatePreset }: Props) {
               </button>
             </>
           )}
-          <button className="icon-btn" title="Hide the game window" onClick={() => hide('game', 'Game')}>
+          <button className="icon-btn" title="Hide the game window" aria-label="Hide the game window" onClick={() => hide('game', 'Game')}>
             <Icon name="x" size={14} />
           </button>
         </div>

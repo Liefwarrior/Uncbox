@@ -40,7 +40,7 @@ export function LauncherBody({ s, set, editing, tilesEditing }: { s: WidgetSetti
     try {
       await launchTile(tile.id);
     } catch (err) {
-      showNotice(err instanceof Error ? err.message : `Couldn’t open ${tile.name}.`);
+      showNotice(err instanceof Error ? err.message : `Couldn’t open ${tile.name}.`, true);
     }
     setTimeout(() => setBusy((b) => (b === tile.id ? '' : b)), 600);
   };
@@ -91,16 +91,16 @@ export function LauncherBody({ s, set, editing, tilesEditing }: { s: WidgetSetti
             </button>
             {arranging && (
               <span className="launch-tile__tools">
-                <button className="icon-btn" title="Move earlier" disabled={i === 0} onClick={() => move(i, -1)}>
+                <button className="icon-btn" title="Move earlier" aria-label="Move earlier" disabled={i === 0} onClick={() => move(i, -1)}>
                   <Icon name="arrowLeft" size={12} />
                 </button>
-                <button className="icon-btn" title="Move later" disabled={i === ids.length - 1} onClick={() => move(i, 1)}>
+                <button className="icon-btn" title="Move later" aria-label="Move later" disabled={i === ids.length - 1} onClick={() => move(i, 1)}>
                   <Icon name="arrowRight" size={12} />
                 </button>
-                <button className="icon-btn" title="Change" onClick={() => setForm({ id: tile.id, name: tile.name, type: tile.type, target: tile.target })}>
+                <button className="icon-btn" title="Change" aria-label="Change" onClick={() => setForm({ id: tile.id, name: tile.name, type: tile.type, target: tile.target })}>
                   <Icon name="pencil" size={12} />
                 </button>
-                <button className="icon-btn" title="Remove" onClick={() => remove(tile)}>
+                <button className="icon-btn" title="Remove" aria-label="Remove" onClick={() => remove(tile)}>
                   <Icon name="x" size={12} />
                 </button>
               </span>

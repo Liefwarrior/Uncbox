@@ -55,7 +55,7 @@ export function MatchPanel({ match, title, mutatePreset }: { match: MatchState; 
             <div key={key} className={`kda__stat kda__stat--${key}`}>
               <button
                 className="kda__value"
-                title={`Add one (${label})`}
+                title={`Add one (${label})`} aria-label={`Add one (${label})`}
                 onClick={() => mutatePreset((d) => void d.match[key]++)}
               >
                 <Digits key={match[key]} className="bump" value={match[key]} />
@@ -63,7 +63,7 @@ export function MatchPanel({ match, title, mutatePreset }: { match: MatchState; 
               <span className="kda__label">{label}</span>
               <button
                 className="icon-btn ctl kda__minus"
-                title={`Remove one (${label})`}
+                title={`Remove one (${label})`} aria-label={`Remove one (${label})`}
                 onClick={() => mutatePreset((d) => void (d.match[key] = Math.max(0, d.match[key] - 1)))}
               >
                 <Icon name="minus" size={12} />

@@ -3,6 +3,7 @@ import ReactGridLayout, { type Compactor, type EventCallback, type Layout } from
 import 'react-grid-layout/css/styles.css';
 import 'react-resizable/css/styles.css';
 import { fitResize, fitToBoard } from '../layout';
+import { nudgeRect } from '../nudge';
 import { sizeOf } from '../panels/catalog';
 import { type AppWindow, type BoardId, GRID_COLS, GRID_ROWS, type GridItem, isWidgetId, isWindowId, type Widget } from '../state/model';
 import { WIDGET_INFO } from '../widgets/catalog';
@@ -17,9 +18,11 @@ interface BoardApi {
   hide: (id: BoardId, name?: string) => void;
   /** Resize a panel's width so its content area matches an aspect ratio (width / height). */
   fitWidthToAspect: (id: BoardId, aspect: number) => void;
+  /** Arrow keys on a panel's handle: moves it a cell, or resizes it with Shift. False for any other key. */
+  nudge: (id: BoardId, key: string, resize: boolean) => boolean;
 }
 
-const BoardContext = createContext<BoardApi>({ editing: false, hide: () => {}, fitWidthToAspect: () => {} });
+const BoardContext = createContext<BoardApi>({ editing: false, hide: () => {}, fitWidthToAspect: () => {}, nudge: () => false });
 export const useBoard = () => useContext(BoardContext);
 
 function useElementSize<T extends HTMLElement>() {
@@ -171,8 +174,16 @@ export function Board({ layout, widgets, editing, mutatePreset, renderPanel }: P
           // Through the same fitting as a drag-resize, so neighbours give way and nothing leaves the board.
           d.layout = fitResize(d.layout, id, { x: item.x, y: item.y, w: cols, h: item.h }, d.widgets);
         }),
+      nudge: (id, key, resize) => {
+        const item = layout.find((it) => it.i === id);
+        const want = item && nudgeRect(item, key, resize);
+        if (!want) return false;
+        // The same fitting as a mouse resize, so neighbours give way and nothing leaves the board.
+        mutatePreset((d) => void (d.layout = fitResize(d.layout, id, want, d.widgets)));
+        return true;
+      },
     }),
-    [editing, mutatePreset, rowHeight, colWidth],
+    [editing, mutatePreset, rowHeight, colWidth, layout],
   );
 
   return (

@@ -2,6 +2,7 @@ import { type PointerEvent, type ReactNode, useEffect, useRef, useState } from '
 import { createPortal } from 'react-dom';
 import { type Box, useVideo } from '../hud/reader';
 import { useCover } from '../native';
+import { useDialog } from '../useDialog';
 
 export interface Mark extends Box {
   id: string;
@@ -35,6 +36,8 @@ export function RegionEditor({ stream, title, marks, selected, canDraw, onDraw, 
   const [still, setStill] = useState('');
   const [drawing, setDrawing] = useState<{ from: [number, number]; box: Box } | null>(null);
   const picture = useRef<HTMLDivElement>(null);
+  const box = useRef<HTMLDivElement>(null);
+  useDialog(box);
 
   const snap = () => {
     const v = video.current;
@@ -79,8 +82,8 @@ export function RegionEditor({ stream, title, marks, selected, canDraw, onDraw, 
   });
 
   return createPortal(
-    <div className="hud-editor" role="dialog" aria-label={title}>
-      <div className="hud-editor__box">
+    <div className="hud-editor" role="dialog" aria-modal="true" aria-label={title}>
+      <div ref={box} className="hud-editor__box">
         <div className="hud-editor__head">
           <strong>{title}</strong>
           <span className="spacer" />

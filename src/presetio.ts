@@ -27,11 +27,11 @@ export function downloadPreset(name: string, base: PresetId, data: PresetData) {
 
 /** Adds a preset file as a new preset of your own, and shows it. Says in plain words how it went. */
 export async function importPresetFile(file: File, state: AppState, mutate: Mutate) {
-  if (file.size > MAX_PRESET_FILE_BYTES) return showNotice('That file is too big to be a preset (the limit is 5 MB).');
+  if (file.size > MAX_PRESET_FILE_BYTES) return showNotice('That file is too big to be a preset (the limit is 5 MB).', true);
   const text = await file.text().catch(() => null);
-  if (text === null) return showNotice('Couldn’t read that file.');
+  if (text === null) return showNotice('Couldn’t read that file.', true);
   const result = parsePresetText(text);
-  if (!result.ok) return showNotice(result.error);
+  if (!result.ok) return showNotice(result.error, true);
   addImportedPreset(result, state, mutate);
 }
 
@@ -44,7 +44,7 @@ export const FULL_MESSAGE = `You already have ${MAX_CUSTOM} presets of your own.
  */
 export function addImportedPreset(result: PresetImportOk, state: AppState, mutate: Mutate, galleryId?: string): boolean {
   if (!canAddCustom(state)) {
-    showNotice(FULL_MESSAGE);
+    showNotice(FULL_MESSAGE, true);
     return false;
   }
   // Settled out here, not inside the recipe: the id must be the same whenever the recipe runs.
@@ -73,19 +73,19 @@ export async function installGalleryPreset(
     return true;
   }
   if (!canAddCustom(state)) {
-    showNotice(FULL_MESSAGE);
+    showNotice(FULL_MESSAGE, true);
     return false;
   }
   let text: string;
   try {
     text = await fetchText(entry.id);
   } catch (err) {
-    showNotice(err instanceof Error ? err.message : 'Couldn’t download that preset. Try again.');
+    showNotice(err instanceof Error ? err.message : 'Couldn’t download that preset. Try again.', true);
     return false;
   }
   const result = parsePresetText(text);
   if (!result.ok) {
-    showNotice(`Couldn’t install “${entry.name}”: ${result.error}`);
+    showNotice(`Couldn’t install “${entry.name}”: ${result.error}`, true);
     return false;
   }
   return addImportedPreset(result, state, mutate, entry.id);
