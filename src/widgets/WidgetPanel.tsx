@@ -6,6 +6,7 @@ import type { Widget, WidgetSettings } from '../state/model';
 import type { MutatePreset } from '../state/useAppState';
 import { type ObsSnapshot, useObs } from '../obs';
 import { WIDGET_INFO, widgetTitle } from './catalog';
+import { DriveBody, DriveSettings } from './DriveWidget';
 import { describeWeather, findPlace, useMedia, useNetstats, useNotifications, useSystem, useWeather, type PingStats } from './data';
 import { fpsTone, pingTone, SPARK_H, SPARK_W, sparkline, type Tone } from './netstats';
 import { ObsBody } from './ObsWidget';
@@ -74,7 +75,10 @@ function SimpleWidgetPanel({ widget, mutatePreset }: Props) {
             : undefined
       }
     >
-      {editing && (settingsOpen || unset) && hasSettings ? (
+      {widget.type === 'drive' && settingsOpen ? (
+        // Signing out and replacing the client work outside edit mode too.
+        <DriveSettings onDone={() => setSettingsOpen(false)} />
+      ) : editing && (settingsOpen || unset) && hasSettings && widget.type !== 'drive' ? (
         <Settings widget={widget} set={set} onDone={() => setSettingsOpen(false)} />
       ) : (
         <Body
@@ -128,6 +132,8 @@ function Body({ widget, set, editing, tilesEditing, obs, setup, onSetupDone }: B
       return <ObsBody obs={obs} setup={setup} onSetupDone={onSetupDone} />;
     case 'web':
       return null; // its own panel, see WebWidget.tsx
+    case 'drive':
+      return <DriveBody s={s} set={set} />;
   }
 }
 

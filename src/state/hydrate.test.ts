@@ -215,3 +215,22 @@ describe('hydrate: focus and launcher widgets', () => {
     expect(load({ focusPhase: 'nap', focusRound: -2 }).settings).toMatchObject({ focusPhase: 'work', focusRound: 1 });
   });
 });
+
+describe('hydrate: Google Drive widget', () => {
+  const withDrive = (settings: unknown) => {
+    const saved = JSON.parse(JSON.stringify(defaultState()));
+    saved.presets.wow.widgets = [{ id: 'wdg-drive1', type: 'drive', title: '', settings }];
+    saved.presets.wow.layout.push({ i: 'wdg-drive1', x: 0, y: 30, w: 6, h: 6 });
+    return hydrate(saved).presets.wow.widgets[0];
+  };
+
+  it('keeps the chosen view', () => {
+    expect(withDrive({ driveView: 'starred' }).settings.driveView).toBe('starred');
+  });
+
+  it('falls back to Recent for a missing or unknown view', () => {
+    expect(withDrive({}).settings.driveView).toBe('recent');
+    expect(withDrive({ driveView: 'trash' }).settings.driveView).toBe('recent');
+    expect(withDrive({ driveView: 7 }).settings.driveView).toBe('recent');
+  });
+});

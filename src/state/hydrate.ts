@@ -161,6 +161,7 @@ export function hydratePreset(id: PresetId, saved: unknown): PresetData {
     f.focusRound = Math.max(1, f.focusRound);
     f.launcherTiles = f.launcherTiles.filter((t) => typeof t === 'string');
   }
+  for (const w of p.widgets) if (w.type === 'drive' && !['recent', 'starred', 'shared', 'search'].includes(w.settings.driveView)) w.settings.driveView = 'recent';
   p.hud = objects(p.hud)
     .map((r) => overlay({ id: uid(), label: '', x: 0, y: 0, w: 10, h: 5, numeric: true, value: '', at: 0 }, r))
     .slice(0, MAX_HUD);

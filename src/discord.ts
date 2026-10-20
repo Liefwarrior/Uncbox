@@ -111,7 +111,7 @@ export const discordApi = {
  * Opens a setup page in the default browser, via the local server. With once = true it opens at
  * most once per browser session, so reloading the dashboard does not keep popping windows.
  */
-export function openPage(target: 'discord-portal' | 'discord-oauth', once = false) {
+export function openPage(target: 'discord-portal' | 'discord-oauth' | 'google-credentials' | 'google-consent' | 'google-drive-api', once = false) {
   const key = `uncbox:opened:${target}`;
   try {
     if (once && sessionStorage.getItem(key)) return;

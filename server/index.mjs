@@ -22,6 +22,8 @@ import {
 } from '../integrations/wow/install.mjs';
 import { createClips } from './clips.mjs';
 import { createDiscordBridge } from './discord.mjs';
+import { createDrive } from './drive.mjs';
+import { createGoogle } from './google.mjs';
 import { openInBrowser, pageFor } from './open.mjs';
 import { createGameSettings } from './gamesettings.mjs';
 import { createNetstats } from './netstats.mjs';
@@ -188,6 +190,10 @@ const web = createWeb({ isLocal, sendJson });
 const steam = createSteam({ broadcastEvent, sendJson, isLocal, readJson, dataDir });
 const obs = createObs({ broadcastEvent, sendJson, isLocal, readJson, dataDir });
 const launcher = createLauncher({ sendJson, isLocal, readJson, dataDir });
+// Sign-in redirects to this server's own plain-http port, so Google needs `port`.
+const google = createGoogle({ broadcastEvent, sendJson, isLocal, readJson, dataDir, port });
+// UNCBOX_DRIVE_FOLDER stands in for the Drive for desktop folder, to try the widget without it.
+const drive = createDrive({ google, isLocal, sendJson, readJson, localFolder: process.env.UNCBOX_DRIVE_FOLDER || '' });
 const ocr = createOcr({ isLocal, sendJson, readBody });
 const smite = createSmite({ broadcastEvent, sendJson });
 const gameSettings = createGameSettings({ isLocal, sendJson, readJson });
@@ -224,6 +230,8 @@ async function handleApi(req, res, url) {
   if (url.pathname === '/api/steam' || url.pathname.startsWith('/api/steam/')) return steam(req, res, url);
   if (url.pathname === '/api/obs' || url.pathname.startsWith('/api/obs/')) return obs(req, res, url);
   if (url.pathname.startsWith('/api/launcher/')) return launcher(req, res, url);
+  if (url.pathname.startsWith('/api/google/')) return google.handle(req, res, url);
+  if (url.pathname.startsWith('/api/drive/')) return drive(req, res, url);
   if (url.pathname === '/api/ocr') return ocr(req, res);
   if (url.pathname === '/api/smite') return smite(req, res);
   if (url.pathname === '/api/game-settings') return gameSettings(req, res);

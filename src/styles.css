@@ -4772,3 +4772,184 @@ p.chat-empty {
   margin: 0;
 }
 
+
+/* ---------- Google Drive widget ---------- */
+
+.drive {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  height: 100%;
+  min-height: 0;
+  font-size: 14px;
+}
+.drive--setup {
+  height: auto;
+}
+.drive h3 {
+  margin: 0;
+  font-size: 16px;
+}
+.drive p {
+  margin: 0;
+}
+.drive__steps {
+  margin: 0;
+  padding-left: 20px;
+  display: grid;
+  gap: 6px;
+  color: var(--muted);
+}
+.drive__steps .btn {
+  margin-left: 2px;
+}
+.drive__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+.drive__tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.drive__search {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--panel-2);
+  color: var(--muted);
+}
+.drive__search input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  outline: none;
+}
+.drive__list {
+  display: grid;
+  align-content: start;
+  gap: 6px;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
+.drive__list ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.drive__list > .btn {
+  justify-self: start;
+}
+.drive__file {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 5px 6px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.drive__file:hover:not(:disabled) {
+  background: var(--panel-2);
+}
+.drive__file:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.drive__icon {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 28px;
+  height: 28px;
+  color: var(--accent);
+}
+.drive__thumb {
+  display: none;
+  flex: none;
+  width: 56px;
+  height: 40px;
+  border-radius: 4px;
+  background: var(--panel-2);
+  object-fit: cover;
+  object-position: top;
+}
+.drive__name {
+  display: grid;
+  flex: 1;
+  min-width: 0;
+}
+.drive__name strong {
+  overflow: hidden;
+  font-weight: 550;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.drive__name small,
+.drive__owner,
+.drive__when {
+  color: var(--muted);
+  font-size: 12px;
+}
+.drive__owner {
+  display: none;
+  flex: 0 1 28%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.drive__when {
+  flex: none;
+  font-variant-numeric: tabular-nums;
+}
+.drive__foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.is-spinning svg {
+  animation: drive-spin 0.9s linear infinite;
+}
+@keyframes drive-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+/* Wide enough for who owns it; tall and wide enough for a picture of the file. */
+@container (min-width: 380px) {
+  .drive__owner {
+    display: block;
+  }
+}
+@container (min-width: 300px) and (min-height: 280px) {
+  .has-thumb .drive__thumb {
+    display: block;
+  }
+  .has-thumb .drive__icon {
+    display: none;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .is-spinning svg {
+    animation: none;
+  }
+}
+

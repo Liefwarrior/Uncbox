@@ -1,5 +1,5 @@
 // Opens a page in the user's default browser. Used when a setup step needs them on an external
-// site (e.g. the Discord Developer Portal), so Uncbox takes them straight there instead of
+// site (e.g. the Discord Developer Portal or Google Cloud Console), so Uncbox takes them straight there instead of
 // describing where to click. Only fixed, known URLs are ever opened.
 
 import { spawn } from 'node:child_process';
@@ -28,6 +28,12 @@ export function pageFor(target, { discordAppId } = {}) {
       return DISCORD_ID.test(discordAppId ?? '')
         ? `https://discord.com/developers/applications/${discordAppId}/oauth2`
         : 'https://discord.com/developers/applications';
+    case 'google-credentials':
+      return 'https://console.cloud.google.com/apis/credentials';
+    case 'google-consent':
+      return 'https://console.cloud.google.com/apis/credentials/consent';
+    case 'google-drive-api':
+      return 'https://console.cloud.google.com/apis/library/drive.googleapis.com';
     default:
       return null;
   }

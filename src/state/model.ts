@@ -59,7 +59,7 @@ export function isWidgetId(id: string): id is WidgetId {
   return id.startsWith('wdg-');
 }
 
-export const WIDGET_TYPES = ['clock', 'weather', 'media', 'notifications', 'system', 'network', 'countdown', 'text', 'obs', 'focus', 'launcher', 'web'] as const;
+export const WIDGET_TYPES = ['clock', 'weather', 'media', 'notifications', 'system', 'network', 'countdown', 'text', 'obs', 'focus', 'launcher', 'web', 'drive'] as const;
 export type WidgetType = (typeof WIDGET_TYPES)[number];
 
 /** Every widget type's settings in one shape; each type reads only its own. */
@@ -109,6 +109,8 @@ export interface WidgetSettings {
   hideToolbar: boolean;
   /** Web: page zoom in percent, 50 to 200. */
   zoom: number;
+  /** Drive: which list is showing (recent, starred, shared or search). */
+  driveView: string;
 }
 
 export interface Widget {
