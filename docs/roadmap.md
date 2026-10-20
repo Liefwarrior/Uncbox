@@ -98,7 +98,7 @@ that loads when the main one is corrupt, PowerShell and polling helpers that sto
 needs them (the media helper runs forever today), and a clean shutdown. Done when: killing the
 server mid-write never corrupts state, and an idle Uncbox with no widgets showing runs no helpers.
 
-### HIP-3 · Smoke tests for every widget and route — Building
+### HIP-3 · Smoke tests for every widget and route — Shipped (a4521de)
 A test that renders every widget type and panel in every preset theme with mocked data (no
 crashes, no React warnings, compact sizes too), and a server test that boots on a random port with
 a temp data folder and calls every GET route. Done when: both run in `npm run check`.
