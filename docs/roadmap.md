@@ -69,7 +69,7 @@ Unread count and the latest few subjects/senders, click to open in the Web widge
 Ctrl+K anywhere in Uncbox: switch presets, add widgets, launch Launcher tiles, search Drive, open
 a URL in a Web widget, save a clip, toggle stream mode.
 
-### UBX-13 · Twitch stream info — Queued
+### UBX-13 · Twitch stream info — Building
 Viewer count, followers/subs as they happen, edit title and category from Uncbox (Twitch sign-in
 kept server-side, like Google).
 
