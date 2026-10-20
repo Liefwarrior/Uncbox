@@ -39,6 +39,13 @@ Two more, without screenshots yet:
 Every panel works in every preset, so any game can borrow from the others. Each preset also picks
 its own background in the sidebar: animated shapes or a pattern, drawn in the preset's colors.
 
+## Download (Windows)
+
+Unzip `Uncbox-<version>-win-x64.zip` anywhere and double-click `Uncbox.exe`. There's nothing to
+install: it brings its own copy of Node.js. It keeps your settings in `%LOCALAPPDATA%\Uncbox`, so
+deleting or replacing the unzipped folder never loses them. Packaging it yourself is
+`npm run package` (see [native/README.md](native/README.md#packaging)).
+
 ## Get started
 
 You need [Node.js](https://nodejs.org) 20 or newer, and Chrome or Edge.

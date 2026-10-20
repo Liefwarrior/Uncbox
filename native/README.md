@@ -113,10 +113,11 @@ The page and the app talk with small JSON messages over WebView2's `postMessage`
 | --- | --- |
 | `UncboxShell/Program.cs` | Options, one copy at a time. |
 | `UncboxShell/ShellForm.cs` | The window, tray, WebView2, messages, the hole and Full screen. |
-| `UncboxShell/ServerHost.cs` | Finds or starts the Uncbox server. |
+| `UncboxShell/ServerHost.cs` | Finds or starts the Uncbox server (the repo's, or a package's own). |
 | `UncboxShell/GameWindow.cs` | Restyles, places and restores the game's window. |
 | `UncboxShell/Native.cs` | The Win32 calls. |
 | `../scripts/app.mjs` | `npm run app`: builds when needed, then starts the app. |
+| `../scripts/package.mjs` | `npm run package`: the folder and zip anyone can run. |
 
 ## Tested
 
@@ -138,8 +139,37 @@ Driven over WebView2's DevTools port, with a stand-in game window:
 app's window is what tools like Borderless Gaming do, and it never touches the game's memory or
 input. Still, check competitive games one at a time.
 
+## Packaging
+
+```bash
+npm run package
+```
+
+builds the page, publishes the app as one self-contained file (no .NET install needed), and puts
+everything into `release/Uncbox/`, plus `release/Uncbox-<version>-win-x64.zip` to hand out. It
+needs the .NET 10 SDK and a connection the first time, to download Node.
+
+```
+Uncbox.exe              the app
+node/node.exe           a portable Node (pinned in scripts/package.mjs), with its license
+app/package.json        marks app/ as Uncbox's folder
+app/server/             the server, without its tests
+app/integrations/wow/   install.mjs and the addon the server copies into WoW
+app/dist/               the built page
+```
+
+The Node zip comes from nodejs.org and is checked against the `SHASUMS256.txt` published beside
+it; packaging stops if they differ. It's cached in `release/.cache/`, which, like the rest of
+`release/`, git ignores.
+
+Next to its `node\` folder, the app runs the server with that Node from `app\`, never builds, and
+keeps the user's data in `%LOCALAPPDATA%\Uncbox\data` (unless given `--data=`), so the folder can
+be unzipped anywhere, even somewhere read-only. Run from the repo, nothing changes.
+
+**Not done yet:** an installer (a Start menu entry, start with Windows, updates). Until then,
+people unzip and run it.
+
 ## Later
 
 - **Mixed DPI / several monitors:** placement assumes Uncbox and the game are on the same monitor.
-- **Packaging:** a single-file `dotnet publish` and an installer, so the app can live outside the
-  Uncbox folder and start with Windows.
+- **An installer** on top of the package (see Packaging).

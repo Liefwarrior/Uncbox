@@ -8,7 +8,8 @@ internal static class Program
     /// Opens http://localhost:5170 unless given another address, starting the Uncbox server first
     /// if nothing answers there (from --root, or the Uncbox folder the app sits in). --screen picks
     /// a monitor (0 is the primary), --windowed opens a 1280 × 720 window instead of covering the
-    /// screen. --data is passed on to a server it starts. Starting it again for the same address
+    /// screen. --data is passed on to a server it starts (a packaged copy defaults it to
+    /// %LOCALAPPDATA%\Uncbox\data). Starting it again for the same address
     /// just brings the running one back.
     /// </summary>
     [STAThread]

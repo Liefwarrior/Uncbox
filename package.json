@@ -15,7 +15,8 @@
     "check": "node scripts/check.mjs",
     "setup-domain": "node scripts/setup-domain.mjs",
     "remove-domain": "node scripts/setup-domain.mjs --remove",
-    "app": "node scripts/app.mjs"
+    "app": "node scripts/app.mjs",
+    "package": "node scripts/package.mjs"
   },
   "engines": {
     "node": ">=20"
