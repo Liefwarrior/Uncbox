@@ -48,6 +48,8 @@ export function useObs(on = true): ObsSnapshot | null {
         .then((r) => r.json())
         .then((s) => alive && setSnap(s))
         .catch(() => {});
+    // Now, and again whenever the event stream reconnects (it may already be open).
+    load();
     const stopConnection = onConnection(load);
     const stop = listen('obs', (data) => setSnap(JSON.parse(data)));
     return () => {
