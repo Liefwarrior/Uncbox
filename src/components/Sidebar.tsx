@@ -9,9 +9,10 @@ import { resetLayout as resetPresetLayout } from '../state/hydrate';
 import type { Mutate, MutatePreset, SyncStatus } from '../state/useAppState';
 import { useArmed } from '../useArmed';
 import { callOut } from '../callout';
-import { placePanel } from '../layout';
+import { addWidgetTo, placePanel, setPanelShown } from '../layout';
 import { send, shell } from '../native';
 import { PANEL_INFO } from '../panels/catalog';
+import { PaletteHint } from '../palette/Palette';
 import { BackgroundPicker } from './BackgroundPicker';
 import { ClipsSection } from './Clips';
 import { CustomPresetCard } from './CustomPresetCard';
@@ -41,10 +42,7 @@ export function Sidebar({ state, mutate, mutatePreset, status, onStreamMode }: P
   const more = PANEL_IDS.filter((id) => !def.featured.includes(id));
   const { armed, trigger } = useArmed();
 
-  const toggle = (id: PanelId, on: boolean) =>
-    mutatePreset((d) => {
-      d.layout = on ? [...d.layout, placePanel(d.layout, id)] : d.layout.filter((item) => item.i !== id);
-    });
+  const toggle = (id: PanelId, on: boolean) => mutatePreset((d) => setPanelShown(d, id, on));
   const addWindow = () =>
     mutatePreset((d) => {
       const id: WindowId = `win-${uid()}`;
@@ -53,10 +51,7 @@ export function Sidebar({ state, mutate, mutatePreset, status, onStreamMode }: P
     });
   const addWidget = (type: WidgetType) => {
     const w = newWidget(type);
-    mutatePreset((d) => {
-      d.widgets.push(w);
-      d.layout.push(placePanel(d.layout, w.id, d.widgets));
-    });
+    mutatePreset((d) => addWidgetTo(d, w));
     callOut(w.id);
   };
   const resetLayout = () =>
@@ -186,6 +181,7 @@ export function Sidebar({ state, mutate, mutatePreset, status, onStreamMode }: P
           <BackgroundPicker value={data.background} mutatePreset={mutatePreset} />
         </div>
 
+        <PaletteHint />
         <footer className={`sync sync--${status}`}>
           <span className="sync__dot" />
           {STATUS_TEXT[status]}

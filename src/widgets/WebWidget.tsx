@@ -21,6 +21,7 @@ import {
   SEARCH_ENGINES,
   startHistory,
   useFrameable,
+  useWebOpenRequests,
   visit,
 } from '../web';
 import { WIDGET_INFO, widgetTitle } from './catalog';
@@ -54,6 +55,7 @@ export function WebPanel({ widget, mutatePreset }: Props) {
   const set: SetSettings = (patch) => edit((w) => void Object.assign(w.settings, patch));
   // Here, above the panel's settings form, so the page and its history stay while that is open.
   const browser = useBrowser(widget, view, set);
+  useWebOpenRequests(widget.id, browser.go);
   const settingsShown = editing && settingsOpen;
 
   return (

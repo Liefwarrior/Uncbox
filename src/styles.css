@@ -5289,3 +5289,144 @@ p.chat-empty {
   color: var(--good);
 }
 
+
+/* ---------- command palette (Ctrl K) ---------- */
+
+.palette-hint {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 8px;
+  margin: 0 12px;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--muted);
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+.palette-hint:hover {
+  background: var(--panel);
+}
+.palette-hint kbd {
+  margin-left: auto;
+}
+/* Over the board: the sidebar's width is left clear, so the box sits in the middle of the stage. */
+.palette {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  display: grid;
+  align-content: start;
+  justify-items: center;
+  padding: 14vh 32px 32px 332px;
+  background: rgba(0, 0, 0, 0.55);
+  animation: rise 0.18s var(--ease-out);
+}
+.is-stream .palette {
+  display: none;
+}
+.palette__box {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  width: min(640px, 100%);
+  max-height: min(560px, 72vh);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--panel-2);
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.6);
+  overflow: hidden;
+}
+.palette__search {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--border);
+  color: var(--muted);
+}
+.palette__search input {
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 16px;
+}
+.palette__list {
+  overflow-y: auto;
+  padding: 4px 6px 8px;
+}
+.palette__heading {
+  margin: 10px 8px 4px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 650;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.palette__row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 10px;
+  border-radius: calc(var(--radius-sm) - 2px);
+  font-size: 14px;
+  cursor: pointer;
+}
+.palette__row.is-active {
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+}
+.palette__icon {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  color: var(--muted);
+}
+.palette__row.is-active .palette__icon {
+  color: var(--accent);
+}
+.palette__title {
+  flex: none;
+  max-width: 70%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.palette__title mark {
+  background: transparent;
+  color: var(--accent);
+  font-weight: 700;
+}
+.palette__detail {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.palette__row kbd {
+  margin-left: auto;
+  flex: none;
+}
+.palette__empty {
+  margin: 0;
+  padding: 18px 10px;
+  text-align: center;
+}
+.palette__foot {
+  display: flex;
+  gap: 16px;
+  padding: 8px 14px;
+  border-top: 1px solid var(--border);
+  font-size: 12px;
+}

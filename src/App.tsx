@@ -3,6 +3,7 @@ import { Backdrop } from './components/Backdrop';
 import { Board } from './components/Board';
 import { ClipPlayer, ClipToast } from './components/Clips';
 import { Sidebar } from './components/Sidebar';
+import { Palette } from './palette/Palette';
 import { UndoToast } from './components/UndoToast';
 import { useClipKeyInPage } from './clips/replay';
 import { useGameDetect } from './hud/reader';
@@ -38,12 +39,14 @@ export function App() {
     if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
   }, []);
 
+  // F8, and the command palette's "Toggle stream mode".
+  const toggleStream = useCallback(() => (streaming.current ? exitStream() : enterStream()), [enterStream, exitStream]);
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'F8') {
         e.preventDefault();
-        if (streaming.current) exitStream();
-        else enterStream();
+        toggleStream();
       } else if (e.key === 'Escape') {
         exitStream();
       }
@@ -58,7 +61,7 @@ export function App() {
       window.removeEventListener('keydown', onKey);
       document.removeEventListener('fullscreenchange', onFullscreen);
     };
-  }, [enterStream, exitStream]);
+  }, [toggleStream, exitStream]);
 
   useClipKeyInPage(state.clips);
 
@@ -109,6 +112,7 @@ export function App() {
         <UndoToast />
         <ClipToast driveAuto={state.clips.driveAuto} />
         <ClipPlayer settings={state.clips} data={data} mutatePreset={mutatePreset} />
+        <Palette state={state} mutate={mutate} mutatePreset={mutatePreset} streaming={streamMode} onToggleStream={toggleStream} />
       </main>
     </div>
   );

@@ -1,5 +1,5 @@
 import { sizeOf } from './panels/catalog';
-import { type BoardId, GRID_COLS, GRID_ROWS, type GridItem, type Widget } from './state/model';
+import { type BoardId, GRID_COLS, GRID_ROWS, type GridItem, type PanelId, type PresetData, type Widget } from './state/model';
 
 export interface Rect {
   x: number;
@@ -10,6 +10,17 @@ export interface Rect {
 
 function overlaps(a: Rect, b: Rect) {
   return a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
+}
+
+/** Shows or hides a built-in panel of a preset being edited. */
+export function setPanelShown(d: PresetData, id: PanelId, on: boolean) {
+  d.layout = on ? [...d.layout, placePanel(d.layout, id)] : d.layout.filter((item) => item.i !== id);
+}
+
+/** Adds a widget to a preset being edited, placed on the board. */
+export function addWidgetTo(d: PresetData, widget: Widget) {
+  d.widgets.push(widget);
+  d.layout.push(placePanel(d.layout, widget.id, d.widgets));
 }
 
 /**

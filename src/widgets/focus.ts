@@ -1,3 +1,5 @@
+import type { WidgetSettings } from '../state/model';
+
 // The focus timer's maths, kept apart from the screen. It never counts ticks: a running timer is
 // just the moment it ends (`endsAt`), so a reload, a sleeping tab or a PC that was asleep all
 // land on the right answer, because "now" is the only thing that changes.
@@ -110,4 +112,25 @@ export function roundDots(s: FocusState, c: FocusConfig): { done: number; curren
   const total = cleanConfig(c).rounds;
   const round = Math.min(s.round, total);
   return s.phase === 'work' ? { done: round - 1, current: round - 1, total } : { done: round, current: -1, total };
+}
+
+// ---- the timer as a widget's settings ----
+
+export const configOf = (s: WidgetSettings): FocusConfig => ({
+  work: s.focusWork,
+  short: s.focusShort,
+  long: s.focusLong,
+  rounds: s.focusRounds,
+  auto: s.focusAuto,
+});
+
+export const stateOf = (s: WidgetSettings): FocusState => ({ phase: s.focusPhase, round: s.focusRound, endsAt: s.focusEndsAt, left: s.focusLeft });
+
+export const patchOf = (f: FocusState): Partial<WidgetSettings> => ({ focusPhase: f.phase, focusRound: f.round, focusEndsAt: f.endsAt, focusLeft: f.left });
+
+/** Start (or resume) a stopped timer, pause a running one; the settings to save. */
+export function toggleFocus(s: WidgetSettings, now: number): Partial<WidgetSettings> {
+  const cfg = configOf(s);
+  const state = settle(stateOf(s), now, cfg).state;
+  return patchOf(isRunning(state) ? pause(state, now) : start(state, now, cfg));
 }

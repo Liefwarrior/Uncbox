@@ -4,7 +4,7 @@ import type { WidgetSettings } from '../state/model';
 import { showNotice } from '../undo';
 import { playChime, primeAudio } from './chime';
 import {
-  type FocusConfig,
+  configOf,
   type FocusState,
   isRunning,
   pause,
@@ -13,25 +13,15 @@ import {
   remaining,
   reset,
   roundDots,
+  patchOf,
   settle,
   skip,
   start,
+  stateOf,
 } from './focus';
 import { useNow } from './useNow';
 
 type SetSettings = (patch: Partial<WidgetSettings>) => void;
-
-const configOf = (s: WidgetSettings): FocusConfig => ({
-  work: s.focusWork,
-  short: s.focusShort,
-  long: s.focusLong,
-  rounds: s.focusRounds,
-  auto: s.focusAuto,
-});
-
-const stateOf = (s: WidgetSettings): FocusState => ({ phase: s.focusPhase, round: s.focusRound, endsAt: s.focusEndsAt, left: s.focusLeft });
-
-const patchOf = (f: FocusState): Partial<WidgetSettings> => ({ focusPhase: f.phase, focusRound: f.round, focusEndsAt: f.endsAt, focusLeft: f.left });
 
 /** "24:07", or "1:05:00" for an hour or more. Rounds up, so a fresh 25 minute timer reads 25:00. */
 function clock(ms: number) {

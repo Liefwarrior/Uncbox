@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 // The Web widget's page-side logic: what a typed address means, the widget's own back / forward
 // list (an iframe can't tell us where the page inside went), and whether a site can be framed.
@@ -61,6 +61,28 @@ export function searchUrl(query: string, engineId: string): string {
 
 /** A saved address that is still fine to open: web pages only, else ''. */
 export const cleanUrl = (text: unknown): string => (typeof text === 'string' && isWebUrl(text.trim()) ? text.trim() : '');
+
+// ---- asking a Web widget to go somewhere (the command palette) ----
+
+type OpenListener = (url: string) => void;
+const openListeners = new Map<string, OpenListener>();
+
+/** Takes a Web widget to a page from outside it. A widget that isn't on screen ignores this. */
+export function requestWebOpen(widgetId: string, url: string): boolean {
+  const listener = openListeners.get(widgetId);
+  listener?.(url);
+  return Boolean(listener);
+}
+
+/** Lets the widget with this id be taken to a page by requestWebOpen. */
+export function useWebOpenRequests(widgetId: string, go: (url: string) => void) {
+  const latest = useRef(go);
+  latest.current = go;
+  useEffect(() => {
+    openListeners.set(widgetId, (url) => latest.current(url));
+    return () => void openListeners.delete(widgetId);
+  }, [widgetId]);
+}
 
 // ---- the widget's own history ----
 

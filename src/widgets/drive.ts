@@ -178,6 +178,15 @@ export function useDriveFiles(source: DriveSource | null, view: DriveView, query
   return { files, error, loading, hasMore: Boolean(next), more: () => void load(next), reload: () => void load() };
 }
 
+/** One search of your Google Drive, for the command palette. Throws if the search fails or is cancelled. */
+export async function searchDriveFiles(query: string, signal?: AbortSignal): Promise<DriveFile[]> {
+  const params = new URLSearchParams({ source: 'cloud', view: 'search', q: query });
+  const r = await fetch(`/api/drive/files?${params}`, { signal });
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(d.error || 'Couldn’t search Drive.');
+  return d.files ?? [];
+}
+
 // ---- how files look ----
 
 export type FileKind = 'folder' | 'image' | 'video' | 'audio' | 'file';
