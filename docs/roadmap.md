@@ -23,13 +23,13 @@ A browser inside a panel: address bar, back/forward/reload, Open in browser, zoo
   YouTube, dashboards), with sign-ins that persist.
 - Done when: several web widgets show different sites in the app and stay put while panels move.
 
-### UBX-3 · OBS widget — Building
+### UBX-3 · OBS widget — Shipped (3b1e193)
 Stream health and control over obs-websocket v5: LIVE/REC with timecodes, bitrate, dropped
 frames, CPU/FPS, scene buttons, start/stop stream and record (stop asks first), mic mutes, save
 replay buffer. Password kept server-side.
 - Done when: the widget shows live status from OBS and switches scenes.
 
-### UBX-4 · Focus timer and Launcher widgets — Building
+### UBX-4 · Focus timer and Launcher widgets — Shipped (dac0305)
 - **Focus**: a Pomodoro timer that survives reloads, with a soft chime and break colours.
 - **Launcher**: a dock of apps, folders, files, websites and Steam games. The server only ever
   launches tiles you saved (never an arbitrary path from the page); icons from the apps.
