@@ -79,3 +79,38 @@ Browse and install shared `.uncbox` presets from inside Uncbox (a GitHub-hosted 
 ### UBX-15 · Screen reading for more games — Queued
 Ready-made readers like the SMITE 2 one: Pokémon party HP and fainted markers, an automatic death
 counter.
+
+## HIP sprint 1: harden and innovate (queued until UBX-14 and UBX-15 land)
+
+### HIP-1 · Local routes only answer Uncbox itself — Queued
+Every "this PC only" route trusts any request from this PC, so a web page open in your browser
+could post to `localhost` (launch a tile, stop the stream, replace the Google client) and a
+DNS-rebinding page could read Drive, Calendar or Gmail answers. Done when: one guard in front of
+every API route checks the Host header against Uncbox's own names, rejects cross-site Origins and
+`Sec-Fetch-Site: cross-site`, requires `application/json` for state-changing bodies, and the
+native app and the unc.box address still work; tests cover each attack.
+
+### HIP-2 · The server never loses data or leaks helpers — Queued
+Atomic writes (temp file + rename) for every `data/*.json`, a last-good backup of `state.json`
+that loads when the main one is corrupt, PowerShell and polling helpers that stop when no page
+needs them (the media helper runs forever today), and a clean shutdown. Done when: killing the
+server mid-write never corrupts state, and an idle Uncbox with no widgets showing runs no helpers.
+
+### HIP-3 · Smoke tests for every widget and route — Queued
+A test that renders every widget type and panel in every preset theme with mocked data (no
+crashes, no React warnings, compact sizes too), and a server test that boots on a random port with
+a temp data folder and calls every GET route. Done when: both run in `npm run check`.
+
+### HIP-4 · Automations — Queued
+Simple "when this, do that" rules in a sidebar section: when a game starts or stops (the existing
+game detection), when OBS goes live or stops, at a time of day, when a focus round starts; then
+switch preset, toggle stream mode, switch an OBS scene, start a focus round, or show a note. Done
+when: "when SMITE 2 starts, switch to the SMITE preset" and "when OBS goes live, turn on stream
+mode" work, with each firing shown in a toast with Undo.
+
+### HIP-5 · Accessibility and keyboard pass — Queued
+Every control reachable and visible by keyboard (focus rings in every theme), labels on icon
+buttons, menus and dialogs with the right roles and focus trapping, reduced-motion support, and
+contrast checked for each theme's text tokens. Done when: an automated axe-style check of each
+widget and panel finds nothing serious, and the palette, menus and clip player are fully usable
+without a mouse.
