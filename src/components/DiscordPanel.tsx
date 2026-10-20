@@ -97,7 +97,7 @@ export function DiscordPanel({ pinned, title, mutate }: Props) {
                 {d.members.map((m) => (
                   <li key={m.id} className={`member ${m.speaking ? 'is-speaking' : ''}`}>
                     <span className="member__avatar">
-                      <img src={m.avatar} alt="" />
+                      {m.avatar && <img src={m.avatar} alt="" />}
                     </span>
                     <span className="member__name">{m.name}</span>
                     {m.deaf ? (
