@@ -1,7 +1,8 @@
 import { useRef } from 'react';
 import { panelTitle, PRESETS } from '../presets';
-import { downloadPreset, importPresetFile } from '../presetio';
-import { type AppState, MAX_CUSTOM, PANEL_IDS, type PanelId, PRESET_IDS, uid, WIDGET_TYPES, type WidgetType, type WindowId } from '../state/model';
+import { openGallery } from '../gallery';
+import { downloadPreset, FULL_MESSAGE, importPresetFile } from '../presetio';
+import { type AppState, PANEL_IDS, type PanelId, PRESET_IDS, uid, WIDGET_TYPES, type WidgetType, type WindowId } from '../state/model';
 import { activePreset, addCustom, canAddCustom, copyOfActive, newCustomId, takenNames, uniqueName } from '../state/presets';
 import { showNotice } from '../undo';
 import { newWidget, WIDGET_INFO } from '../widgets/catalog';
@@ -61,7 +62,7 @@ export function Sidebar({ state, mutate, mutatePreset, status, onStreamMode }: P
     if (file) void importPresetFile(file, state, mutate);
   };
   const saveCopy = () => {
-    if (!canAddCustom(state)) return showNotice(`You already have ${MAX_CUSTOM} presets of your own. Delete one to make room.`);
+    if (!canAddCustom(state)) return showNotice(FULL_MESSAGE);
     const copy = copyOfActive(state);
     const id = newCustomId();
     const name = uniqueName(def.name, takenNames(state));
@@ -110,6 +111,9 @@ export function Sidebar({ state, mutate, mutatePreset, status, onStreamMode }: P
           </div>
           <button className="side-link side-link--quiet" onClick={() => picker.current?.click()}>
             <Icon name="upload" /> Import a preset
+          </button>
+          <button className="side-link side-link--quiet" onClick={openGallery}>
+            <Icon name="globe" /> Browse presets
           </button>
           <input
             ref={picker}

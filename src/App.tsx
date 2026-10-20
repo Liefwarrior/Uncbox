@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Backdrop } from './components/Backdrop';
 import { Board } from './components/Board';
 import { ClipPlayer, ClipToast } from './components/Clips';
+import { Gallery } from './components/Gallery';
 import { Sidebar } from './components/Sidebar';
 import { Palette } from './palette/Palette';
 import { UndoToast } from './components/UndoToast';
@@ -113,6 +114,7 @@ export function App() {
         <UndoToast />
         <ClipToast driveAuto={state.clips.driveAuto} />
         <ClipPlayer settings={state.clips} data={data} mutatePreset={mutatePreset} />
+        <Gallery state={state} mutate={mutate} streaming={streamMode} />
         <Palette state={state} mutate={mutate} mutatePreset={mutatePreset} streaming={streamMode} onToggleStream={toggleStream} />
       </main>
     </div>

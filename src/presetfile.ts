@@ -20,7 +20,8 @@ export interface PresetFile {
   data: PresetData;
 }
 
-export type PresetImport = { ok: true; name: string; base: PresetId; data: PresetData } | { ok: false; error: string };
+export type PresetImportOk = { ok: true; name: string; base: PresetId; data: PresetData };
+export type PresetImport = PresetImportOk | { ok: false; error: string };
 
 /** For a file with a base this version doesn't know (one from a newer Uncbox): the plainest theme. */
 const FALLBACK_BASE: PresetId = 'terminal';

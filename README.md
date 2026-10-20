@@ -120,6 +120,10 @@ of a community gallery: presets that people post and others can try.
   on the dashboard. It arrives as a new preset of its own, in the same style as the game it was
   made for, with its own name (a number is added if you already have that name). It never
   replaces anything of yours.
+- **Browse presets** in the sidebar (or Ctrl K, "Browse presets") opens the gallery: search, filter
+  by tag, and **Install** adds a preset as one of yours. Presets live in this repo's `gallery/`
+  folder; `gallery/README.md` says how to add yours with a pull request. Set `UNCBOX_GALLERY_URL`
+  (a web address or a folder on your PC) to read a different copy.
 - **Save as a new preset** copies the preset you're on, with everything in it, so you can try
   changes without losing the original. Presets of your own show up under the built-in ones, with
   **Rename**, **Export** and **Delete** (with an **Undo**) in their **⋯** menu.
@@ -320,6 +324,7 @@ server/widgets.mjs         system load, now playing and notifications for the wi
 server/netstats.mjs        ping, jitter and loss, and a game's frame rate, for the Ping & FPS widget
 server/twitch.mjs          Twitch sign-in and stream info for the Twitch widget
 server/steam.mjs           the Steam panel, from the Steam app's files
+server/gallery.mjs         the preset gallery: reads gallery/ from GitHub (or a folder), keeps the list; scripts/gallery.mjs checks it
 server/ocr.mjs             Windows text recognition for the Stats panel
 src/widgets/               the widget library
 src/hud/                   the Stats panel's screen reader

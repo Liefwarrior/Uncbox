@@ -19,6 +19,7 @@ const fakeActions = (): PaletteActions => ({
   primeAudio: vi.fn(),
   callOut: vi.fn(),
   toggleStream: vi.fn(),
+  browsePresets: vi.fn(),
 });
 
 /** A palette over a fresh default state; the changes the commands make are applied to that state. */
@@ -64,12 +65,21 @@ const file = (id: string, name: string): DriveFile => ({
 });
 
 describe('presets', () => {
-  it('lists every preset but the one showing', () => {
+  it('lists every preset but the one showing, then Browse presets', () => {
     const { commands, state } = setup();
     const ids = commands()
       .filter((c) => c.group === 'Presets')
       .map((c) => c.id);
-    expect(ids).toEqual(PRESET_IDS.filter((id) => id !== state.preset).map((id) => `preset:${id}`));
+    expect(ids).toEqual([...PRESET_IDS.filter((id) => id !== state.preset).map((id) => `preset:${id}`), 'preset:browse']);
+  });
+
+  it('opens the gallery with Browse presets, and finds it by searching for gallery', () => {
+    const { find, actions, commands } = setup();
+    expect(find('preset:browse')!.title).toBe('Browse presets');
+    find('preset:browse')!.run();
+    expect(actions.browsePresets).toHaveBeenCalled();
+    const sections = arrange(commands(), 'gallery', []);
+    expect(sections[0].rows[0].command.id).toBe('preset:browse');
   });
 
   it('includes your own presets, and switches to one', () => {

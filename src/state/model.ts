@@ -18,6 +18,8 @@ export interface CustomPreset {
   name: string;
   base: PresetId;
   data: PresetData;
+  /** The gallery preset it was installed from (its id in gallery/index.json), so the gallery can say "Installed". */
+  galleryId?: string;
 }
 
 export function isCustomId(id: string): id is CustomId {

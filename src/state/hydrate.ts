@@ -239,7 +239,9 @@ function hydrateCustom(saved: unknown): CustomPreset[] {
     if (typeof id !== 'string' || !isCustomId(id) || ids.has(id)) continue;
     if (!PRESET_IDS.includes(base as PresetId)) continue;
     ids.add(id);
-    out.push({ id, base: base as PresetId, name: cleanName(raw.name, PRESETS[base as PresetId].name), data: hydratePreset(base as PresetId, raw.data) });
+    const preset: CustomPreset = { id, base: base as PresetId, name: cleanName(raw.name, PRESETS[base as PresetId].name), data: hydratePreset(base as PresetId, raw.data) };
+    if (typeof raw.galleryId === 'string' && /^[a-z0-9-]{1,48}$/.test(raw.galleryId)) preset.galleryId = raw.galleryId;
+    out.push(preset);
   }
   return out;
 }

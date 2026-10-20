@@ -59,6 +59,8 @@ export interface PaletteActions {
   /** Points at a panel that was just added. */
   callOut: (id: Widget['id']) => void;
   toggleStream: () => void;
+  /** Opens the preset gallery. */
+  browsePresets: () => void;
 }
 
 export interface PaletteContext {
@@ -83,7 +85,7 @@ export const GROUPS = ['Presets', 'Panels', 'Widgets', 'Clips', 'Stream', 'Launc
 
 // ---- presets ----
 
-const presetCommands: Provider = ({ state, mutate }) => {
+const presetCommands: Provider = ({ state, mutate, actions }) => {
   const make = (id: string, name: string, detail?: string): Command => ({
     id: `preset:${id}`,
     title: `Switch to ${name}`,
@@ -94,7 +96,16 @@ const presetCommands: Provider = ({ state, mutate }) => {
     enabled: state.preset !== id,
     run: () => mutate((s) => void (s.preset = id as AppState['preset'])),
   });
-  return [...PRESET_IDS.map((id) => make(id, PRESETS[id].name, PRESETS[id].blurb)), ...state.custom.map((c) => make(c.id, c.name, 'Your preset'))];
+  const browse: Command = {
+    id: 'preset:browse',
+    title: 'Browse presets',
+    group: 'Presets',
+    icon: 'globe',
+    detail: 'Install presets other people made',
+    keywords: 'gallery community install download share',
+    run: actions.browsePresets,
+  };
+  return [...PRESET_IDS.map((id) => make(id, PRESETS[id].name, PRESETS[id].blurb)), ...state.custom.map((c) => make(c.id, c.name, 'Your preset')), browse];
 };
 
 // ---- panels and widgets ----

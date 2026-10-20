@@ -66,10 +66,23 @@ export function newCustomId(): CustomId {
 }
 
 /** Adds a preset of your own and switches to it. Does nothing at the limit; check `canAddCustom` first. */
-export function addCustom(draft: AppState, id: CustomId, name: string, base: PresetId, data: PresetData) {
+export function addCustom(draft: AppState, id: CustomId, name: string, base: PresetId, data: PresetData, galleryId?: string) {
   if (!canAddCustom(draft)) return;
-  draft.custom.push({ id, name: uniqueName(name, takenNames(draft)), base, data });
+  const preset: CustomPreset = { id, name: uniqueName(name, takenNames(draft)), base, data };
+  if (galleryId) preset.galleryId = galleryId;
+  draft.custom.push(preset);
   draft.preset = id;
+}
+
+/**
+ * The preset of yours that came from this gallery entry: matched by the gallery id it was installed
+ * with, or, for one without (made before the id was kept, or a file imported by hand), by name.
+ */
+export function installedFrom(custom: CustomPreset[], entry: { id: string; name: string }): CustomPreset | undefined {
+  return (
+    custom.find((c) => c.galleryId === entry.id) ??
+    custom.find((c) => c.galleryId === undefined && c.name.toLowerCase() === entry.name.toLowerCase())
+  );
 }
 
 export const canAddCustom = (state: Pick<AppState, 'custom'>) => state.custom.length < MAX_CUSTOM;

@@ -29,6 +29,7 @@ import { createDriveUpload } from './driveupload.mjs';
 import { createGmail } from './gmail.mjs';
 import { createGoogle } from './google.mjs';
 import { openInBrowser, pageFor } from './open.mjs';
+import { createGallery } from './gallery.mjs';
 import { createGameSettings } from './gamesettings.mjs';
 import { createNetstats } from './netstats.mjs';
 import { createObs } from './obs.mjs';
@@ -207,6 +208,7 @@ const twitch = createTwitch({ broadcastEvent, sendJson, isLocal, readJson, dataD
 const ocr = createOcr({ isLocal, sendJson, readBody });
 const smite = createSmite({ broadcastEvent, sendJson });
 const gameSettings = createGameSettings({ isLocal, sendJson, readJson });
+const gallery = createGallery({ dataDir, sendJson, isLocal, baseUrl: process.env.UNCBOX_GALLERY_URL });
 const update = createUpdate({ dataDir, version: JSON.parse(readFileSync(path.join(root, 'package.json'), 'utf8')).version });
 
 async function handleWow(req, res, url) {
@@ -251,6 +253,7 @@ async function handleApi(req, res, url) {
   if (url.pathname === '/api/smite') return smite(req, res);
   if (url.pathname === '/api/game-settings') return gameSettings(req, res);
   if (url.pathname === '/api/running') return running(req, res, url);
+  if (url.pathname === '/api/gallery' || url.pathname.startsWith('/api/gallery/')) return gallery.handle(req, res, url);
   if (url.pathname === '/api/update' && req.method === 'GET') return sendJson(res, 200, await update.status());
 
   if (url.pathname === '/api/open' && req.method === 'POST') {

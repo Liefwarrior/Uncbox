@@ -1,0 +1,67 @@
+{
+  "version": 1,
+  "presets": [
+    {
+      "id": "nuzlocke-run",
+      "name": "Nuzlocke run",
+      "author": "Uncbox",
+      "description": "A ready Nuzlocke board: your party, deaths and resets, badges up to the Champion, and the usual rules in the notes.",
+      "base": "pokemon",
+      "tags": [
+        "nuzlocke",
+        "challenge",
+        "run"
+      ],
+      "file": "presets/nuzlocke-run.uncbox",
+      "preview": "",
+      "updated": "2026-10-20"
+    },
+    {
+      "id": "ranked-grind",
+      "name": "Ranked grind",
+      "author": "Uncbox",
+      "description": "For a night of SMITE 2 ranked: match and teams on screen, your record, daily goals, and a focus timer so you remember to take breaks.",
+      "base": "smite2",
+      "tags": [
+        "ranked",
+        "moba",
+        "session"
+      ],
+      "file": "presets/ranked-grind.uncbox",
+      "preview": "",
+      "updated": "2026-10-20"
+    },
+    {
+      "id": "cozy-desk",
+      "name": "Cozy desk",
+      "author": "Uncbox",
+      "description": "A calm desk for evenings: the time and weather, one thing for today, a focus timer, what is playing, and a little checklist.",
+      "base": "desk",
+      "tags": [
+        "desk",
+        "relax",
+        "focus",
+        "widgets"
+      ],
+      "file": "presets/cozy-desk.uncbox",
+      "preview": "",
+      "updated": "2026-10-20"
+    },
+    {
+      "id": "steam-couch",
+      "name": "Steam couch",
+      "author": "Uncbox",
+      "description": "Controller in hand: any Steam game big on screen with what Steam says you are playing, plus ping and frame rate, now playing and quick launch buttons.",
+      "base": "steam",
+      "tags": [
+        "steam",
+        "couch",
+        "controller",
+        "widgets"
+      ],
+      "file": "presets/steam-couch.uncbox",
+      "preview": "",
+      "updated": "2026-10-20"
+    }
+  ]
+}

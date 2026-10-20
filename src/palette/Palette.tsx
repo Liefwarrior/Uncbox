@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { callOut } from '../callout';
 import { revealClip, saveClip, useClips, watchClip } from '../clips/replay';
 import { Icon } from '../components/Icon';
+import { openGallery } from '../gallery';
 import { useCover } from '../native';
 import { obsAction, useObs } from '../obs';
 import type { AppState } from '../state/model';
@@ -112,6 +113,7 @@ function Dialog({ state, mutate, mutatePreset, onToggleStream, onClose }: Props 
       primeAudio,
       callOut,
       toggleStream: onToggleStream,
+      browsePresets: openGallery,
     }),
     [onToggleStream],
   );
