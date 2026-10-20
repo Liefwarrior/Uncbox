@@ -103,7 +103,7 @@ A test that renders every widget type and panel in every preset theme with mocke
 crashes, no React warnings, compact sizes too), and a server test that boots on a random port with
 a temp data folder and calls every GET route. Done when: both run in `npm run check`.
 
-### HIP-4 · Automations — Building
+### HIP-4 · Automations — Shipped (02da118)
 Simple "when this, do that" rules in a sidebar section: when a game starts or stops (the existing
 game detection), when OBS goes live or stops, at a time of day, when a focus round starts; then
 switch preset, toggle stream mode, switch an OBS scene, start a focus round, or show a note. Done
