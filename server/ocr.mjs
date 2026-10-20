@@ -43,6 +43,23 @@ while ($null -ne ($line = [Console]::In.ReadLine())) {
 }
 `;
 
+/**
+ * The helper's JSON for one picture, as lines. Windows sometimes reads an icon as a control
+ * character (a bell, say), which PowerShell writes into the JSON as-is and which JSON.parse then
+ * refuses, losing every line of that picture. The reply is a single line, so control characters
+ * can only be inside words: drop them.
+ */
+export function parseWords(raw) {
+  let parsed = [];
+  try {
+    parsed = JSON.parse((raw || '[]').replace(/\p{Cc}/gu, ''));
+  } catch {
+    // A picture Windows couldn't read gives no lines.
+  }
+  // PowerShell turns a one-item list into the item itself.
+  return (Array.isArray(parsed) ? parsed : [parsed]).map((l) => ({ ...l, words: Array.isArray(l.words?.[0]) ? l.words : [l.words].filter(Boolean) }));
+}
+
 export function createOcr({ isLocal, sendJson, readBody }) {
   let helper = null;
   /** Replies come back one line per picture, in order. */
@@ -99,16 +116,7 @@ export function createOcr({ isLocal, sendJson, readBody }) {
       return sendJson(res, 200, { texts });
     }
     const lines = [];
-    for (const image of images) {
-      let parsed = [];
-      try {
-        parsed = JSON.parse((await read(image, true)) || '[]');
-      } catch {
-        // A picture Windows couldn't read gives no lines.
-      }
-      // PowerShell turns a one-item list into the item itself.
-      lines.push((Array.isArray(parsed) ? parsed : [parsed]).map((l) => ({ ...l, words: Array.isArray(l.words?.[0]) ? l.words : [l.words].filter(Boolean) })));
-    }
+    for (const image of images) lines.push(parseWords(await read(image, true)));
     return sendJson(res, 200, { texts: lines.map((ls) => ls.map((l) => l.text).join(' ')), lines });
   };
 }

@@ -114,7 +114,7 @@ export const PRESETS: Record<PresetId, PresetDef> = {
     name: 'SMITE 2',
     blurb: 'Live god, build and teams; record',
     titles: { slots: 'Build', run: 'Session', notes: 'Game plan', record: 'Record' },
-    featured: ['game', 'camera', 'chat', 'discord', 'match', 'teams', 'record', 'slots', 'run', 'notes'],
+    featured: ['game', 'camera', 'chat', 'discord', 'match', 'teams', 'scoreboard', 'damage', 'record', 'slots', 'run', 'notes'],
     slots: { variant: 'tiles', name: 'Item', detail: '', showDown: false },
     layout: [
       { i: 'game', x: 0, y: 0, w: 17, h: 17 },

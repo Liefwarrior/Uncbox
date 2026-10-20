@@ -3944,3 +3944,164 @@ p.chat-empty {
 .theme-terminal .live-dot--connected {
   box-shadow: none;
 }
+
+/* ---------- SMITE 2 scoreboard and damage (read off the Tab and T screens) ---------- */
+
+.board,
+.damage {
+  display: grid;
+  gap: 10px;
+  align-content: start;
+}
+.board__ago {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+.board-team {
+  display: grid;
+  gap: 2px;
+}
+.board-team__name {
+  margin: 0 0 2px;
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+.board-team__head,
+.board-row {
+  display: grid;
+  grid-template-columns: 2em minmax(0, 1fr) 2.2em 2.2em 2.2em 4em;
+  align-items: center;
+  gap: 6px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.board-team__head {
+  color: var(--muted);
+  font-size: 11px;
+}
+.board-row {
+  padding: 3px 6px;
+  border-radius: var(--radius-sm);
+  font-family: var(--font-num);
+  font-size: 15px;
+}
+.board-row.is-me {
+  background: color-mix(in srgb, var(--accent-2) 16%, transparent);
+  color: var(--accent-2);
+}
+.board-row__level {
+  color: var(--muted);
+}
+.board-row__who {
+  display: grid;
+  min-width: 0;
+  text-align: left;
+}
+.board-row__who b,
+.board-row__who small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.board-row__who small {
+  color: var(--muted);
+  font-size: 11px;
+}
+.board-row__gold {
+  color: var(--accent-2);
+}
+.board-kills ul {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 14px;
+}
+.board-kills li {
+  display: flex;
+  gap: 8px;
+}
+.board-kills time {
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.damage-side h3 {
+  margin: 0 0 4px;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 500;
+}
+.damage-side h3 b {
+  color: var(--text);
+  font-family: var(--font-num);
+  font-size: 20px;
+}
+.damage-side ul {
+  display: grid;
+  gap: 3px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.damage-side li {
+  position: relative;
+  display: grid;
+  grid-template-columns: 3.4em 2.4em minmax(0, 1fr);
+  gap: 6px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 14px;
+  background: linear-gradient(90deg, var(--bar) var(--share), transparent var(--share));
+}
+.damage-side--dealt li {
+  --bar: color-mix(in srgb, var(--good) 28%, transparent);
+}
+.damage-side--taken li {
+  --bar: color-mix(in srgb, var(--bad) 28%, transparent);
+}
+.damage-row__amount {
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+}
+.damage-row__hits {
+  color: var(--muted);
+}
+.damage-row__name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.damage-top {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  font-size: 13px;
+}
+.damage-top div {
+  display: grid;
+  grid-template-columns: 6.5em minmax(0, 1fr);
+  gap: 6px;
+}
+.damage-top dt {
+  color: var(--muted);
+}
+.damage-top dd {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 0;
+}
+.damage-top__ally {
+  color: var(--good);
+}
+.damage-top__enemy {
+  color: var(--bad);
+  text-align: right;
+}

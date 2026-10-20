@@ -23,6 +23,8 @@ export const PANEL_IDS = [
   'steam',
   'hud',
   'teams',
+  'scoreboard',
+  'damage',
 ] as const;
 export type PanelId = (typeof PANEL_IDS)[number];
 

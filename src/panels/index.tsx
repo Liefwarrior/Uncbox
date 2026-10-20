@@ -13,6 +13,8 @@ import { RunPanel } from '../components/RunPanel';
 import { HudPanel } from '../components/HudPanel';
 import { SlotsPanel } from '../components/SlotsPanel';
 import { SteamPanel } from '../components/SteamPanel';
+import { DamagePanel } from '../components/DamagePanel';
+import { ScoreboardPanel } from '../components/ScoreboardPanel';
 import { TeamsPanel } from '../components/TeamsPanel';
 import { WindowPanel } from '../components/WindowPanel';
 import { panelTitle, type PresetDef } from '../presets';
@@ -54,6 +56,8 @@ const RENDER: Record<PanelId, (c: PanelContext) => ReactNode> = {
   quests: (c) => <QuestsPanel quests={c.data.quests} linked={c.data.wowLinkAt > 0} title={c.title} />,
   steam: (c) => <SteamPanel title={c.title} />,
   teams: (c) => <TeamsPanel title={c.title} />,
+  scoreboard: (c) => <ScoreboardPanel title={c.title} />,
+  damage: (c) => <DamagePanel title={c.title} />,
   hud: (c) => <HudPanel hud={c.data.hud} title={c.title} suggestions={c.def.hud ?? []} mutatePreset={c.mutatePreset} />,
 };
 

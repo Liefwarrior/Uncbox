@@ -32,6 +32,8 @@ export const PANEL_INFO: Record<PanelId, PanelInfo> = {
   steam: { title: 'Steam', hint: 'What you’re playing on Steam, live', w: 7, h: 9, minW: 4, minH: 4 },
   hud: { title: 'Stats', hint: 'Numbers read live off your game’s screen', w: 5, h: 7, minW: 3, minH: 3 },
   teams: { title: 'Teams', hint: 'Both teams’ gods, live from SMITE 2', w: 7, h: 7, minW: 4, minH: 4 },
+  scoreboard: { title: 'Scoreboard', hint: 'Everyone’s K/D/A and gold, from the Tab screen', w: 9, h: 9, minW: 5, minH: 5 },
+  damage: { title: 'Damage', hint: 'Damage dealt and taken, from the T screen', w: 8, h: 9, minW: 4, minH: 5 },
 };
 
 const WINDOW_SIZE = { w: 7, h: 8, minW: 3, minH: 3 };

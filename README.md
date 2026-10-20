@@ -149,6 +149,26 @@ level, a timer. Uncbox reads the boxes once a second with Windows' own text reco
 new number has to read the same twice before it shows, so one blurry frame doesn't flash a wrong
 value. Boxes are a share of the picture, so they keep working if the window changes size.
 
+### SMITE 2
+
+With the SMITE 2 preset showing and a match on, Uncbox reads the game's log for your god, build and
+both teams, and reads three screens off the game's picture with Windows' own text recognition,
+once a second:
+
+- **Hold Tab** and the **Scoreboard** panel shows everyone's god, level, K/D/A and gold. Your own
+  K/D/A also goes into the **Match** panel.
+- **Hold T** (the combat log) and the **Damage** panel shows damage dealt and taken, the abilities
+  behind them, and the top cards.
+- The top bar (match clock, team kills), your gold and your K/D/A beside the portrait are read
+  all the time. The K/D/A strip is tiny, so a number only counts after it reads the same twice,
+  and it never goes down. The Tab screen always wins over it.
+- A kill banner in the upper middle adds a line to **Recent kills** under the Scoreboard.
+
+Both panels are in the preset's **On screen** list, not on the board to start with. Reading only
+runs while the match is on and Uncbox's page is visible (in the Uncbox app it also runs behind the
+game), and the heavy part runs off the page's main thread. It is best effort: OCR sometimes drops
+a number or garbles a name, which shows as a dash or is filled in from the team totals.
+
 ### Steam
 
 The Steam panel reads the Steam app's own files on this PC: which game is running, your name and
@@ -237,6 +257,7 @@ server/steam.mjs           the Steam panel, from the Steam app's files
 server/ocr.mjs             Windows text recognition for the Stats panel
 src/widgets/               the widget library
 src/hud/                   the Stats panel's screen reader
+src/smite/                 SMITE 2 screens: parsers, image recipes, the reader, its store
 src/clips/                 instant replay: the encoder worker, its store, the clip keys
 src/events.ts              the page's one live connection to /api/events
 native/UncboxShell/        the Windows app, where the game can be played in its panel
