@@ -9,7 +9,7 @@
 
 import http from 'node:http';
 import https from 'node:https';
-import { createReadStream } from 'node:fs';
+import { createReadStream, readFileSync } from 'node:fs';
 import { mkdir, readFile, rename, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -21,6 +21,7 @@ import {
   uninstall as uninstallWowAddon,
 } from '../integrations/wow/install.mjs';
 import { createClips } from './clips.mjs';
+import { createUpdate } from './update.mjs';
 import { createDiscordBridge } from './discord.mjs';
 import { createDrive } from './drive.mjs';
 import { createGoogle } from './google.mjs';
@@ -199,6 +200,7 @@ const twitch = createTwitch({ broadcastEvent, sendJson, isLocal, readJson, dataD
 const ocr = createOcr({ isLocal, sendJson, readBody });
 const smite = createSmite({ broadcastEvent, sendJson });
 const gameSettings = createGameSettings({ isLocal, sendJson, readJson });
+const update = createUpdate({ dataDir, version: JSON.parse(readFileSync(path.join(root, 'package.json'), 'utf8')).version });
 
 async function handleWow(req, res, url) {
   if (!isLocal(req)) return sendJson(res, 403, { error: 'Run this on the PC WoW is on.' });
@@ -239,6 +241,7 @@ async function handleApi(req, res, url) {
   if (url.pathname === '/api/smite') return smite(req, res);
   if (url.pathname === '/api/game-settings') return gameSettings(req, res);
   if (url.pathname === '/api/running') return running(req, res, url);
+  if (url.pathname === '/api/update' && req.method === 'GET') return sendJson(res, 200, await update.status());
 
   if (url.pathname === '/api/open' && req.method === 'POST') {
     if (!isLocal(req)) return sendJson(res, 403, { error: 'Local only' });
@@ -360,6 +363,9 @@ discord.start().catch((err) => console.error('Discord bridge:', err.message));
 loadState()
   .then((s) => clips.configure(s?.clips))
   .catch(() => clips.configure(null));
+
+// Look for a newer release now, so the answer is ready when the page asks (once a day at most).
+update.check().catch(() => {});
 
 server.listen(port, host, () => {
   const shown = host === '0.0.0.0' ? 'localhost' : host;

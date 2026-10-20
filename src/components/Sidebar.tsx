@@ -17,6 +17,8 @@ import { ClipsSection } from './Clips';
 import { CustomPresetCard } from './CustomPresetCard';
 import { Icon } from './Icon';
 import { SetupList } from './SetupList';
+import { StartWithWindows } from './StartWithWindows';
+import { UpdateNotice } from './UpdateNotice';
 
 const STATUS_TEXT: Record<SyncStatus, string> = {
   loading: 'Loading…',
@@ -101,6 +103,8 @@ export function Sidebar({ state, mutate, mutatePreset, status, onStreamMode }: P
             <span>Uncbox</span>
           </div>
 
+          <UpdateNotice />
+
           <h3>Game</h3>
           <div className="presets">
             {PRESET_IDS.map((id) => (
@@ -143,6 +147,7 @@ export function Sidebar({ state, mutate, mutatePreset, status, onStreamMode }: P
               <Icon name="minus" /> Minimize to the tray
             </button>
           )}
+          <StartWithWindows />
 
           <ClipsSection settings={state.clips} mutate={mutate} />
 

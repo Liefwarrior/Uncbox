@@ -29,9 +29,11 @@ namespace UncboxShell;
 ///               { type: "minimize" }                      to the tray
 ///               { type: "web" | "webrect" | "webnav" | "webzoom" | "webclose", id, ... }
 ///                    the web widgets' pages, each a WebView2 over its panel (see WebViews.cs)
+///               { type: "autostart" } | { type: "autostart", enabled }   ask / change start-with-Windows
 ///   app → page  { type: "windows", windows: [{ id, title, process }] }
 ///               { type: "attached", id, title, process, followed } | { type: "detached" }
 ///                    followed: the app took it by itself (see follow), so it isn't the saved game
+///               { type: "autostartstate", enabled }       whether Uncbox starts with Windows (see Autostart.cs)
 ///               { type: "picture", on, launchOption }  the game won't be resized, so it's shown as a
 ///                    live picture; launchOption, if known, is what makes it resizable
 ///               { type: "webstate", id, url, title, canGoBack, canGoForward, loading }
@@ -165,6 +167,13 @@ internal sealed class ShellForm : Form
         // A second start of Uncbox.exe signals this one to come back instead.
         _wakeWait = ThreadPool.RegisterWaitForSingleObject(_options.Wake, (_, _) => BeginInvoke(RestoreFromTray), null, -1, false);
         HookWindowEvents();
+        // Started with Windows (--tray): invisible until the tray hides it, and no "still running" tip.
+        if (_options.StartInTray)
+        {
+            Opacity = 0;
+            _trayHinted = true;
+            BeginInvoke(ToTray);
+        }
 
         if (!await StartServer()) return;
 
@@ -287,6 +296,7 @@ internal sealed class ShellForm : Form
             LeaveGameFullScreen();
             return;
         }
+        Opacity = 1;
         Show();
         WindowState = FormWindowState.Normal;
         FitToScreen();
@@ -366,6 +376,9 @@ internal sealed class ShellForm : Form
                 break;
             case "web" or "webrect" or "webnav" or "webzoom" or "webclose":
                 if (msg is not null) _webViews?.OnMessage((string)msg["type"]!, msg);
+                break;
+            case "autostart":
+                Send(new { type = "autostartstate", enabled = Autostart.Handle(msg) });
                 break;
         }
     }

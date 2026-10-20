@@ -34,7 +34,9 @@ export type ShellMessage =
   /** The game won't be resized, so it's shown as a live picture; launchOption makes it resizable. */
   | { type: 'picture'; on: boolean; launchOption: string }
   /** A web widget's page moved on (see useWebView). */
-  | ({ type: 'webstate' } & WebState);
+  | ({ type: 'webstate' } & WebState)
+  /** Whether Uncbox starts with Windows (sent when asked and after every change). */
+  | { type: 'autostartstate'; enabled: boolean };
 
 export function send(message: { type: string; [key: string]: unknown }) {
   shell?.postMessage(message);
@@ -92,6 +94,16 @@ export function useHole(el: HTMLElement | null, crop: Crop, stripPx: number) {
     };
     // crop is read through cropKey, so a new but equal object doesn't resend.
   }, [el, cropKey]);
+}
+
+/** Whether Uncbox starts with Windows (null until the app answers), and a way to change it. */
+export function useAutostart(): [boolean | null, (enabled: boolean) => void] {
+  const [enabled, setEnabled] = useState<boolean | null>(null);
+  useShellMessages((msg) => {
+    if (msg.type === 'autostartstate') setEnabled(msg.enabled);
+  });
+  useEffect(() => send({ type: 'autostart' }), []);
+  return [enabled, (on) => send({ type: 'autostart', enabled: on })];
 }
 
 /** The window list, asked for when the picker opens. */

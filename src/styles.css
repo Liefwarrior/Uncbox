@@ -782,6 +782,11 @@ input[type='color'] {
   cursor: pointer;
   transition: background 0.2s;
 }
+.update-notice {
+  margin-top: 6px;
+  font-size: 14px;
+  text-decoration: none;
+}
 
 .sync {
   display: flex;

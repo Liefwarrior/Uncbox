@@ -11,9 +11,16 @@
     <ApplicationIcon>uncbox.ico</ApplicationIcon>
     <RootNamespace>UncboxShell</RootNamespace>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <!-- Shown in Settings > Apps. npm run package stamps package.json's version over this (-p:Version). -->
+    <Version>0.2.0</Version>
     <!-- WebView2 also ships a WPF control this app does not use; its WindowsBase version clash is harmless. -->
     <NoWarn>$(NoWarn);MSB3277</NoWarn>
   </PropertyGroup>
+
+  <!-- The Setup exe (npm run package -p:PayloadZip=...) carries node\ and app\ as a zip inside itself. -->
+  <ItemGroup Condition="'$(PayloadZip)' != ''">
+    <EmbeddedResource Include="$(PayloadZip)" LogicalName="UncboxPayload.zip" />
+  </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.4191.47" />

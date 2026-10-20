@@ -41,9 +41,13 @@ its own background in the sidebar: animated shapes or a pattern, drawn in the pr
 
 ## Download (Windows)
 
-Unzip `Uncbox-<version>-win-x64.zip` anywhere and double-click `Uncbox.exe`. There's nothing to
-install: it brings its own copy of Node.js. It keeps your settings in `%LOCALAPPDATA%\Uncbox`, so
-deleting or replacing the unzipped folder never loses them. Packaging it yourself is
+Run `Uncbox-Setup-<version>.exe` and choose Install: it goes in `%LOCALAPPDATA%\Programs\Uncbox` for
+you only (no admin rights), with a Start menu shortcut and an entry in Settings > Apps to uninstall
+it. Or unzip `Uncbox-<version>-win-x64.zip` anywhere and double-click `Uncbox.exe` (it offers to
+install too; "Just run it" skips that). Either way it brings its own copy of Node.js. It keeps your
+settings in `%LOCALAPPDATA%\Uncbox`, so replacing or deleting the app folder never loses them, and
+uninstalling keeps them unless you ask. It checks GitHub once a day for a newer version and shows a
+quiet "Download" link; it never updates itself. Packaging it yourself is
 `npm run package` (see [native/README.md](native/README.md#packaging)).
 
 ## Get started
