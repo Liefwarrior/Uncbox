@@ -50,7 +50,7 @@ Uncbox when Windows starts", and a quiet "a new version is out" notice from GitH
 
 ## Wave 2: queued (start as wave 1 lands)
 
-### UBX-6 · Desk preset — Queued (after UBX-1, 2, 4)
+### UBX-6 · Desk preset — Building
 A built-in "Desk" preset for working between games: Drive, Web, Focus, Launcher, Calendar, Now
 playing, Notifications, Clock/Weather, with its own calm theme.
 
