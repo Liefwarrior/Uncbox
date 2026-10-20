@@ -73,7 +73,7 @@ a URL in a Web widget, save a clip, toggle stream mode.
 Viewer count, followers/subs as they happen, edit title and category from Uncbox (Twitch sign-in
 kept server-side, like Google).
 
-### UBX-14 · Community preset gallery — Queued
+### UBX-14 · Community preset gallery — Shipped (4117336)
 Browse and install shared `.uncbox` presets from inside Uncbox (a GitHub-hosted index to start).
 
 ### UBX-15 · Screen reading for more games — Shipped (b8e5903)
@@ -82,9 +82,9 @@ down, or tick a milestone", with recipes (Souls, GTA, Game Over, Nuzlocke "{name
 Defeat), fuzzy matching for OCR noise, one firing per sighting, and Undo on every firing. Not yet
 built: reading the Pokémon HP bar by its colour (a follow-up).
 
-## HIP sprint 1: harden and innovate (queued until UBX-14 and UBX-15 land)
+## HIP sprint 1: harden and innovate
 
-### HIP-1 · Local routes only answer Uncbox itself — Queued
+### HIP-1 · Local routes only answer Uncbox itself — Building
 Every "this PC only" route trusts any request from this PC, so a web page open in your browser
 could post to `localhost` (launch a tile, stop the stream, replace the Google client) and a
 DNS-rebinding page could read Drive, Calendar or Gmail answers. Done when: one guard in front of
@@ -92,25 +92,25 @@ every API route checks the Host header against Uncbox's own names, rejects cross
 `Sec-Fetch-Site: cross-site`, requires `application/json` for state-changing bodies, and the
 native app and the unc.box address still work; tests cover each attack.
 
-### HIP-2 · The server never loses data or leaks helpers — Queued
+### HIP-2 · The server never loses data or leaks helpers — Building
 Atomic writes (temp file + rename) for every `data/*.json`, a last-good backup of `state.json`
 that loads when the main one is corrupt, PowerShell and polling helpers that stop when no page
 needs them (the media helper runs forever today), and a clean shutdown. Done when: killing the
 server mid-write never corrupts state, and an idle Uncbox with no widgets showing runs no helpers.
 
-### HIP-3 · Smoke tests for every widget and route — Queued
+### HIP-3 · Smoke tests for every widget and route — Building
 A test that renders every widget type and panel in every preset theme with mocked data (no
 crashes, no React warnings, compact sizes too), and a server test that boots on a random port with
 a temp data folder and calls every GET route. Done when: both run in `npm run check`.
 
-### HIP-4 · Automations — Queued
+### HIP-4 · Automations — Building
 Simple "when this, do that" rules in a sidebar section: when a game starts or stops (the existing
 game detection), when OBS goes live or stops, at a time of day, when a focus round starts; then
 switch preset, toggle stream mode, switch an OBS scene, start a focus round, or show a note. Done
 when: "when SMITE 2 starts, switch to the SMITE preset" and "when OBS goes live, turn on stream
 mode" work, with each firing shown in a toast with Undo.
 
-### HIP-5 · Accessibility and keyboard pass — Queued
+### HIP-5 · Accessibility and keyboard pass — Building
 Every control reachable and visible by keyboard (focus rings in every theme), labels on icon
 buttons, menus and dialogs with the right roles and focus trapping, reduced-motion support, and
 contrast checked for each theme's text tokens. Done when: an automated axe-style check of each
