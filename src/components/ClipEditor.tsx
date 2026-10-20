@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { clampTrim, discordBitrate, frameShare, isSoft, lastSeconds } from '../clips/plan';
 import type { Trim } from '../clips/plan';
+import { copyLink, openInDrive } from '../clips/drive';
 import { clipUrl, watchClip } from '../clips/replay';
 import { makeVertical, sendToDiscord } from '../clips/share';
 import type { Edit, Progress, Report } from '../clips/share';
@@ -10,14 +11,14 @@ import { Icon } from './Icon';
 export type Status =
   | { kind: 'idle' }
   | { kind: 'busy'; text: string; fraction: number | null }
-  | { kind: 'done'; text: string; watch?: string }
+  | { kind: 'done'; text: string; watch?: string; link?: string }
   | { kind: 'error'; text: string };
 
 export interface Job {
   status: Status;
   busy: boolean;
-  /** Runs one job at a time. `done` is the message (and clip to watch) for when it works. */
-  run: (task: (report: Report, signal: AbortSignal) => Promise<{ text: string; watch?: string }>) => void;
+  /** Runs one job at a time. `done` is the message (and clip to watch, or Drive link) for when it works. */
+  run: (task: (report: Report, signal: AbortSignal) => Promise<{ text: string; watch?: string; link?: string }>) => void;
   cancel: () => void;
 }
 
@@ -59,6 +60,7 @@ export function StatusLine({ job }: { job: Job }) {
             <Icon name="play" size={13} /> Watch
           </button>
         )}
+        {status.link && <DriveLink link={status.link} />}
       </p>
     );
   }
@@ -73,6 +75,29 @@ export function StatusLine({ job }: { job: Job }) {
         Cancel
       </button>
     </div>
+  );
+}
+
+/** After "Saved to Drive": copy the link, or open the clip's Drive page. */
+function DriveLink({ link }: { link: string }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <>
+      <button
+        className="btn btn--small"
+        onClick={() =>
+          void copyLink(link).then((ok) => {
+            setCopied(ok);
+            if (ok) setTimeout(() => setCopied(false), 2000);
+          })
+        }
+      >
+        <Icon name={copied ? 'check' : 'copy'} size={13} /> {copied ? 'Copied' : 'Copy link'}
+      </button>
+      <button className="btn btn--small" onClick={() => openInDrive(link)}>
+        <Icon name="external" size={13} /> Open
+      </button>
+    </>
   );
 }
 

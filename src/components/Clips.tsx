@@ -1,10 +1,15 @@
 import { useEffect, useRef, useState } from 'react';
 import { keyLabel, isClipKey } from '../clips/keys';
+import { callOut } from '../callout';
+import { canSaveToDrive, saveToDrive, useDriveUploads } from '../clips/drive';
 import { CLIP_SECONDS, clipUrl, revealClip, saveClip, useClips, watchClip } from '../clips/replay';
 import { removeWebhook, sendToDiscord, setWebhook, useWebhook } from '../clips/share';
+import { placePanel } from '../layout';
 import { useCover } from '../native';
-import type { ClipSettings } from '../state/model';
-import type { Mutate } from '../state/useAppState';
+import type { ClipSettings, PresetData } from '../state/model';
+import type { Mutate, MutatePreset } from '../state/useAppState';
+import { newWidget } from '../widgets/catalog';
+import { useGoogle } from '../widgets/drive';
 import { StatusLine, VerticalEditor, useJob } from './ClipEditor';
 import { Icon } from './Icon';
 
@@ -72,6 +77,38 @@ export function ClipsSection({ settings, mutate }: { settings: ClipSettings; mut
             </span>
           </label>
         </li>
+        {settings.enabled && (
+          <>
+            <li>
+              <label>
+                <input
+                  type="checkbox"
+                  checked={settings.driveAuto}
+                  onChange={(e) => mutate((s) => void (s.clips.driveAuto = e.target.checked))}
+                />
+                <span className="toggle" />
+                <span className="toggles__text">
+                  Upload new clips to Drive automatically
+                  <small>Needs Google sign-in in a Drive widget</small>
+                </span>
+              </label>
+            </li>
+            <li>
+              <label>
+                <input
+                  type="checkbox"
+                  checked={settings.driveShare}
+                  onChange={(e) => mutate((s) => void (s.clips.driveShare = e.target.checked))}
+                />
+                <span className="toggle" />
+                <span className="toggles__text">
+                  Share links publicly
+                  <small>Anyone with the link can watch clips you put on Drive</small>
+                </span>
+              </label>
+            </li>
+          </>
+        )}
       </ul>
       {settings.enabled && (
         <>
@@ -194,24 +231,35 @@ function DiscordWebhook() {
   );
 }
 
-/** "Clip saved" with a Watch button, for a few seconds after each clip. Hidden in stream mode. */
-export function ClipToast() {
+/**
+ * "Clip saved" with a Watch button, for a few seconds after each clip. With automatic upload on it
+ * goes on to say "uploading to Drive…" and then "on Drive". Hidden in stream mode.
+ */
+export function ClipToast({ driveAuto }: { driveAuto: boolean }) {
   const { saved, saveError } = useClips();
-  const key = saved ? `saved:${saved.at}` : saveError ? `error:${saveError}` : '';
+  const drive = useDriveUploads()[saved?.name ?? ''];
+  const upload = driveAuto ? drive : undefined;
+  const key = saved ? `saved:${saved.at}:${upload?.state ?? ''}` : saveError ? `error:${saveError}` : '';
   const [hidden, setHidden] = useState('');
 
   useEffect(() => {
-    if (!key) return;
+    // Stays up while the upload is going; the next word on it shows again.
+    if (!key || upload?.state === 'uploading') return;
     const t = setTimeout(() => setHidden(key), TOAST_MS);
     return () => clearTimeout(t);
-  }, [key]);
+  }, [key, upload?.state]);
 
   if (!key || hidden === key) return null;
   return (
     <div className="toast toast--clip" role="status">
       {saved ? (
         <>
-          <span>Clip saved</span>
+          <span>
+            Clip saved
+            {upload?.state === 'uploading' && ' · uploading to Drive…'}
+            {upload?.state === 'done' && ' · on Drive'}
+            {upload?.state === 'error' && ` · not on Drive: ${upload.error}`}
+          </span>
           <button className="toast__undo" onClick={() => watchClip(saved.name)}>
             <Icon name="play" size={13} /> Watch
           </button>
@@ -224,16 +272,33 @@ export function ClipToast() {
 }
 
 /** Plays a saved clip over the dashboard. */
-export function ClipPlayer() {
+export function ClipPlayer({ settings, data, mutatePreset }: { settings: ClipSettings; data: PresetData; mutatePreset: MutatePreset }) {
   const { playing } = useClips();
   useCover(Boolean(playing));
+
+  // Signing in to Google happens in a Drive widget: point at the one on the board, or add one.
+  const setUpDrive = () => {
+    watchClip(null);
+    const there = data.widgets.find((w) => w.type === 'drive' && data.layout.some((item) => item.i === w.id));
+    if (there) return callOut(there.id);
+    const w = newWidget('drive');
+    mutatePreset((d) => {
+      d.widgets.push(w);
+      d.layout.push(placePanel(d.layout, w.id, d.widgets));
+    });
+    callOut(w.id);
+  };
+
   // Keyed, so each clip starts with a fresh editor and no leftover "Sent to Discord".
-  return playing ? <Player key={playing} playing={playing} /> : null;
+  return playing ? <Player key={playing} playing={playing} share={settings.driveShare} onSetUpDrive={setUpDrive} /> : null;
 }
 
-/** The player itself, with Make vertical and Send to Discord. */
-function Player({ playing }: { playing: string }) {
+/** The player itself, with Make vertical, Send to Discord and Save to Drive. */
+function Player({ playing, share, onSetUpDrive }: { playing: string; share: boolean; onSetUpDrive: () => void }) {
   const { set: discord } = useWebhook();
+  const google = useGoogle();
+  const onDrive = useDriveUploads()[playing];
+  const driveReady = google.reachable && canSaveToDrive(google.status);
   const job = useJob();
   const [editing, setEditing] = useState(false);
 
@@ -284,6 +349,28 @@ function Player({ playing }: { playing: string }) {
             >
               <Icon name="message" size={14} /> Send to Discord
             </button>
+          )}
+          {!editing && (
+            <>
+              <button
+                className="btn btn--small"
+                disabled={busy || !driveReady || onDrive?.state === 'uploading'}
+                title={driveReady ? 'Save this clip to your Google Drive' : 'Sign in to Google in a Drive widget first'}
+                onClick={() =>
+                  job.run(async (report, signal) => {
+                    const link = await saveToDrive(playing, share, report, signal);
+                    return { text: 'Saved to Drive.', link };
+                  })
+                }
+              >
+                <Icon name="cloud" size={14} /> Save to Drive
+              </button>
+              {!driveReady && google.status !== null && (
+                <button className="btn btn--small" title="Opens a Drive widget where you can sign in to Google" onClick={onSetUpDrive}>
+                  Set up Drive
+                </button>
+              )}
+            </>
           )}
           <button className="btn btn--small" onClick={() => revealClip(playing)}>
             <Icon name="folder" size={14} /> Show in folder

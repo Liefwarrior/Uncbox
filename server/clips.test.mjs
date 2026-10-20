@@ -132,4 +132,23 @@ describe('clip routes', () => {
       expect(res.status, `${method} ${route}`).toBe(403);
     }
   });
+
+  it('hands each new clip to the Drive upload only while "upload new clips" is on', async () => {
+    const handed = [];
+    clips.onSaved((name, options) => handed.push([name, options]));
+    // Off to start with, and after settings with no Drive keys.
+    clips.configure(null);
+    await post(base, new Uint8Array([1]), 'video/mp4');
+    clips.configure({ enabled: false, key: 'Equal' });
+    await post(base, new Uint8Array([1]), 'video/mp4');
+    expect(handed).toEqual([]);
+
+    clips.configure({ enabled: false, key: 'Equal', driveAuto: true, driveShare: true });
+    const { name } = await (await post(base, new Uint8Array([1]), 'video/mp4')).json();
+    expect(handed).toEqual([[name, { share: true }]]);
+
+    // Vertical shorts are made by hand, so they don't go up on their own.
+    await post(`${base}?kind=vertical`, new Uint8Array([1]), 'video/mp4');
+    expect(handed).toHaveLength(1);
+  });
 });

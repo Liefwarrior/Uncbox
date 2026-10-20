@@ -10,6 +10,9 @@
 //   POST /api/clips/reveal           { name? }: shows the clip (or the folder) in Explorer
 //   GET  /api/clips/file/<name>      the clip, with Range support for seeking
 //
+// Uploading clips to Google Drive is server/driveupload.mjs; with "upload new clips to Drive" on
+// (in the saved clip settings), each clip saved here is handed to it.
+//
 // Discord (these, like saving and revealing, only answer the PC Uncbox runs on):
 //
 //   GET  /api/clips/discord          { set, hint }: whether a webhook is set and its last 4 characters.
@@ -33,7 +36,7 @@ import { DISCORD_MAX_BYTES, createWebhookStore, parseWebhook, sendToWebhook } fr
 const MAX_CLIP = 2 * 1024 ** 3;
 const LISTED = 30;
 /** Matches the page's defaults in src/state/hydrate.ts, for a state saved before clips existed. */
-const DEFAULTS = { enabled: true, key: 'Equal' };
+const DEFAULTS = { enabled: true, key: 'Equal', driveAuto: false, driveShare: false };
 
 /** Windows keeps Videos wherever the user moved it (often OneDrive), so ask it. */
 function videosFolder() {
@@ -54,6 +57,10 @@ export function createClips({ clipsDir, dataDir, broadcastEvent, isLocal, sendJs
   const webhook = createWebhookStore(dataDir);
   const claimed = new Set();
   let presses = 0;
+  /** Called with each clip saved (name, kind) so it can go on to Drive; set by index.mjs. */
+  let afterSave = null;
+  /** The saved settings that matter after a save: upload new clips to Drive, and share them. */
+  let drive = { auto: false, share: false };
 
   const hotkey = createHotkey({
     onPress: () => {
@@ -104,6 +111,8 @@ export function createClips({ clipsDir, dataDir, broadcastEvent, isLocal, sendJs
       throw err;
     }
     broadcastEvent('clips', await snapshot());
+    // Only the clip key's clips go up by themselves, not the vertical shorts made by hand.
+    if (kind === 'clip' && drive.auto) afterSave?.(name, { share: drive.share });
     return name;
   }
 
@@ -261,6 +270,13 @@ export function createClips({ clipsDir, dataDir, broadcastEvent, isLocal, sendJs
     configure(settings) {
       const s = settings && typeof settings === 'object' ? settings : DEFAULTS;
       hotkey.watch(s.enabled !== false ? (s.key ?? DEFAULTS.key) : '');
+      drive = { auto: s.driveAuto === true, share: s.driveShare === true };
+    },
+    /** The clips folder. */
+    folder: () => dir,
+    /** Sets what happens after a clip is saved while "upload new clips to Drive" is on. */
+    onSaved(fn) {
+      afterSave = fn;
     },
     close: hotkey.close,
   };

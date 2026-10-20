@@ -311,6 +311,10 @@ export interface ClipSettings {
   enabled: boolean;
   /** The clip key, as a KeyboardEvent.code ("Equal" is =). */
   key: string;
+  /** Upload each new clip to Google Drive as soon as it is saved (server/driveupload.mjs). */
+  driveAuto: boolean;
+  /** Clips put on Drive can be viewed by anyone with the link. */
+  driveShare: boolean;
 }
 
 export interface AppState {

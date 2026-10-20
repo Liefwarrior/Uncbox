@@ -24,6 +24,7 @@ import { createClips } from './clips.mjs';
 import { createUpdate } from './update.mjs';
 import { createDiscordBridge } from './discord.mjs';
 import { createDrive } from './drive.mjs';
+import { createDriveUpload } from './driveupload.mjs';
 import { createGoogle } from './google.mjs';
 import { openInBrowser, pageFor } from './open.mjs';
 import { createGameSettings } from './gamesettings.mjs';
@@ -196,6 +197,8 @@ const launcher = createLauncher({ sendJson, isLocal, readJson, dataDir });
 const google = createGoogle({ broadcastEvent, sendJson, isLocal, readJson, dataDir, port });
 // UNCBOX_DRIVE_FOLDER stands in for the Drive for desktop folder, to try the widget without it.
 const drive = createDrive({ google, isLocal, sendJson, readJson, localFolder: process.env.UNCBOX_DRIVE_FOLDER || '' });
+const driveUpload = createDriveUpload({ google, dir: clips.folder(), dataDir, broadcastEvent, isLocal, sendJson, readJson });
+clips.onSaved((name, options) => void driveUpload.queue(name, options));
 const twitch = createTwitch({ broadcastEvent, sendJson, isLocal, readJson, dataDir });
 const ocr = createOcr({ isLocal, sendJson, readBody });
 const smite = createSmite({ broadcastEvent, sendJson });
@@ -235,6 +238,7 @@ async function handleApi(req, res, url) {
   if (url.pathname === '/api/obs' || url.pathname.startsWith('/api/obs/')) return obs(req, res, url);
   if (url.pathname.startsWith('/api/launcher/')) return launcher(req, res, url);
   if (url.pathname.startsWith('/api/google/')) return google.handle(req, res, url);
+  if (url.pathname === '/api/drive/upload' || url.pathname === '/api/drive/upload/cancel') return driveUpload.handle(req, res, url);
   if (url.pathname.startsWith('/api/drive/')) return drive(req, res, url);
   if (url.pathname.startsWith('/api/twitch/')) return twitch.handle(req, res, url);
   if (url.pathname === '/api/ocr') return ocr(req, res);

@@ -116,14 +116,15 @@ describe('hydrate', () => {
       clips: { enabled: false, key: 'F9' },
       presets: { wow: { game: { source: 'native', nativeGame: { process: 'WowClassic', title: 'World of Warcraft' } } } },
     });
-    expect(good.clips).toEqual({ enabled: false, key: 'F9' });
+    expect(good.clips).toEqual({ enabled: false, key: 'F9', driveAuto: false, driveShare: false });
     expect(good.presets.wow.game.nativeGame).toEqual({ process: 'WowClassic', title: 'World of Warcraft' });
     const bad = hydrate({
       version: 2,
       clips: { key: 'KeyW' },
       presets: { wow: { game: { nativeGame: { title: 'no process' } } }, smite2: { game: { nativeGame: 'x' } } },
     });
-    expect(bad.clips).toEqual({ enabled: true, key: 'Equal' });
+    expect(bad.clips).toEqual({ enabled: true, key: 'Equal', driveAuto: false, driveShare: false });
+    expect(hydrate({ version: 2, clips: { driveAuto: true, driveShare: 'yes' } }).clips).toMatchObject({ driveAuto: true, driveShare: false });
     expect(bad.presets.wow.game.nativeGame).toBeNull();
     expect(bad.presets.smite2.game.nativeGame).toBeNull();
   });

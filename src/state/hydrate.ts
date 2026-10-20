@@ -61,7 +61,7 @@ export function defaultState(): AppState {
     version: 2,
     preset: 'pokemon',
     twitch: { channel: '', hideBots: true },
-    clips: { enabled: true, key: DEFAULT_CLIP_KEY },
+    clips: { enabled: true, key: DEFAULT_CLIP_KEY, driveAuto: false, driveShare: false },
     discord: { pinned: [] },
     camera: { enabled: false, deviceId: null, mirrored: true },
     presets: eachPreset(defaultPresetData),

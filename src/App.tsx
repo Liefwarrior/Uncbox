@@ -107,8 +107,8 @@ export function App() {
           renderPanel={render}
         />
         <UndoToast />
-        <ClipToast />
-        <ClipPlayer />
+        <ClipToast driveAuto={state.clips.driveAuto} />
+        <ClipPlayer settings={state.clips} data={data} mutatePreset={mutatePreset} />
       </main>
     </div>
   );
