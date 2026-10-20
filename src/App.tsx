@@ -6,7 +6,7 @@ import { Sidebar } from './components/Sidebar';
 import { Palette } from './palette/Palette';
 import { UndoToast } from './components/UndoToast';
 import { useClipKeyInPage } from './clips/replay';
-import { useGameDetect } from './hud/reader';
+import { useGameDetect, useGameStream, useScreenTriggers } from './hud/reader';
 import { useSmiteSync } from './smite';
 import { useSmiteScreen } from './smite/reader';
 import { renderPanel } from './panels';
@@ -78,6 +78,7 @@ export function App() {
   // Game-specific behavior follows the base, so a copy of the SMITE 2 preset still reads SMITE.
   const { base, def, data } = activePreset(state);
   useGameDetect(def.detect, mutatePreset);
+  useScreenTriggers(useGameStream(), data, mutatePreset);
   useSmiteSync(base === 'smite2', mutatePreset);
   useSmiteScreen(base === 'smite2', mutatePreset);
   usePresetDrop(state, mutate);

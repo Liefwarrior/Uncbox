@@ -17,6 +17,12 @@ import {
   MAX_HISTORY,
   MAX_MILESTONES,
   MAX_HUD,
+  MAX_TRIGGERS,
+  MAX_PHRASE,
+  MAX_COOLDOWN,
+  emptyTrigger,
+  TRIGGER_ACTIONS,
+  type ScreenTrigger,
   MAX_QUESTS,
   MAX_SLOTS,
   PANEL_IDS,
@@ -130,6 +136,23 @@ function cleanLayout(saved: unknown, fallback: GridItem[], windows: AppWindow[],
   return items;
 }
 
+const pct = (n: number) => Math.min(100, Math.max(0, n));
+
+/** A trigger from a hand-edited or shared file: its box stays on the picture and its action is a known one. */
+function cleanTrigger(t: ScreenTrigger): ScreenTrigger {
+  t.x = pct(t.x);
+  t.y = pct(t.y);
+  t.w = Math.min(100 - t.x, pct(t.w));
+  t.h = Math.min(100 - t.y, pct(t.h));
+  t.phrase = t.phrase.slice(0, MAX_PHRASE);
+  t.cooldownSec = Math.min(MAX_COOLDOWN, Math.max(1, Math.round(t.cooldownSec) || 5));
+  const kind = t.action.kind;
+  if (!TRIGGER_ACTIONS.includes(kind)) t.action = { kind: 'counter', counterId: '' };
+  else if (t.action.kind === 'counter') t.action = { kind: 'counter', counterId: String(t.action.counterId ?? '') };
+  else t.action = { kind } as ScreenTrigger['action'];
+  return t;
+}
+
 const QUEST_STATES: QuestState[] = ['open', 'complete', 'failed'];
 const VIDEO_SOURCES: VideoSource[] = ['none', 'device', 'window', 'chroma', 'native'];
 const VIDEO_FITS: VideoFit[] = ['contain', 'cover', 'stretch'];
@@ -181,6 +204,9 @@ export function hydratePreset(id: PresetId, saved: unknown): PresetData {
   p.hud = objects(p.hud)
     .map((r) => overlay({ id: uid(), label: '', x: 0, y: 0, w: 10, h: 5, numeric: true, value: '', at: 0 }, r))
     .slice(0, MAX_HUD);
+  p.triggers = objects(Array.isArray(s.triggers) ? s.triggers : [])
+    .map((t) => cleanTrigger(overlay(emptyTrigger(), t)))
+    .slice(0, MAX_TRIGGERS);
   p.layout = cleanLayout(s.layout, base.layout, p.windows, p.widgets);
   p.slots = objects(p.slots).map((m) => overlay(emptySlot(), m)).slice(0, MAX_SLOTS);
   p.counters = objects(p.counters).map((c) => overlay({ id: uid(), label: 'Counter', value: 0 }, c));

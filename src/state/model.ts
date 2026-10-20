@@ -279,6 +279,40 @@ export interface HudRegion {
   at: number;
 }
 
+/** What a screen trigger does when its phrase shows up. */
+export type TriggerAction =
+  /** Adds 1 to one of the preset's counters (deaths, defeats). */
+  | { kind: 'counter'; counterId: string }
+  /** Marks the party member named in the text as down; the phrase has a {name} placeholder. */
+  | { kind: 'slotDown' }
+  /** Ticks the next milestone that isn't done. */
+  | { kind: 'milestone' };
+
+export const TRIGGER_ACTIONS: TriggerAction['kind'][] = ['counter', 'slotDown', 'milestone'];
+
+/**
+ * "When this shows up on the game's screen, do something": a box on the game picture (percent of
+ * the uncropped picture, like a Stats box), a phrase to look for in what Windows' OCR reads there,
+ * and an action. See src/hud/triggers.ts.
+ */
+export interface ScreenTrigger {
+  id: string;
+  label: string;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  phrase: string;
+  /** The phrase is a regular expression, not plain words. */
+  regex: boolean;
+  action: TriggerAction;
+  enabled: boolean;
+  /** Seconds the phrase must be gone before it can fire again, so one death screen counts once. */
+  cooldownSec: number;
+  /** When it last fired; 0 if never. */
+  at: number;
+}
+
 export interface PresetData {
   layout: GridItem[];
   /** What fills the space behind the panels; see src/backgrounds.ts. */
@@ -305,6 +339,8 @@ export interface PresetData {
   widgets: Widget[];
   /** The Stats panel's screen reader boxes (src/hud). */
   hud: HudRegion[];
+  /** Phrases to watch for on the game's screen (src/hud/triggers.ts). */
+  triggers: ScreenTrigger[];
 }
 
 export interface PinnedChannel {
@@ -346,6 +382,9 @@ export const MAX_MILESTONES = 24;
 export const MAX_HISTORY = 30;
 export const MAX_QUESTS = 50;
 export const MAX_HUD = 12;
+export const MAX_TRIGGERS = 12;
+export const MAX_PHRASE = 120;
+export const MAX_COOLDOWN = 600;
 export const MAX_CUSTOM = 50;
 export const MAX_PRESET_NAME = 60;
 
@@ -359,6 +398,23 @@ export function emptySlot(): SlotItem {
 
 export function milestone(name = ''): Milestone {
   return { id: uid(), name, done: false };
+}
+
+export function emptyTrigger(): ScreenTrigger {
+  return {
+    id: uid(),
+    label: '',
+    x: 25,
+    y: 40,
+    w: 50,
+    h: 20,
+    phrase: '',
+    regex: false,
+    action: { kind: 'counter', counterId: '' },
+    enabled: true,
+    cooldownSec: 5,
+    at: 0,
+  };
 }
 
 export function counter(label: string, value = 0): Counter {

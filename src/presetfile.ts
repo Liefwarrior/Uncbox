@@ -63,6 +63,8 @@ export function forSharing(data: PresetData, base: PresetId): PresetData {
 
   // Boxes stay where they were drawn; what they read is gone.
   d.hud = d.hud.map((r) => ({ ...r, value: '', at: 0 }));
+  // Triggers are layout-ish and shared as they are; when one last fired is not.
+  d.triggers = d.triggers.map((t) => ({ ...t, at: 0 }));
   // A weather place is likely home. The widget asks again.
   d.widgets = d.widgets.map((w) => (w.type === 'weather' ? { ...w, settings: { ...w.settings, place: '', lat: 0, lon: 0 } } : w));
   return d;

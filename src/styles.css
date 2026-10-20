@@ -2094,6 +2094,88 @@ button.addon-message {
   justify-items: start;
   gap: 8px;
 }
+.hud-empty__buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.triggers {
+  margin-top: 10px;
+}
+.triggers__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 0 0 4px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 650;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.triggers ul {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.triggers li {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 4px 10px;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--panel-2);
+}
+.triggers li.is-off .trigger__what {
+  opacity: 0.55;
+}
+.trigger__switch {
+  position: relative;
+  display: inline-flex;
+  cursor: pointer;
+}
+.trigger__what {
+  display: grid;
+  min-width: 0;
+  line-height: 1.25;
+}
+.trigger__what strong,
+.trigger__what small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.trigger__what small {
+  color: var(--muted);
+  font-size: 12px;
+}
+.trigger__said {
+  grid-column: 1 / -1;
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+.trigger-edit__more {
+  display: grid;
+  grid-column: 1 / -1;
+  gap: 6px;
+}
+.trigger-edit__more select,
+.trigger-edit__more input[type='number'] {
+  min-width: 0;
+  padding: 5px 8px;
+}
+.trigger-edit__more input[type='number'] {
+  width: 4.5em;
+  margin: 0 4px;
+}
+.trigger-edit__problem {
+  color: var(--bad);
+}
 .hud-editor {
   position: fixed;
   inset: 0;

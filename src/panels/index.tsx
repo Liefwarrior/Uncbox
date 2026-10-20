@@ -58,7 +58,7 @@ const RENDER: Record<PanelId, (c: PanelContext) => ReactNode> = {
   teams: (c) => <TeamsPanel title={c.title} />,
   scoreboard: (c) => <ScoreboardPanel title={c.title} />,
   damage: (c) => <DamagePanel title={c.title} />,
-  hud: (c) => <HudPanel hud={c.data.hud} title={c.title} suggestions={c.def.hud ?? []} mutatePreset={c.mutatePreset} />,
+  hud: (c) => <HudPanel data={c.data} title={c.title} suggestions={c.def.hud ?? []} recipes={c.def.triggers ?? []} mutatePreset={c.mutatePreset} />,
 };
 
 export function renderPanel(id: BoardId, c: Omit<PanelContext, 'title'>): ReactNode {

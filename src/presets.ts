@@ -1,3 +1,4 @@
+import type { RecipeId } from './hud/recipes';
 import { PANEL_INFO } from './panels/catalog';
 import { defaultWidgetSettings } from './widgets/catalog';
 import {
@@ -23,6 +24,8 @@ export interface PresetDef {
   featured: PanelId[];
   /** Names the Stats panel suggests for its screen-reading boxes. */
   hud?: string[];
+  /** Screen trigger recipes (src/hud/recipes.ts) listed first in the Stats panel's "Add from a recipe". */
+  triggers?: RecipeId[];
   /** The game's program ("Dungeons.exe"): the run timer starts when it does and pauses when it closes. */
   detect?: string;
   slots: {
@@ -77,6 +80,7 @@ const baseData = (): Omit<PresetData, 'layout'> => ({
   windows: [],
   widgets: [],
   hud: [],
+  triggers: [],
 });
 
 // Layouts are on a 24 × 24 grid sized to fill the window. At 1920 × 1080 a 17 × 17 game
@@ -88,6 +92,7 @@ export const PRESETS: Record<PresetId, PresetDef> = {
     blurb: 'Party, badges, Nuzlocke',
     titles: {},
     featured: ['game', 'camera', 'slots', 'chat', 'discord', 'run', 'progress', 'notes'],
+    triggers: ['nuzlocke', 'defeat'],
     slots: { variant: 'list', name: 'Pokémon', detail: 'Level, nature', showDown: true },
     layout: [
       { i: 'game', x: 0, y: 0, w: 17, h: 17 },

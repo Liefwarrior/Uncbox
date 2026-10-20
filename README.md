@@ -187,6 +187,15 @@ level, a timer. Uncbox reads the boxes once a second with Windows' own text reco
 new number has to read the same twice before it shows, so one blurry frame doesn't flash a wrong
 value. Boxes are a share of the picture, so they keep working if the window changes size.
 
+**Screen triggers** are in the same panel: *when this appears on screen, do something*. Choose
+**Set up screen triggers**, pick **Add from a recipe** (a death counter for Souls games, GTA or
+any "Game Over"; a Nuzlocke "{name} fainted!" that marks the party member down), and check that
+the box sits over the right part of the picture. Once a second, only while a game picture is up
+and a trigger is on, Uncbox reads just those boxes and looks for the words (ignoring case and
+small reading mistakes). A trigger fires once per sighting: the words must be gone for a few
+seconds before it can fire again. Every firing shows an **Undo**, and **Test** reads once and
+says what it saw.
+
 ### SMITE 2
 
 With the SMITE 2 preset showing and a match on, Uncbox reads the game's log for your god, build and

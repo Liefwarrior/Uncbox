@@ -23,6 +23,7 @@ function played(): PresetData {
   d.quests = [{ title: 'Wanted', level: 5, state: 'open', objectives: [{ text: 'x 1/2', done: false }] }];
   d.wowLinkAt = 1700000000000;
   d.hud = [{ id: 'h1', label: 'Emeralds', x: 1, y: 2, w: 10, h: 5, numeric: true, value: '1234', at: 99 }];
+  d.triggers = [{ id: 't1', label: 'You died', x: 25, y: 38, w: 50, h: 24, phrase: 'YOU DIED', regex: false, action: { kind: 'counter', counterId: 'c1' }, enabled: true, cooldownSec: 8, at: 1700000000000 }];
   d.background = 'stars';
   d.windows = [{ id: 'win-a', title: 'Spotify', fit: 'cover', crop: { top: 1, right: 2, bottom: 3, left: 4 } }];
   d.layout.push({ i: 'win-a', x: 0, y: 20, w: 5, h: 4 });
@@ -52,6 +53,7 @@ describe('toPresetFile', () => {
     expect(d.quests).toEqual([]);
     expect(d.wowLinkAt).toBe(0);
     expect(d.hud).toEqual([{ id: 'h1', label: 'Emeralds', x: 1, y: 2, w: 10, h: 5, numeric: true, value: '', at: 0 }]);
+    expect(d.triggers).toEqual([{ ...played().triggers[0], at: 0 }]);
     expect(d.widgets[1].settings).toMatchObject({ place: '', lat: 0, lon: 0 });
     expect(d.slots[0].down).toBe(false);
     expect(d.slots[1].image).toBe('');

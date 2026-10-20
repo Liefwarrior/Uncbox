@@ -265,3 +265,56 @@ describe('hydrate: Calendar and Gmail widgets', () => {
     expect(load('gmail', { gmailLabel: '' }).settings.gmailLabel).toBe('INBOX');
   });
 });
+
+describe('hydrate: screen triggers', () => {
+  const trigger = {
+    id: 't1',
+    label: 'You died',
+    x: 25,
+    y: 38,
+    w: 50,
+    h: 24,
+    phrase: 'YOU DIED',
+    regex: false,
+    action: { kind: 'counter', counterId: 'c1' },
+    enabled: true,
+    cooldownSec: 8,
+    at: 123,
+  };
+  const load = (triggers: unknown) => {
+    const saved = JSON.parse(JSON.stringify(defaultState()));
+    saved.presets.pokemon.triggers = triggers;
+    return hydrate(saved).presets.pokemon.triggers;
+  };
+
+  it('starts with none, and older saves without the field get none', () => {
+    const saved = JSON.parse(JSON.stringify(defaultState()));
+    delete saved.presets.pokemon.triggers;
+    expect(hydrate(saved).presets.pokemon.triggers).toEqual([]);
+  });
+
+  it('keeps a saved trigger as it was', () => {
+    expect(load([trigger])).toEqual([trigger]);
+    const nuzlocke = { ...trigger, phrase: '{name} fainted!', action: { kind: 'slotDown' } };
+    expect(load([nuzlocke])).toEqual([nuzlocke]);
+  });
+
+  it('fills in missing fields and drops junk', () => {
+    const [t] = load([{ phrase: 'WASTED' }, 'nope', 5]);
+    expect(t).toMatchObject({ phrase: 'WASTED', regex: false, enabled: true, cooldownSec: 5, at: 0, action: { kind: 'counter', counterId: '' } });
+    expect(load([{ phrase: 'x' }, 7, null])).toHaveLength(1);
+    expect(load('not a list')).toEqual([]);
+  });
+
+  it('repairs a box off the picture, a strange action, a silly cooldown and a long phrase', () => {
+    const [t] = load([{ ...trigger, x: -5, y: 90, w: 500, h: 50, action: { kind: 'format-disk' }, cooldownSec: 99999, phrase: 'x'.repeat(500) }]);
+    expect(t).toMatchObject({ x: 0, y: 90, w: 100, h: 10, cooldownSec: 600, action: { kind: 'counter', counterId: '' } });
+    expect(t.phrase).toHaveLength(120);
+    expect(load([{ ...trigger, cooldownSec: 0 }])[0].cooldownSec).toBe(5);
+    expect(load([{ ...trigger, cooldownSec: -3 }])[0].cooldownSec).toBe(1);
+  });
+
+  it('keeps at most 12', () => {
+    expect(load(Array.from({ length: 30 }, (_, i) => ({ ...trigger, id: `t${i}` })))).toHaveLength(12);
+  });
+});
