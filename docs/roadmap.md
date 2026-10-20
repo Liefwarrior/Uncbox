@@ -44,7 +44,7 @@ a widget is showing.
 Album art, a live progress bar, and previous/play-pause/next/seek for Spotify, browsers and
 anything in the Windows media flyout.
 
-### UBX-8 · Installer, start with Windows, update notice — Building
+### UBX-8 · Installer, start with Windows, update notice — Shipped (e8dad8b)
 `Uncbox.exe` installs itself per user (Start menu, uninstall entry, no admin), an optional "Start
 Uncbox when Windows starts", and a quiet "a new version is out" notice from GitHub releases.
 
