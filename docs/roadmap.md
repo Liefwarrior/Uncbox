@@ -92,7 +92,7 @@ every API route checks the Host header against Uncbox's own names, rejects cross
 `Sec-Fetch-Site: cross-site`, requires `application/json` for state-changing bodies, and the
 native app and the unc.box address still work; tests cover each attack.
 
-### HIP-2 · The server never loses data or leaks helpers — Building
+### HIP-2 · The server never loses data or leaks helpers — Shipped (1807eb2)
 Atomic writes (temp file + rename) for every `data/*.json`, a last-good backup of `state.json`
 that loads when the main one is corrupt, PowerShell and polling helpers that stop when no page
 needs them (the media helper runs forever today), and a clean shutdown. Done when: killing the
@@ -110,7 +110,7 @@ switch preset, toggle stream mode, switch an OBS scene, start a focus round, or 
 when: "when SMITE 2 starts, switch to the SMITE preset" and "when OBS goes live, turn on stream
 mode" work, with each firing shown in a toast with Undo.
 
-### HIP-5 · Accessibility and keyboard pass — Building
+### HIP-5 · Accessibility and keyboard pass — Shipped (d63bb6b)
 Every control reachable and visible by keyboard (focus rings in every theme), labels on icon
 buttons, menus and dialogs with the right roles and focus trapping, reduced-motion support, and
 contrast checked for each theme's text tokens. Done when: an automated axe-style check of each
