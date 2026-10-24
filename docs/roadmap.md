@@ -148,6 +148,6 @@ full and targeted scans, market value from scan history, sale rates from your ma
 undercut detection, deals, flips and crafting profit, with prices written back into the game for
 tooltips and one-click posting.
 
-### UBX-21 · Auction House widget — Building
+### UBX-21 · Auction House widget — Shipped (14b0601)
 The Uncbox side of the AH tools: item search with price history charts, deals and flips,
 crafting profit, your auctions and sales, posting rules and shopping lists.
