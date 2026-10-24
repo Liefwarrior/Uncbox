@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { keyLabel, isClipKey } from '../clips/keys';
 import { callOut } from '../callout';
 import { canSaveToDrive, saveToDrive, useDriveUploads } from '../clips/drive';
-import { CLIP_SECONDS, clipUrl, revealClip, saveClip, useClips, watchClip } from '../clips/replay';
+import { CLIP_SECONDS, clipLabel, clipUrl, isVerticalClip, revealClip, saveClip, useClips, watchClip } from '../clips/replay';
 import { removeWebhook, sendToDiscord, setWebhook, useWebhook } from '../clips/share';
 import { placePanel } from '../layout';
 import { useCover } from '../native';
@@ -141,9 +141,10 @@ export function ClipsSection({ settings, mutate }: { settings: ClipSettings; mut
             <li key={c.name}>
               <button className="side-link" title="Watch" onClick={() => watchClip(c.name)}>
                 <Icon name="play" size={13} />
-                <span>{when(c.at)}</span>
+                <span>{c.download ? clipLabel(c.name) : when(c.at)}</span>
                 <small>
-                  {c.name.includes(' vertical') && 'Vertical · '}
+                  {c.download && 'Download · '}
+                  {isVerticalClip(c.name) && 'Vertical · '}
                   {megabytes(c.size)}
                 </small>
               </button>
@@ -274,7 +275,7 @@ export function ClipToast({ driveAuto }: { driveAuto: boolean }) {
 
 /** Plays a saved clip over the dashboard. */
 export function ClipPlayer({ settings, data, mutatePreset }: { settings: ClipSettings; data: PresetData; mutatePreset: MutatePreset }) {
-  const { playing } = useClips();
+  const { playing, playingEdit } = useClips();
   useCover(Boolean(playing));
 
   // Signing in to Google happens in a Drive widget: point at the one on the board, or add one.
@@ -291,17 +292,17 @@ export function ClipPlayer({ settings, data, mutatePreset }: { settings: ClipSet
   };
 
   // Keyed, so each clip starts with a fresh editor and no leftover "Sent to Discord".
-  return playing ? <Player key={playing} playing={playing} share={settings.driveShare} onSetUpDrive={setUpDrive} /> : null;
+  return playing ? <Player key={playing} playing={playing} startEditing={playingEdit} share={settings.driveShare} onSetUpDrive={setUpDrive} /> : null;
 }
 
 /** The player itself, with Make vertical, Send to Discord and Save to Drive. */
-function Player({ playing, share, onSetUpDrive }: { playing: string; share: boolean; onSetUpDrive: () => void }) {
+function Player({ playing, startEditing, share, onSetUpDrive }: { playing: string; startEditing: boolean; share: boolean; onSetUpDrive: () => void }) {
   const { set: discord } = useWebhook();
   const google = useGoogle();
   const onDrive = useDriveUploads()[playing];
   const driveReady = google.reachable && canSaveToDrive(google.status);
   const job = useJob();
-  const [editing, setEditing] = useState(false);
+  const [editing, setEditing] = useState(startEditing && !isVerticalClip(playing));
 
   // While something is being made, Esc and a click outside stop that rather than closing the player.
   const { busy, cancel } = job;
@@ -322,9 +323,9 @@ function Player({ playing, share, onSetUpDrive }: { playing: string; share: bool
   const box = useRef<HTMLDivElement>(null);
   useDialog(box);
 
-  const vertical = playing.includes(' vertical');
+  const vertical = isVerticalClip(playing);
   return (
-    <div className="clip-player" role="dialog" aria-modal="true" aria-label={`Clip ${playing.replace(/\.mp4$/, '')}`} onClick={close}>
+    <div className="clip-player" role="dialog" aria-modal="true" aria-label={`Clip ${clipLabel(playing)}`} onClick={close}>
       <div ref={box} className={`clip-player__box ${editing ? 'is-editing' : ''}`} onClick={(e) => e.stopPropagation()}>
         {editing ? (
           <VerticalEditor name={playing} job={job} discord={discord} />
@@ -333,7 +334,7 @@ function Player({ playing, share, onSetUpDrive }: { playing: string; share: bool
         )}
         <StatusLine job={job} />
         <div className="clip-player__bar">
-          <span>{playing.replace(/\.mp4$/, '')}</span>
+          <span>{clipLabel(playing)}</span>
           <span className="spacer" />
           {!vertical && (
             <button className={`btn btn--small ${editing ? 'btn--on' : ''}`} disabled={busy} onClick={() => setEditing((e) => !e)}>

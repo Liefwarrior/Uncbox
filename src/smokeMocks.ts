@@ -183,6 +183,17 @@ export function route(scenario: Scenario, path: string, method: string): Reply {
   if (p === '/api/clips') {
     return ok({ dir: 'C:\\Videos\\Uncbox', hotkey: 'unsupported', clips: data ? [{ name: 'clip-1.mp4', size: 1e6, at: NOW }] : [] });
   }
+  if (p === '/api/ytdlp') {
+    const found = { found: true, path: 'C:\\Tools\\x.exe', version: '2026.07.04' };
+    const gone = { found: false, path: '', version: '' };
+    const item = { id: 'dl1', url: 'https://example.com/v', title: 'A video', percent: 40, speed: 2e6, eta: 30, height: 1080, fps: 60, vcodec: 'vp09.00.40.08', state: 'downloading', file: '', name: '', error: '', audioOnly: false };
+    return ok({
+      tools: { ytdlp: data ? found : gone, ffmpeg: data ? found : gone, winget: true, helpUrl: 'https://github.com/yt-dlp/yt-dlp/wiki/Installation' },
+      install: { running: false, action: '', tool: '', lines: [], error: '' },
+      queue: data ? [item] : [],
+      history: data ? [{ ...item, id: 'dl0', state: 'done', percent: 100, file: 'A video [x].mp4', name: 'Downloads/A video [x].mp4' }] : [],
+    });
+  }
   if (p === '/api/clips/discord') return ok({ set: data, hint: data ? 'abcd' : '' });
   if (p === '/api/update') return ok({ update: data ? { version: '9.9.9', url: 'https://github.com/Liefwarrior/Uncbox/releases' } : null });
   if (p === '/api/gallery') {

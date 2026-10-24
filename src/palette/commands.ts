@@ -63,6 +63,8 @@ export interface PaletteActions {
   browsePresets: () => void;
   /** Opens the sidebar's editor for a new automation. */
   addAutomation: () => void;
+  /** Saves the video at a web address with yt-dlp. */
+  downloadVideo: (url: string) => void;
 }
 
 export interface PaletteContext {
@@ -83,7 +85,7 @@ export interface PaletteContext {
 export type Provider = (ctx: PaletteContext) => Command[];
 
 /** Headings in the order they are listed (before a search puts the best match's heading first). */
-export const GROUPS = ['Presets', 'Panels', 'Widgets', 'Clips', 'Stream', 'Launcher', 'Web', 'Drive', 'OBS', 'Focus timer', 'Automations'] as const;
+export const GROUPS = ['Presets', 'Panels', 'Widgets', 'Clips', 'Stream', 'Launcher', 'Web', 'Downloads', 'Drive', 'OBS', 'Focus timer', 'Automations'] as const;
 
 // ---- presets ----
 
@@ -264,6 +266,25 @@ const webCommands: Provider = ({ state, query, mutatePreset, actions }) => {
   return commands;
 };
 
+// ---- video downloads ----
+
+/** A typed web address can also be downloaded as a video (yt-dlp, see widgets/downloads.ts). */
+const downloadCommands: Provider = ({ query, actions }) => {
+  const guess = classifyQuery(query);
+  if (guess.kind !== 'url') return [];
+  return [
+    {
+      id: 'download:url',
+      title: `Download video: ${short(query.trim())}`,
+      group: 'Downloads',
+      icon: 'download',
+      detail: 'Saved at the video’s own quality',
+      live: 900,
+      run: () => actions.downloadVideo(guess.url),
+    },
+  ];
+};
+
 // ---- drive ----
 
 /** How many letters before Drive is searched. */
@@ -364,6 +385,7 @@ export const providers: Provider[] = [
   streamCommands,
   launcherCommands,
   webCommands,
+  downloadCommands,
   driveCommands,
   obsCommands,
   focusCommands,

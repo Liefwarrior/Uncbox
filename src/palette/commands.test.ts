@@ -21,6 +21,7 @@ const fakeActions = (): PaletteActions => ({
   toggleStream: vi.fn(),
   browsePresets: vi.fn(),
   addAutomation: vi.fn(),
+  downloadVideo: vi.fn(),
 });
 
 /** A palette over a fresh default state; the changes the commands make are applied to that state. */
@@ -188,6 +189,18 @@ describe('web', () => {
     const words = setup({ query: 'cat videos' });
     expect(words.find('web:open')).toBeUndefined();
     expect(words.find('web:search')!.title).toBe('Search the web for cat videos');
+  });
+
+  it('offers to download the video at a typed address, and only for an address', () => {
+    const { find, actions } = setup({ query: 'https://www.youtube.com/watch?v=abc' });
+    const command = find('download:url')!;
+    expect(command.title).toBe('Download video: https://www.youtube.com/watch?v=abc');
+    command.run();
+    expect(actions.downloadVideo).toHaveBeenCalledWith('https://www.youtube.com/watch?v=abc');
+    expect(setup({ query: 'cat videos' }).find('download:url')).toBeUndefined();
+    expect(setup({ query: 'javascript:alert(1)' }).find('download:url')).toBeUndefined();
+    expect(setup({ query: '--exec calc' }).find('download:url')).toBeUndefined();
+    expect(setup().find('download:url')).toBeUndefined();
   });
 
   it('adds a Web widget when there is none, already on the page', () => {

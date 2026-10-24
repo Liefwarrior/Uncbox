@@ -11,6 +11,7 @@ import type { Mutate, MutatePreset } from '../state/useAppState';
 import { showNotice } from '../undo';
 import { requestWebOpen } from '../web';
 import { primeAudio } from '../widgets/chime';
+import { downloadFromHere } from '../widgets/downloads';
 import { type DriveFile, openFile, searchDriveFiles } from '../widgets/drive';
 import { DRIVE_FEATURE, hasGoogleScopes, useGoogle } from '../widgets/google';
 import { launchTile, useTiles } from '../widgets/launcher';
@@ -116,6 +117,7 @@ function Dialog({ state, mutate, mutatePreset, onToggleStream, onClose }: Props 
       toggleStream: onToggleStream,
       browsePresets: openGallery,
       addAutomation: openAutomationEditor,
+      downloadVideo: (url) => void downloadFromHere(url),
     }),
     [onToggleStream],
   );

@@ -41,6 +41,7 @@ import { createSmite } from './smite.mjs';
 import { createSteam } from './steam.mjs';
 import { createLauncher } from './launcher.mjs';
 import { createWeb } from './web.mjs';
+import { createYtdlp } from './ytdlp.mjs';
 import { createTwitch } from './twitch.mjs';
 import { createWidgets } from './widgets.mjs';
 import { createGuardConfig, guardApi } from './guard.mjs';
@@ -222,6 +223,8 @@ const ocr = createOcr({ isLocal, sendJson, readBody });
 const smite = createSmite({ broadcastEvent, sendJson });
 const gameSettings = createGameSettings({ isLocal, sendJson, readJson });
 const gallery = createGallery({ dataDir, sendJson, isLocal, baseUrl: process.env.UNCBOX_GALLERY_URL, fetchImpl });
+// Downloads go to the clips folder's Downloads subfolder; the clip list is refreshed when one ends.
+const ytdlp = createYtdlp({ broadcastEvent, sendJson, isLocal, readJson, dataDir, clipsFolder: () => clips.folder(), onFinished: () => void clips.announce() });
 const update = createUpdate({ dataDir, fetchImpl, version: JSON.parse(readFileSync(path.join(root, 'package.json'), 'utf8')).version });
 
 async function handleWow(req, res, url) {
@@ -265,6 +268,7 @@ async function handleApi(req, res, url) {
   if (url.pathname.startsWith('/api/calendar/')) return calendar(req, res, url);
   if (url.pathname.startsWith('/api/gmail/')) return gmail(req, res, url);
   if (url.pathname.startsWith('/api/twitch/')) return twitch.handle(req, res, url);
+  if (url.pathname === '/api/ytdlp' || url.pathname.startsWith('/api/ytdlp/')) return ytdlp.handle(req, res, url);
   if (url.pathname === '/api/ocr') return ocr(req, res);
   if (url.pathname === '/api/smite') return smite(req, res);
   if (url.pathname === '/api/game-settings') return gameSettings(req, res);
@@ -448,7 +452,7 @@ function closeServer(srv) {
 
 // Added first so they stop last: the helpers and pollers.
 shutdown.add('helpers', () => {
-  for (const part of [widgets, ocr, netstats, steam, obs, smite, twitch, discord, clips]) {
+  for (const part of [widgets, ocr, netstats, steam, obs, smite, twitch, discord, clips, ytdlp]) {
     try {
       (part.close ?? part.stop)?.call(part);
     } catch (err) {

@@ -1,12 +1,12 @@
 // Clip names, and the clip routes against a real server on a temporary folder. Sending to Discord
 // itself is covered with a fake fetch in webhook.test.mjs; nothing here can reach a real webhook.
 
-import { mkdtemp, readdir, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, readdir, rm, utimes, writeFile } from 'node:fs/promises';
 import http from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { NAME, clipName } from './clipnames.mjs';
+import { DOWNLOAD_NAME, NAME, clipName, isClipName } from './clipnames.mjs';
 import { createClips } from './clips.mjs';
 
 describe('clip names', () => {
@@ -94,6 +94,64 @@ describe('clip routes', () => {
     expect(name).not.toContain('vertical');
     const bad = await post(`${base}?kind=../x`, new Uint8Array([1]), 'video/mp4');
     expect(bad.status).toBe(400);
+  });
+
+  describe('downloads from the yt-dlp widget', () => {
+    const DL = 'Downloads/Some video [abc123].mp4';
+
+    async function seed() {
+      const clipsDir = path.join(tmp, 'clips');
+      await mkdir(path.join(clipsDir, 'Downloads'), { recursive: true });
+      await writeFile(path.join(clipsDir, clipName(new Date(2026, 0, 1, 1, 1, 1))), Buffer.alloc(10, 1));
+      await writeFile(path.join(clipsDir, 'Downloads', 'Some video [abc123].mp4'), Buffer.alloc(100, 2));
+      // Not videos we made: left out of the list.
+      await writeFile(path.join(clipsDir, 'Downloads', 'Some video [abc123].mp4.part'), Buffer.alloc(5));
+      await writeFile(path.join(clipsDir, 'Downloads', 'song.m4a'), Buffer.alloc(5));
+      await mkdir(path.join(clipsDir, 'Downloads', 'folder.mp4'));
+      // Make the download the newest.
+      const later = new Date(Date.now() + 5000);
+      await utimes(path.join(clipsDir, 'Downloads', 'Some video [abc123].mp4'), later, later);
+    }
+
+    it('lists them after the clips, marked as downloads', async () => {
+      await seed();
+      const { clips: list } = await (await fetch(base)).json();
+      expect(list.map((c) => [c.name, c.download ?? false])).toEqual([
+        [DL, true],
+        ['Uncbox 2026-01-01 01-01-01.mp4', false],
+      ]);
+    });
+
+    it('plays them, with Range support', async () => {
+      await seed();
+      const res = await fetch(`${base}/file/${encodeURIComponent(DL)}`, { headers: { Range: 'bytes=0-9' } });
+      expect(res.status).toBe(206);
+      expect((await res.arrayBuffer()).byteLength).toBe(10);
+    });
+
+    it('still keeps every name inside the clips and Downloads folders', async () => {
+      await seed();
+      for (const bad of [
+        'Downloads/../Uncbox 2026-01-01 01-01-01.mp4',
+        'Downloads/sub/x.mp4',
+        'Downloads\\x.mp4',
+        '../Downloads/Some video [abc123].mp4',
+        'Downloads/Some video [abc123].mp4.part',
+        'Downloads/song.m4a',
+        'downloads/Some video [abc123].mp4',
+        'Downloads//x.mp4',
+        'Downloads/.hidden.mp4',
+        'Downloads/a:b.mp4',
+      ]) {
+        expect(isClipName(bad), bad).toBe(false);
+        const res = await fetch(`${base}/file/${encodeURIComponent(bad)}`);
+        expect(res.status, bad).toBe(404);
+      }
+      expect(DOWNLOAD_NAME.test('Downloads/Ok [id].mp4')).toBe(true);
+      // The send route refuses them too, rather than reading some other file.
+      const res = await post(`${base}/discord/send`, { name: 'Downloads/../../secret.mp4' });
+      expect([400]).toContain(res.status);
+    });
   });
 
   it('keeps the webhook to itself: set, replace and remove, never read back', async () => {

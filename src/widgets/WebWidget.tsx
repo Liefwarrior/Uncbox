@@ -25,6 +25,7 @@ import {
   visit,
 } from '../web';
 import { WIDGET_INFO, widgetTitle } from './catalog';
+import { downloadFromHere, downloadUrl } from './downloads';
 
 interface Props {
   widget: Widget;
@@ -79,6 +80,7 @@ export function WebPanel({ widget, mutatePreset }: Props) {
         { label: settingsOpen ? 'Close settings' : 'Settings', icon: 'list', onSelect: () => setSettingsOpen((o) => !o) },
         { label: 'Reload', icon: 'refresh', onSelect: browser.reload, disabled: !browser.url },
         { label: 'Open in browser', icon: 'external', onSelect: () => openInBrowser(browser.url), disabled: !browser.url },
+        { label: 'Download video from this page', icon: 'download', onSelect: () => void downloadFromHere(browser.url), disabled: !downloadUrl(browser.url) },
       ]}
     >
       {settingsShown ? (

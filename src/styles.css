@@ -6149,3 +6149,96 @@ p.chat-empty {
   display: flex;
   gap: 6px;
 }
+
+/* Video downloader: the address box, then the queue and finished downloads. */
+.dl {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  height: 100%;
+  overflow: auto;
+  scrollbar-width: thin;
+}
+.dl__add {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.dl__add input {
+  flex: 1 1 160px;
+  min-width: 0;
+}
+.dl__list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.dl__item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  background: var(--panel-2);
+}
+.dl__title {
+  margin: 0;
+  overflow: hidden;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dl__meta {
+  margin: 0;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+.dl__bar {
+  height: 5px;
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--text) 18%, transparent);
+}
+.dl__bar i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--accent);
+  transition: width 0.25s linear;
+}
+.dl__item--merging .dl__bar i {
+  opacity: 0.6;
+}
+.dl__item--cancelled {
+  opacity: 0.6;
+}
+.dl__buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.dl__tools p {
+  margin: 0 0 6px;
+  font-size: 13px;
+}
+.dl__log {
+  max-height: 120px;
+  margin: 0;
+  padding: 6px 8px;
+  overflow: auto;
+  border-radius: var(--radius-sm);
+  background: var(--panel-2);
+  color: var(--muted);
+  font-size: 12px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.dl__clear {
+  align-self: flex-start;
+}
+.dl__empty {
+  margin: 0;
+  font-size: 13px;
+}

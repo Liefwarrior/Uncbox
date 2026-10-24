@@ -15,7 +15,7 @@
 
 import { open, readFile, stat } from 'node:fs/promises';
 import path from 'node:path';
-import { NAME } from './clipnames.mjs';
+import { isClipName } from './clipnames.mjs';
 import { driveProblem } from './drive.mjs';
 import { GOOGLE_SCOPES } from './google.mjs';
 import { writeJsonAtomic } from './datafile.mjs';
@@ -44,7 +44,7 @@ const quote = (text) => `'${String(text).replace(/\\/g, '\\\\').replace(/'/g, "\
  * server/clipnames.mjs) pass, so a name can't reach outside the folder.
  */
 export function clipPath(folder, name) {
-  return typeof name === 'string' && NAME.test(name) ? path.join(folder, name) : null;
+  return isClipName(name) ? path.join(folder, name) : null;
 }
 
 /** How far Google says it got, from a 308's Range header ("bytes=0-8388607"): the next byte to send. */
@@ -235,12 +235,12 @@ export function createDriveUpload({ google, dir, dataDir, broadcastEvent = () =>
     const folderId = await ensureFolder(signal);
     let session;
     try {
-      session = await startSession({ name, total, folderId, signal });
+      session = await startSession({ name: path.basename(name), total, folderId, signal });
     } catch (err) {
       // The folder went missing after the check (deleted just now): make it again, once.
       if (!err.gone) throw err;
       await rememberFolder('');
-      session = await startSession({ name, total, folderId: await ensureFolder(signal), signal });
+      session = await startSession({ name: path.basename(name), total, folderId: await ensureFolder(signal), signal });
     }
     let made;
     try {
