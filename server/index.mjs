@@ -42,6 +42,7 @@ import { createSteam } from './steam.mjs';
 import { createLauncher } from './launcher.mjs';
 import { createWeb } from './web.mjs';
 import { createYtdlp } from './ytdlp.mjs';
+import { createWowAh } from './wowah.mjs';
 import { createTwitch } from './twitch.mjs';
 import { createWidgets } from './widgets.mjs';
 import { createGuardConfig, guardApi } from './guard.mjs';
@@ -227,6 +228,9 @@ const gallery = createGallery({ dataDir, sendJson, isLocal, baseUrl: process.env
 const ytdlp = createYtdlp({ broadcastEvent, sendJson, isLocal, readJson, dataDir, clipsFolder: () => clips.folder(), onFinished: () => void clips.announce() });
 const update = createUpdate({ dataDir, fetchImpl, version: JSON.parse(readFileSync(path.join(root, 'package.json'), 'utf8')).version });
 
+// The auction house engine (/api/wow/ah/*): reads what the UncboxAH addon saved and writes its prices back.
+const wowAh = createWowAh({ broadcastEvent, sendJson, isLocal, readJson, dataDir });
+
 async function handleWow(req, res, url) {
   if (!isLocal(req)) return sendJson(res, 403, { error: 'Run this on the PC WoW is on.' });
   try {
@@ -254,6 +258,7 @@ async function handleApi(req, res, url) {
   // No CORS headers anywhere, so another site's preflight is always refused.
   if (req.method === 'OPTIONS') return sendJson(res, 405, { error: 'Method not allowed' });
   if (url.pathname === '/api/discord' || url.pathname.startsWith('/api/discord/')) return handleDiscord(req, res, url);
+  if (url.pathname.startsWith('/api/wow/ah/')) return wowAh.handle(req, res, url);
   if (url.pathname.startsWith('/api/wow/')) return handleWow(req, res, url);
   if (url.pathname === '/api/clips' || url.pathname.startsWith('/api/clips/')) return clips.handle(req, res, url);
   if (['/api/system', '/api/notifications'].includes(url.pathname) || url.pathname.startsWith('/api/media')) return widgets(req, res, url);
@@ -392,6 +397,7 @@ async function handleRequest(req, res) {
 server.on('request', handleRequest);
 
 discord.start().catch((err) => console.error('Discord bridge:', err.message));
+wowAh.start().catch((err) => console.warn('Uncbox: the auction house data:', err.message));
 // The clip key follows the saved settings; with none saved yet, the default (=) is on.
 loadState()
   .then((s) => clips.configure(s?.clips))
@@ -452,7 +458,7 @@ function closeServer(srv) {
 
 // Added first so they stop last: the helpers and pollers.
 shutdown.add('helpers', () => {
-  for (const part of [widgets, ocr, netstats, steam, obs, smite, twitch, discord, clips, ytdlp]) {
+  for (const part of [widgets, ocr, netstats, steam, obs, smite, twitch, discord, clips, ytdlp, wowAh]) {
     try {
       (part.close ?? part.stop)?.call(part);
     } catch (err) {

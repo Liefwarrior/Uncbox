@@ -21,6 +21,10 @@ describe('WoW addon install', () => {
     await install(found[0].path, roots);
     const toc = await readFile(path.join(found[0].path, 'Uncbox', 'Uncbox.toc'), 'utf8');
     expect(toc).toContain('Codec.lua');
+    // Every folder under addon/ goes in: the auction house addon too.
+    expect(await readFile(path.join(found[0].path, 'UncboxAH', 'UncboxAH.toc'), 'utf8')).toContain('SavedVariables: UncboxAHDB');
+    await uninstall(found[0].path, roots);
+    await expect(stat(path.join(found[0].path, 'UncboxAH'))).rejects.toThrow();
   });
 
   it('installs everywhere in one go, replaces an old copy whole, and removes it', async () => {

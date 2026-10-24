@@ -148,6 +148,23 @@ const ROUTES = [
   ['/api/discord/nope', [404]],
   ['/api/wow/installs', JSON_OK, (r) => expect(Array.isArray(r.json.installs)).toBe(true)],
   ['/api/wow/status', JSON_OK, (r) => expect(r.json).toHaveProperty('bundled')],
+  // The auction house engine, with no addon data yet: every answer is empty, never an error.
+  ['/api/wow/ah/status', JSON_OK, (r) => expect(r.json).toMatchObject({ addonInstalled: false, realms: [], dataAge: null })],
+  ['/api/wow/ah/items?q=linen&sort=market&limit=5', JSON_OK, (r) => expect(r.json).toMatchObject({ total: 0, items: [] })],
+  ['/api/wow/ah/item/i%3A2589', [404]],
+  ['/api/wow/ah/deals', JSON_OK, (r) => expect(r.json.rows).toEqual([])],
+  ['/api/wow/ah/flips', JSON_OK, (r) => expect(r.json.rows).toEqual([])],
+  ['/api/wow/ah/vendor-flips', JSON_OK, (r) => expect(r.json.rows).toEqual([])],
+  ['/api/wow/ah/crafting', JSON_OK, (r) => expect(r.json.rows).toEqual([])],
+  ['/api/wow/ah/sell', JSON_OK, (r) => expect(r.json.rows).toEqual([])],
+  ['/api/wow/ah/undercuts', JSON_OK, (r) => expect(r.json.rows).toEqual([])],
+  ['/api/wow/ah/accounting?days=7', JSON_OK, (r) => expect(r.json).toMatchObject({ days: 7, entries: [] })],
+  ['/api/wow/ah/gold', JSON_OK, (r) => expect(r.json).toMatchObject({ total: [], current: 0 })],
+  ['/api/wow/ah/groups', JSON_OK, (r) => expect(r.json.groups).toEqual([])],
+  ['/api/wow/ah/operations', JSON_OK, (r) => expect(r.json.operations.map((o) => o.id)).toEqual(['default-post', 'default-shop'])],
+  ['/api/wow/ah/shopping', JSON_OK, (r) => expect(r.json.shopping).toEqual([])],
+  ['/api/wow/ah/deals-settings', JSON_OK, (r) => expect(r.json.percent).toBe(0.6)],
+  ['/api/wow/ah/nothing', [404]],
   ['/api/clips', JSON_OK, (r) => {
     expect(r.json.hotkey).toBe('unsupported');
     expect(r.json.clips.map((c) => c.name)).toEqual([CLIP]);

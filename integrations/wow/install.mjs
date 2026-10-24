@@ -64,18 +64,28 @@ async function targets(target, roots) {
  */
 export async function install(target, roots = defaultRoots()) {
   const done = await targets(target, roots);
+  const addons = await addonFolders();
   for (const dir of done) {
     await mkdir(dir, { recursive: true });
-    await rm(path.join(dir, 'Uncbox'), { recursive: true, force: true });
-    await cp(path.join(ADDON_DIR, 'Uncbox'), path.join(dir, 'Uncbox'), { recursive: true });
+    for (const name of addons) {
+      await rm(path.join(dir, name), { recursive: true, force: true });
+      await cp(path.join(ADDON_DIR, name), path.join(dir, name), { recursive: true });
+    }
   }
   return done;
+}
+
+/** The addons Uncbox ships: every folder under addon/ (Uncbox, UncboxAH…). */
+async function addonFolders() {
+  const entries = await readdir(ADDON_DIR, { withFileTypes: true });
+  return entries.filter((e) => e.isDirectory()).map((e) => e.name);
 }
 
 /** Removes the addon from target, or from every WoW install found. Its saved settings stay in WTF. */
 export async function uninstall(target, roots = defaultRoots()) {
   const done = await targets(target, roots);
-  for (const dir of done) await rm(path.join(dir, 'Uncbox'), { recursive: true, force: true });
+  const addons = await addonFolders();
+  for (const dir of done) for (const name of addons) await rm(path.join(dir, name), { recursive: true, force: true });
   return done;
 }
 
