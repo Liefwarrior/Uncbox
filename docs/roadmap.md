@@ -119,7 +119,7 @@ without a mouse.
 
 ## Wave 3: video downloads, the widget library, and WoW for guild leaders
 
-### UBX-16 · yt-dlp plugin — Building
+### UBX-16 · yt-dlp plugin — Shipped (2995fa3)
 Download any video yt-dlp supports, at the source's own resolution and frame rate (no downscaling,
 60 fps stays 60 fps), into the Uncbox clips folder, so it plays in the clip player and can be made
 vertical, sent to Discord or saved to Drive. Uses the installed yt-dlp and ffmpeg, with one-click
