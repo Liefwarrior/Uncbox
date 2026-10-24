@@ -69,10 +69,22 @@ takes). Changes are pushed as the `wowguild` event on `/api/events`:
 - `GET /api/wow/attendance?last=10`: `{ raids, since, members: [{ name, class, rankIndex, inGuild, attended, raids, pct, bossesAttended, bosses, lastRaidAt }] }`. In a raid someone attended if they were in at least half its snapshots (taken at the start, at each boss kill and every 15 minutes).
 - `GET /api/wow/loot?member=&since=&raid=&limit=`: `{ loot: [{ id, at, raidId, who, itemId, name, quality, count, boss }] }`, newest first.
 - `GET /api/wow/readychecks?limit=`: `{ readyChecks: [{ at, initiator, ready, notReady, afk, done }] }`.
-- Setup: `GET /api/wow/status`, `GET`/`POST /api/wow/settings`, `POST /api/wow/install`, `/uninstall`, `/auto`, `/reveal`, `POST /api/wow/live` (what the page reads off the strip), `POST /api/wow/guild/reset` (for a new guild).
+- Setup: `GET /api/wow/status`, `GET`/`POST /api/wow/settings`, `POST /api/wow/install`, `/uninstall`, `/auto`, `/reveal`, `POST /api/wow/live` (what the page reads off the strip), `POST /api/wow/guild/reset` (for a new guild), `POST /api/wow/open` `{ item }` (opens that item's Wowhead page in the browser, and nothing else).
 
 The data is in `data/wow.db` (SQLite) and the settings in `data/wow.json`. One guild is kept at a
 time; saved data from a character in another guild is ignored until you reset the guild.
+
+## Guild widgets
+
+The WoW category of the widget library has six widgets that read this API: **Guild roster** (who is
+online; search, filters, sorting; click a member for their rank history, sessions, attendance and
+loot), **Guild news** (a live feed with filter chips; stream-friendly), **Raid composition** (the
+raid by group with roles, buffs, who is down and the last ready check), **Raid attendance** (members
+against the last raids, with Export CSV), **Raid loot** (history, "Fair share", Export CSV, items
+open on Wowhead) and **Guild goals** (bosses killed per raid). Each refetches on the `wowguild` event and gently once a minute while the page shows. In stream
+mode (F8) officer notes never show, public notes only with "Show notes on stream", and the attendance and loot widgets show
+"Member 1", "Member 2"… instead of names unless "Show names on stream" is on. The palette has
+"WoW: raid attendance" and "WoW: find member <name>".
 
 ## Good to know
 

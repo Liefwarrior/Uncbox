@@ -22,6 +22,7 @@ const fakeActions = (): PaletteActions => ({
   browsePresets: vi.fn(),
   addAutomation: vi.fn(),
   downloadVideo: vi.fn(),
+  showMember: vi.fn(),
 });
 
 /** A palette over a fresh default state; the changes the commands make are applied to that state. */
@@ -36,6 +37,7 @@ function setup(over: Partial<PaletteContext> = {}) {
     tiles: null,
     drive: { signedIn: false, results: [] },
     obs: null,
+    wow: null,
     now: 1_000_000,
     ...over,
     state,
@@ -465,5 +467,52 @@ describe('automations', () => {
     expect(add.title).toBe('Add an automation');
     add.run();
     expect(actions.addAutomation).toHaveBeenCalled();
+  });
+});
+
+describe('WoW guild', () => {
+  const onWow = (over: Partial<PaletteContext> = {}) => {
+    const t = setup(over);
+    t.state.preset = 'wow';
+    return t;
+  };
+
+  it('is only there on the WoW preset', () => {
+    const none = setup();
+    expect(none.commands().some((c) => c.group === 'WoW')).toBe(false);
+    expect(onWow().find('wow:attendance')?.title).toBe('WoW: raid attendance');
+  });
+
+  it('WoW: raid attendance adds the widget if there is none, and points at it if there is', () => {
+    const { state, find, actions } = onWow();
+    const before = activePreset(state).data.widgets.length;
+    find('wow:attendance')!.run();
+    const { widgets } = activePreset(state).data;
+    expect(widgets).toHaveLength(before + 1);
+    const added = widgets.at(-1)!;
+    expect(added.kind).toBe('attendance');
+    expect(actions.callOut).toHaveBeenLastCalledWith(added.id);
+    find('wow:attendance')!.run();
+    expect(activePreset(state).data.widgets).toHaveLength(before + 1);
+    expect(actions.callOut).toHaveBeenLastCalledWith(added.id);
+  });
+
+  it('finds guild members by what is typed, without caring about case or accents, and opens them in the roster', () => {
+    const { commands, state, actions } = onWow({ query: 'zoe', wow: { members: ['Lief', 'Zoë', 'Kaz', 'Zoran'] } });
+    const found = commands().filter((c) => c.id.startsWith('wow:member:'));
+    expect(found.map((c) => c.title)).toEqual(['WoW: find member Zoë']);
+    found[0].run();
+    const roster = activePreset(state).data.widgets.find((w) => w.kind === 'guildroster')!;
+    expect(roster).toBeDefined();
+    expect(actions.showMember).toHaveBeenCalledWith(roster.id, 'Zoë');
+    expect(actions.callOut).toHaveBeenCalledWith(roster.id);
+  });
+
+  it('understands being asked as "find member kaz" and caps the list', () => {
+    const names = Array.from({ length: 9 }, (_, i) => `Ka${i}`);
+    const typed = onWow({ query: 'WoW: find member ka', wow: { members: names } });
+    expect(typed.commands().filter((c) => c.id.startsWith('wow:member:'))).toHaveLength(5);
+    const short = onWow({ query: 'k', wow: { members: names } });
+    expect(short.commands().some((c) => c.id.startsWith('wow:member:'))).toBe(false);
   });
 });

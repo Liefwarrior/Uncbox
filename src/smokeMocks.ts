@@ -4,6 +4,7 @@
 // get drawn.
 
 import { ahRoute } from './widgets/auctionhouse/fixtures';
+import { wowGuildRoute } from './wowMocks';
 
 export type Scenario = 'empty' | 'data';
 
@@ -221,6 +222,9 @@ export function route(scenario: Scenario, path: string, method: string): Reply {
       settings: { strip: { enabled: true, corner: 'TOPLEFT' }, modules, lootMinQuality: 2 },
     });
   }
+  const guild = method === 'GET' ? wowGuildRoute(data, url) : null;
+  if (guild) return guild;
+  if (p === '/api/wow/open' && method === 'POST') return ok({ ok: true });
   if (p === '/api/google/status') return ok(data ? googleIn : googleOut);
   if (p === '/api/drive/local') return ok({ available: false, name: '' });
   if (p === '/api/drive/files') return data ? ok({ files, nextPageToken: '' }) : { status: 401, body: { code: 'signin', error: 'Sign in to Google.' } };

@@ -2,6 +2,7 @@ import type { PresetDef } from '../presets';
 import { overlay } from '../state/overlay';
 import { type BoardId, isWidgetId, uid, type Widget } from '../state/model';
 import { auctionhouse } from './auctionhouse';
+import { attendance } from './attendance';
 import { calendar } from './calendar';
 import { camera } from './camera';
 import { character } from './character';
@@ -15,6 +16,9 @@ import { drive } from './drive';
 import { focus } from './focus';
 import { game } from './game';
 import { gmail } from './gmail';
+import { guildfeed } from './guildfeed';
+import { guildgoals } from './guildgoals';
+import { guildroster } from './guildroster';
 import { hud } from './hud';
 import { launcher } from './launcher';
 import { match } from './match';
@@ -25,6 +29,8 @@ import { notifications } from './notifications';
 import { obs } from './obs';
 import { progress } from './progress';
 import { quests } from './quests';
+import { raidcomp } from './raidcomp';
+import { raidloot } from './raidloot';
 import { record } from './record';
 import { run } from './run';
 import { scoreboard } from './scoreboard';
@@ -83,6 +89,12 @@ export const WIDGETS: readonly AnyWidgetDef[] = [
   character,
   quests,
   auctionhouse,
+  guildroster,
+  guildfeed,
+  raidcomp,
+  attendance,
+  raidloot,
+  guildgoals,
   steam,
 ];
 

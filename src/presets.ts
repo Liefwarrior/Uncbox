@@ -150,10 +150,16 @@ export const PRESETS: Record<PresetId, PresetDef> = {
       { i: 'camera', x: 17, y: 0, w: 7, h: 7 },
       { i: 'character', x: 17, y: 7, w: 7, h: 8 },
       { i: 'chat', x: 17, y: 15, w: 7, h: 9 },
-      { i: 'progress', x: 0, y: 17, w: 5, h: 7 },
+      { i: 'wdg-wowroster', x: 0, y: 17, w: 5, h: 7 },
       { i: 'quests', x: 5, y: 17, w: 4, h: 7 },
       { i: 'discord', x: 9, y: 17, w: 4, h: 7 },
-      { i: 'run', x: 13, y: 17, w: 4, h: 7 },
+      { i: 'wdg-wownews', x: 13, y: 17, w: 4, h: 7 },
+    ],
+    // For leading a guild: who is online, and what is happening. The rest (raid group, attendance,
+    // loot, goals) are a click away in the widget library.
+    widgets: [
+      { id: 'wdg-wowroster', kind: 'guildroster' },
+      { id: 'wdg-wownews', kind: 'guildfeed' },
     ],
     data: () => {
       const d = baseData();

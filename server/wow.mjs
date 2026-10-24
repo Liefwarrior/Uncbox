@@ -10,6 +10,7 @@
 //   POST /api/wow/reveal          opens the folder holding the addon
 //   GET/POST /api/wow/settings    { settings, autoInstall, flavor }: what the addon collects (UncboxConfig.lua)
 //   POST /api/wow/live            { messages: [{ kind, text }] } what the page read off the strip
+//   POST /api/wow/open            { item } opens that item's Wowhead page in the browser (nothing else)
 //   GET  /api/wow/guild           roster plus counts (?officer=1 adds officer notes, ?former=1 past members)
 //   GET  /api/wow/guild/events    ?since=<ms>&limit=&type= newest first
 //   GET  /api/wow/guild/sessions  ?member=&since=&limit=
@@ -42,6 +43,7 @@ import {
 } from '../integrations/wow/install.mjs';
 import { parseSavedVariables } from '../integrations/wow/savedvars.mjs';
 import { readJsonSafe, writeJsonAtomic } from './datafile.mjs';
+import { openInBrowser } from './open.mjs';
 import { noHelpers } from './switches.mjs';
 import { createStore } from './wowdb.mjs';
 
@@ -72,6 +74,7 @@ export function createWow({
   helpers = !noHelpers(),
   pollMs = POLL_MS,
   now = () => Math.floor(Date.now() / 1000),
+  open = openInBrowser,
 } = {}) {
   const settingsFile = path.join(dataDir, 'wow.json');
   const dbFile = path.join(dataDir, 'wow.db');
@@ -367,6 +370,15 @@ export function createWow({
         link.liveAt = Date.now();
         changed(s.ingestLive(messages));
         return sendJson(res, 200, { ok: true, accepted: messages.length });
+      }
+      if (route === '/open') {
+        const body = await readJson(req);
+        // Only an item's page, by its number: the page can't make this open anything else.
+        const item = Number(body.item);
+        if (!Number.isInteger(item) || item < 1 || item > 9_999_999) return sendJson(res, 400, { error: 'That isn’t an item.' });
+        const url = `https://www.wowhead.com/classic/item=${item}`;
+        open(url);
+        return sendJson(res, 200, { ok: true, url });
       }
       if (route === '/guild/reset') {
         (await openStore()).resetGuild();

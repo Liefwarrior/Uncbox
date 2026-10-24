@@ -13,6 +13,7 @@ import { isAuctionHouseWidget } from '../widgets/auctionhouse/settings';
 import { isFocusWidget, isRunning, remaining, settle, stateOf, configOf, toggleFocus } from '../widgets/focus/focus';
 import { newWidget, panelTitle, WIDGETS, widgetTitle } from '../widgets/registry';
 import { isSingle } from '../widgets/types';
+import { fold } from '../widgets/shared/wowGuild';
 import { isWebWidget } from '../widgets/web/settings';
 import { TILE_KINDS, type Tile } from '../widgets/launcher/launcher';
 import { fuzzyMatch, type Match } from './fuzzy';
@@ -67,6 +68,8 @@ export interface PaletteActions {
   addAutomation: () => void;
   /** Saves the video at a web address with yt-dlp. */
   downloadVideo: (url: string) => void;
+  /** Asks a Guild roster widget to show a member (it does as soon as it is on screen). */
+  showMember: (widgetId: Widget['id'], name: string) => void;
 }
 
 export interface PaletteContext {
@@ -80,6 +83,8 @@ export interface PaletteContext {
   tiles: Tile[] | null;
   drive: { signedIn: boolean; results: DriveFile[] };
   obs: ObsSnapshot | null;
+  /** The guild's member names, once known (only asked for on the WoW preset). */
+  wow: { members: string[] } | null;
   actions: PaletteActions;
   now: number;
 }
@@ -87,7 +92,7 @@ export interface PaletteContext {
 export type Provider = (ctx: PaletteContext) => Command[];
 
 /** Headings in the order they are listed (before a search puts the best match's heading first). */
-export const GROUPS = ['Presets', 'Panels', 'Widgets', 'Clips', 'Stream', 'Launcher', 'Web', 'Downloads', 'Drive', 'OBS', 'Focus timer', 'Auction House', 'Automations'] as const;
+export const GROUPS = ['Presets', 'Panels', 'Widgets', 'Clips', 'Stream', 'Launcher', 'Web', 'Downloads', 'Drive', 'OBS', 'WoW', 'Focus timer', 'Auction House', 'Automations'] as const;
 
 // ---- presets ----
 
@@ -340,6 +345,62 @@ const obsCommands: Provider = ({ obs, actions }) => {
   return [...scenes, recording];
 };
 
+// ---- WoW guild ----
+
+/** How many guild members one search lists. */
+export const WOW_MEMBERS_SHOWN = 5;
+
+/** On the WoW preset: raid attendance, and a search for guild members that opens them in the Guild roster. */
+const wowCommands: Provider = ({ state, query, wow, mutatePreset, actions }) => {
+  const { base, data } = activePreset(state);
+  if (base !== 'wow') return [];
+
+  /** The first widget of a kind goes on screen (a new one if there is none); returns it. */
+  const point = (kind: string): Widget => {
+    const have = data.widgets.find((w) => w.kind === kind);
+    if (have) return have;
+    const widget = newWidget(kind);
+    mutatePreset((d) => addWidgetTo(d, widget));
+    return widget;
+  };
+
+  const commands: Command[] = [
+    {
+      id: 'wow:attendance',
+      title: 'WoW: raid attendance',
+      group: 'WoW',
+      icon: 'calendar',
+      detail: 'Who came to the last raids',
+      keywords: 'raiders missed loot council dkp csv guild',
+      run: () => actions.callOut(point('attendance').id),
+    },
+  ];
+
+  // "kaz", "find member kaz" and "wow: find member kaz" all look for Kaz.
+  const text = fold(query.trim().replace(/^(wow:?\s*)?(find member\s*)?/i, ''));
+  if (wow && text.length >= 2) {
+    wow.members
+      .filter((name) => fold(name).includes(text))
+      .slice(0, WOW_MEMBERS_SHOWN)
+      .forEach((name, i) =>
+        commands.push({
+          id: `wow:member:${name}`,
+          title: `WoW: find member ${name}`,
+          group: 'WoW',
+          icon: 'users',
+          detail: 'Open them in the Guild roster',
+          live: -30 - i,
+          run: () => {
+            const roster = point('guildroster');
+            actions.showMember(roster.id, name);
+            actions.callOut(roster.id);
+          },
+        }),
+      );
+  }
+  return commands;
+};
+
 // ---- focus timer ----
 
 const focusCommands: Provider = ({ state, mutatePreset, actions, now }) => {
@@ -435,6 +496,7 @@ export const providers: Provider[] = [
   downloadCommands,
   driveCommands,
   obsCommands,
+  wowCommands,
   focusCommands,
   ahCommands,
   automationCommands,

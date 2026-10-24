@@ -9,12 +9,14 @@ import { obsAction, useObs } from '../obs';
 import type { AppState } from '../state/model';
 import type { Mutate, MutatePreset } from '../state/useAppState';
 import { showNotice } from '../undo';
+import { activePreset } from '../state/presets';
 import { requestWebOpen } from '../web';
 import { primeAudio } from '../widgets/focus/chime';
 import { downloadFromHere } from '../widgets/downloads/downloads';
 import { type DriveFile, openFile, searchDriveFiles } from '../widgets/drive/drive';
 import { DRIVE_FEATURE, hasGoogleScopes, useGoogle } from '../widgets/shared/google';
 import { launchTile, useTiles } from '../widgets/launcher/launcher';
+import { requestMember } from '../widgets/shared/wowGuild';
 import { arrange, buildCommands, DRIVE_MIN_QUERY, type PaletteActions, type PaletteContext, type Row } from './commands';
 import { opensPalette } from './keys';
 import { bump, loadRecent, saveRecent } from './recent';
@@ -86,6 +88,23 @@ function useDriveResults(query: string, enabled: boolean): DriveFile[] {
   return found?.text === text ? found.files : [];
 }
 
+/** The guild's member names, asked for once when the palette opens on the WoW preset (for "WoW: find member"). */
+function useWowMembers(enabled: boolean): { members: string[] } | null {
+  const [members, setMembers] = useState<string[] | null>(null);
+  useEffect(() => {
+    if (!enabled) return;
+    let alive = true;
+    fetch('/api/wow/guild')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((g) => alive && Array.isArray(g?.members) && setMembers(g.members.map((m: { name: string }) => m.name)))
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, [enabled]);
+  return enabled && members ? { members } : null;
+}
+
 function Dialog({ state, mutate, mutatePreset, onToggleStream, onClose }: Props & { onClose: () => void }) {
   const [query, setQuery] = useState('');
   const [active, setActive] = useState(0);
@@ -102,6 +121,7 @@ function Dialog({ state, mutate, mutatePreset, onToggleStream, onClose }: Props 
   // Reading OBS is what makes the server connect to it, so only where a widget already does.
   const usesObs = [...Object.values(state.presets), ...state.custom.map((c) => c.data)].some((d) => d.widgets.some((w) => w.kind === 'obs'));
   const obs = useObs(usesObs);
+  const wow = useWowMembers(activePreset(state).base === 'wow');
 
   const actions: PaletteActions = useMemo(
     () => ({
@@ -118,6 +138,7 @@ function Dialog({ state, mutate, mutatePreset, onToggleStream, onClose }: Props 
       browsePresets: openGallery,
       addAutomation: openAutomationEditor,
       downloadVideo: (url) => void downloadFromHere(url),
+      showMember: requestMember,
     }),
     [onToggleStream],
   );
@@ -131,6 +152,7 @@ function Dialog({ state, mutate, mutatePreset, onToggleStream, onClose }: Props 
     tiles,
     drive: { signedIn, results },
     obs,
+    wow,
     actions,
     now: Date.now(),
   };

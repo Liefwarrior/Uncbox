@@ -384,6 +384,12 @@ const SHOWS: Record<string, string> = {
   text: 'Hello chat',
   launcher: 'Wiki',
   system: '37%',
+  guildroster: '6 online of 9',
+  guildfeed: 'Mira reached level 42',
+  raidcomp: '9 in the raid',
+  attendance: 'Last 2 raids',
+  raidloot: 'Arcanist Bindings',
+  guildgoals: '3 bosses down',
 };
 
 describe.each(Object.entries(SHOWS))('widget %s with data', (kind, text) => {

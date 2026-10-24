@@ -398,3 +398,25 @@ describe('raids and loot over the API', () => {
     expect((await stat(path.join(data, 'wow.db'))).isFile()).toBe(true);
   });
 });
+
+describe('opening an item on Wowhead', () => {
+  it('opens only the page of an item, by its number', async () => {
+    const opened = [];
+    await boot({ open: (url) => opened.push(url) });
+    const ok = await post('/api/wow/open', { item: 19019 });
+    expect(ok.status).toBe(200);
+    expect(opened).toEqual(['https://www.wowhead.com/classic/item=19019']);
+    for (const item of ['19019/../x', -1, 1.5, 0, 1e12, null, { a: 1 }]) {
+      expect((await post('/api/wow/open', { item })).status, String(item)).toBe(400);
+    }
+    expect((await post('/api/wow/open', { url: 'https://example.com' })).status).toBe(400);
+    expect(opened).toHaveLength(1);
+  });
+
+  it('is for this PC only', async () => {
+    const opened = [];
+    await boot({ open: (url) => opened.push(url) }, { local: false });
+    expect((await post('/api/wow/open', { item: 1 })).status).toBe(403);
+    expect(opened).toEqual([]);
+  });
+});
