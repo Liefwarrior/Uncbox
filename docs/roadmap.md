@@ -138,7 +138,7 @@ game window. The addon reports your guild roster, raid group, ready checks, loot
 live over the strip and in full through its saved variables. Uncbox keeps guild history (who
 raids, attendance, loot) in a local database.
 
-### UBX-19 · WoW guild widgets — Building
+### UBX-19 · WoW guild widgets — Shipped (18d94bc)
 Widgets for running a 50+ person guild: roster and who's online, raid composition and roles,
 attendance, loot history, guild events feed, and recruitment notes.
 
