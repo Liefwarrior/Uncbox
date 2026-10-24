@@ -1,7 +1,8 @@
 import { useEffect, useRef } from 'react';
-import { MAX_PRESET_FILE_BYTES, parsePresetText, PRESET_FILE_EXT, presetFileName, toPresetFile } from './presetfile';
+import { fetchGalleryPreset, type GalleryEntry } from './gallery';
+import { MAX_PRESET_FILE_BYTES, parsePresetText, PRESET_FILE_EXT, type PresetImportOk, presetFileName, toPresetFile } from './presetfile';
 import { MAX_CUSTOM, type AppState, type PresetData, type PresetId } from './state/model';
-import { addCustom, canAddCustom, newCustomId, takenNames, uniqueName } from './state/presets';
+import { addCustom, canAddCustom, installedFrom, newCustomId, takenNames, uniqueName } from './state/presets';
 import type { Mutate } from './state/useAppState';
 import { showNotice } from './undo';
 
@@ -26,17 +27,68 @@ export function downloadPreset(name: string, base: PresetId, data: PresetData) {
 
 /** Adds a preset file as a new preset of your own, and shows it. Says in plain words how it went. */
 export async function importPresetFile(file: File, state: AppState, mutate: Mutate) {
-  if (file.size > MAX_PRESET_FILE_BYTES) return showNotice('That file is too big to be a preset (the limit is 5 MB).');
+  if (file.size > MAX_PRESET_FILE_BYTES) return showNotice('That file is too big to be a preset (the limit is 5 MB).', true);
   const text = await file.text().catch(() => null);
-  if (text === null) return showNotice('Couldn’t read that file.');
+  if (text === null) return showNotice('Couldn’t read that file.', true);
   const result = parsePresetText(text);
-  if (!result.ok) return showNotice(result.error);
-  if (!canAddCustom(state)) return showNotice(`You already have ${MAX_CUSTOM} presets of your own. Delete one to make room.`);
+  if (!result.ok) return showNotice(result.error, true);
+  addImportedPreset(result, state, mutate);
+}
+
+export const FULL_MESSAGE = `You already have ${MAX_CUSTOM} presets of your own. Delete one to make room.`;
+
+/**
+ * Adds a checked preset (from a file or from the gallery) as a new preset of your own and shows it,
+ * saying in plain words how it went. `galleryId` marks one that came from the gallery. False when
+ * there was no room.
+ */
+export function addImportedPreset(result: PresetImportOk, state: AppState, mutate: Mutate, galleryId?: string): boolean {
+  if (!canAddCustom(state)) {
+    showNotice(FULL_MESSAGE, true);
+    return false;
+  }
   // Settled out here, not inside the recipe: the id must be the same whenever the recipe runs.
   const id = newCustomId();
   const name = uniqueName(result.name, takenNames(state));
-  mutate((s) => addCustom(s, id, name, result.base, result.data));
+  mutate((s) => addCustom(s, id, name, result.base, result.data, galleryId));
   showNotice(`Added “${name}” as a new preset. Your other presets are untouched.`);
+  return true;
+}
+
+/**
+ * Installs a gallery preset: fetches its file, checks it like any imported file, adds it and shows
+ * it. One you already have is just shown. Says in plain words what went wrong; true when the preset
+ * is now in your list. `fetchText` is only swapped out by the tests.
+ */
+export async function installGalleryPreset(
+  entry: Pick<GalleryEntry, 'id' | 'name'>,
+  state: AppState,
+  mutate: Mutate,
+  fetchText: (id: string) => Promise<string> = fetchGalleryPreset,
+): Promise<boolean> {
+  const have = installedFrom(state.custom, entry);
+  if (have) {
+    mutate((s) => void (s.preset = have.id));
+    showNotice(`“${have.name}” is already installed. Showing it.`);
+    return true;
+  }
+  if (!canAddCustom(state)) {
+    showNotice(FULL_MESSAGE, true);
+    return false;
+  }
+  let text: string;
+  try {
+    text = await fetchText(entry.id);
+  } catch (err) {
+    showNotice(err instanceof Error ? err.message : 'Couldn’t download that preset. Try again.', true);
+    return false;
+  }
+  const result = parsePresetText(text);
+  if (!result.ok) {
+    showNotice(`Couldn’t install “${entry.name}”: ${result.error}`, true);
+    return false;
+  }
+  return addImportedPreset(result, state, mutate, entry.id);
 }
 
 const isPresetFile = (f: File) => /\.(uncbox|json)$/i.test(f.name);

@@ -1,0 +1,38 @@
+{
+  "note": "What Windows OCR returned (or plausibly returns) for a box over each game screen, as /api/ocr gives it.",
+  "souls": [
+    { "text": "YOU DIED", "match": true },
+    { "text": "Y0U DlED", "match": true },
+    { "text": "YOUDIED", "match": true },
+    { "text": "you died.", "match": true },
+    { "text": "YOU D1ED", "match": true },
+    { "text": "VOU DIED", "match": true },
+    { "text": "", "match": false },
+    { "text": "Bonfire lit", "match": false },
+    { "text": "HEIR OF FIRE DESTROYED", "match": false },
+    { "text": "You have died of dysentery", "match": false }
+  ],
+  "gta": [
+    { "text": "WASTED", "match": true },
+    { "text": "WASTEO", "match": true },
+    { "text": "wasted", "match": true },
+    { "text": "WAS", "match": false },
+    { "text": "BUSTED", "match": false }
+  ],
+  "gameover": [
+    { "text": "GAME OVER", "match": true },
+    { "text": "GAMEOVER", "match": true },
+    { "text": "GAME 0VER", "match": true },
+    { "text": "Game Over - Press Start", "match": true },
+    { "text": "GAME ON", "match": false }
+  ],
+  "battle": [
+    { "text": "Pidgeotto fainted!", "name": "Pidgeotto" },
+    { "text": "Pidgeoto fainted!", "name": "Pidgeoto" },
+    { "text": "PIDGEOTTO fainted !", "name": "PIDGEOTTO" },
+    { "text": "Mr. Mime fainted!", "name": "Mr. Mime" },
+    { "text": "Wild RATTATA fainted!", "name": "Wild RATTATA" },
+    { "text": "Charmeleon used Ember! It's super effective!", "name": null },
+    { "text": "Go! Charmander!", "name": null }
+  ]
+}

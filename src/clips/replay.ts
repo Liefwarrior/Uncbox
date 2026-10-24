@@ -14,7 +14,15 @@ export interface ClipFile {
   name: string;
   size: number;
   at: number;
+  /** A video the Video downloader saved ("Downloads/<title>.mp4"), not a clip. */
+  download?: boolean;
 }
+
+/** What to call a clip in the player and lists: a download by its title, a clip by its file name. */
+export const clipLabel = (name: string) => name.replace(/^Downloads\//, '').replace(/\.mp4$/, '');
+
+/** Made with Make vertical (a download called "... vertical" is not). */
+export const isVerticalClip = (name: string) => /^Uncbox .* vertical(?: \d+)?\.mp4$/.test(name);
 
 /** The server's clip key watcher: 'unsupported' means only presses inside this window count. */
 export type HotkeyStatus = 'on' | 'starting' | 'off' | 'unsupported';
@@ -34,6 +42,8 @@ export interface ClipsSnapshot {
   clips: ClipFile[];
   /** The clip open in the player, if any. */
   playing: string | null;
+  /** The player opens straight into Make vertical. */
+  playingEdit: boolean;
 }
 
 let snap: ClipsSnapshot = {
@@ -47,6 +57,7 @@ let snap: ClipsSnapshot = {
   dir: '',
   clips: [],
   playing: null,
+  playingEdit: false,
 };
 const listeners = new Set<() => void>();
 function set(patch: Partial<ClipsSnapshot>) {
@@ -148,8 +159,9 @@ export async function saveClip() {
   else if (result.type === 'failed') set({ saving: false, saveError: result.error, saved: null });
 }
 
-export function watchClip(name: string | null) {
-  set({ playing: name });
+/** Opens a clip in the player (null closes it). `edit` opens it with Make vertical already showing. */
+export function watchClip(name: string | null, edit = false) {
+  set({ playing: name, playingEdit: edit });
 }
 
 export function clipUrl(name: string) {

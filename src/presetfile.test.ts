@@ -3,7 +3,7 @@ import { PRESETS } from './presets';
 import { forSharing, fromPresetFile, parsePresetText, presetFileName, toPresetFile } from './presetfile';
 import { defaultPresetData } from './state/hydrate';
 import type { PresetData } from './state/model';
-import { defaultWidgetSettings } from './widgets/catalog';
+import { newWidget } from './widgets/registry';
 
 /** A WoW preset that has been played: everything personal or progress-like filled in. */
 function played(): PresetData {
@@ -23,13 +23,21 @@ function played(): PresetData {
   d.quests = [{ title: 'Wanted', level: 5, state: 'open', objectives: [{ text: 'x 1/2', done: false }] }];
   d.wowLinkAt = 1700000000000;
   d.hud = [{ id: 'h1', label: 'Emeralds', x: 1, y: 2, w: 10, h: 5, numeric: true, value: '1234', at: 99 }];
+  d.triggers = [{ id: 't1', label: 'You died', x: 25, y: 38, w: 50, h: 24, phrase: 'YOU DIED', regex: false, action: { kind: 'counter', counterId: 'c1' }, enabled: true, cooldownSec: 8, at: 1700000000000 }];
   d.background = 'stars';
-  d.windows = [{ id: 'win-a', title: 'Spotify', fit: 'cover', crop: { top: 1, right: 2, bottom: 3, left: 4 } }];
-  d.layout.push({ i: 'win-a', x: 0, y: 20, w: 5, h: 4 });
-  const settings = defaultWidgetSettings();
   d.widgets = [
-    { id: 'wdg-n', type: 'notifications', title: '', settings: { ...settings, apps: 'Discord' } },
-    { id: 'wdg-w', type: 'weather', title: 'Home', settings: { ...settings, place: 'Springfield', lat: 1, lon: 2 } },
+    newWidget('notifications', { id: 'wdg-n', settings: { apps: 'Discord' } }),
+    newWidget('weather', { id: 'wdg-w', title: 'Home', settings: { place: 'Springfield', lat: 1, lon: 2 } }),
+    newWidget('window', { id: 'wdg-a', title: 'Spotify', settings: { fit: 'cover', crop: { top: 1, right: 2, bottom: 3, left: 4 } } }),
+  ];
+  d.layout = [
+    { i: 'game', x: 0, y: 0, w: 17, h: 17 },
+    { i: 'camera', x: 17, y: 0, w: 7, h: 7 },
+    { i: 'character', x: 17, y: 7, w: 7, h: 8 },
+    { i: 'chat', x: 17, y: 15, w: 7, h: 9 },
+    { i: 'wdg-n', x: 0, y: 17, w: 6, h: 7 },
+    { i: 'wdg-w', x: 6, y: 17, w: 5, h: 7 },
+    { i: 'wdg-a', x: 11, y: 17, w: 6, h: 7 },
   ];
   return d;
 }
@@ -37,7 +45,7 @@ function played(): PresetData {
 describe('toPresetFile', () => {
   it('has a clear header', () => {
     const f = toPresetFile('My WoW', 'wow', played(), new Date('2026-01-02T03:04:05Z'));
-    expect(f).toMatchObject({ uncbox: 'preset', version: 1, name: 'My WoW', base: 'wow', exportedAt: '2026-01-02T03:04:05.000Z' });
+    expect(f).toMatchObject({ uncbox: 'preset', version: 2, name: 'My WoW', base: 'wow', exportedAt: '2026-01-02T03:04:05.000Z' });
   });
 
   it('takes out what is personal or only true on this PC', () => {
@@ -52,6 +60,7 @@ describe('toPresetFile', () => {
     expect(d.quests).toEqual([]);
     expect(d.wowLinkAt).toBe(0);
     expect(d.hud).toEqual([{ id: 'h1', label: 'Emeralds', x: 1, y: 2, w: 10, h: 5, numeric: true, value: '', at: 0 }]);
+    expect(d.triggers).toEqual([{ ...played().triggers[0], at: 0 }]);
     expect(d.widgets[1].settings).toMatchObject({ place: '', lat: 0, lon: 0 });
     expect(d.slots[0].down).toBe(false);
     expect(d.slots[1].image).toBe('');
@@ -70,7 +79,7 @@ describe('toPresetFile', () => {
     expect(d.milestones.label).toBe(before.milestones.label);
     expect(d.notes).toEqual([{ id: 'n1', text: 'Train spells', done: false }]);
     expect(d.character).toMatchObject({ race: 'Orc', cls: 'Shaman', hardcore: true, maxLevel: 60 });
-    expect(d.windows).toEqual(before.windows);
+    expect(d.widgets[2]).toEqual(before.widgets[2]);
     expect(d.widgets[0].settings.apps).toBe('Discord');
     expect(d.widgets[1].title).toBe('Home');
     expect(d.game).toMatchObject({ fit: 'cover', pixelated: true, chroma: '#112233', crop: { top: 7, right: 0, bottom: 0, left: 0 } });
@@ -116,7 +125,7 @@ describe('fromPresetFile', () => {
   });
 
   it('refuses a version it does not know, with a plain message', () => {
-    const r = fromPresetFile({ uncbox: 'preset', version: 2, name: 'x', base: 'wow', data: {} });
+    const r = fromPresetFile({ uncbox: 'preset', version: 3, name: 'x', base: 'wow', data: {} });
     expect(r.ok).toBe(false);
     expect(!r.ok && r.error).toMatch(/newer Uncbox/);
     expect(fromPresetFile({ uncbox: 'preset', version: 0, data: {} }).ok).toBe(false);

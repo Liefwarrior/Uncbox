@@ -49,7 +49,7 @@ describe('activePreset', () => {
     const s = defaultState();
     addCustom(s, newCustomId(), 'Ranked', 'smite2', s.presets.smite2);
     expect(activePreset(s)).toMatchObject({ base: 'smite2' });
-    expect(activePreset(s).def.featured).toBe(PRESETS.smite2.featured);
+    expect(activePreset(s).def.titles).toBe(PRESETS.smite2.titles);
   });
 
   it('falls back to a built-in preset if the custom one is missing', () => {

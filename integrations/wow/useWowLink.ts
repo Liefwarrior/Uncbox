@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import type { PresetData } from '../../src/state/model';
 import type { MutatePreset } from '../../src/state/useAppState';
-import { Assembler, COLS, fromBlocks, KIND_CHARACTER, KIND_PARTY, KIND_QUESTS, locate, readBlocks, ROWS, type StripSpot } from './codec';
+import { Assembler, COLS, fromBlocks, KIND_CHARACTER, KIND_GUILD, KIND_PARTY, KIND_QUESTS, locate, readBlocks, ROWS, type StripSpot } from './codec';
+import { markWowSeen, sendWowLive } from '../../src/wow';
 import { parseCharacter, parseParty, parseQuests, partySlots } from './parse';
 
 // The addon shows each page for 50 ms, and only for a moment after something changes, so every
@@ -33,11 +34,13 @@ function lastCrop(): number {
 
 /**
  * Reads the Uncbox addon's strip out of the game video and writes the character, quest log and party into
- * the WoW preset, only when something changed. Pass data only while the WoW preset is showing.
+ * the WoW preset, only when something changed. The guild and raid messages (kinds 4 to 7) go to the
+ * server, which keeps them in its database. Pass data only while the WoW preset is showing. `corner`
+ * is where the addon was told to put the strip.
  * Returns how much of the video's height the strip covers from the top, in percent, so the game
  * panel can crop it out of what viewers see.
  */
-export function useWowLink(stream: MediaStream | null, data: PresetData | null, mutatePreset: MutatePreset): number {
+export function useWowLink(stream: MediaStream | null, data: PresetData | null, mutatePreset: MutatePreset, corner: 'TOPLEFT' | 'TOPRIGHT' = 'TOPLEFT'): number {
   const [stripPct, setStripPct] = useState(lastCrop);
   const latest = useRef(data);
   useEffect(() => {
@@ -59,7 +62,10 @@ export function useWowLink(stream: MediaStream | null, data: PresetData | null, 
     const apply = (kind: number, text: string) => {
       const d = latest.current;
       if (!d) return;
-      if (kind === KIND_CHARACTER) {
+      markWowSeen();
+      if (kind >= KIND_GUILD) {
+        sendWowLive(kind, text);
+      } else if (kind === KIND_CHARACTER) {
         const c = parseCharacter(text);
         if (!c) return;
         const changed = (Object.keys(c) as (keyof typeof c)[]).some((k) => c[k] !== d.character[k]);
@@ -112,10 +118,13 @@ export function useWowLink(stream: MediaStream | null, data: PresetData | null, 
       if (!page) {
         if (spot && ++misses < MISSES_BEFORE_SEARCH) return;
         if (++searches % SEARCH_EVERY !== 0) return;
-        const img = grab(frame, 0, 0, Math.min(REGION_W, vw), Math.min(REGION_H, vh));
-        const found = locate(img);
-        page = found && fromBlocks(readBlocks(img, found));
-        if (!found || !page) return;
+        // The strip is at the left edge, or the right one if the addon was told so.
+        const x0 = corner === 'TOPRIGHT' ? Math.max(0, vw - REGION_W) : 0;
+        const img = grab(frame, x0, 0, Math.min(REGION_W, vw), Math.min(REGION_H, vh));
+        const local = locate(img, corner === 'TOPRIGHT' ? Infinity : undefined);
+        page = local && fromBlocks(readBlocks(img, local));
+        if (!local || !page) return;
+        const found = { ...local, x: local.x + x0 };
         spot = found;
         // One pixel more, so a blurred edge never peeks through.
         const pct = ((found.y + ROWS * found.block + 1) / vh) * 100;
@@ -170,7 +179,7 @@ export function useWowLink(stream: MediaStream | null, data: PresetData | null, 
       stopped = true;
       stop();
     };
-  }, [on, stream, mutatePreset]);
+  }, [on, stream, mutatePreset, corner]);
 
   return on ? stripPct : 0;
 }

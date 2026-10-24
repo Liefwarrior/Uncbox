@@ -3,6 +3,10 @@
 
 import { type CharacterState, emptySlot, type Quest, type QuestState, type SlotItem } from '../../src/state/model';
 
+// The guild and raid messages (kinds 4 to 7) are read in messages.mjs, which the server and the
+// tests use too.
+export * from './messages.mjs';
+
 const FIELD = '\x1f';
 const RECORD = '\x1e';
 

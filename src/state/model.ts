@@ -4,7 +4,7 @@ import type { BackgroundId } from '../backgrounds';
 // live between every open window, so a phone or second monitor can drive the streamed one.
 // Each game preset keeps its own layout and data; Twitch and camera settings are shared.
 
-export const PRESET_IDS = ['pokemon', 'smite2', 'wow', 'mcd2', 'steam', 'terminal'] as const;
+export const PRESET_IDS = ['pokemon', 'smite2', 'wow', 'mcd2', 'steam', 'terminal', 'desk'] as const;
 export type PresetId = (typeof PRESET_IDS)[number];
 
 /**
@@ -18,77 +18,39 @@ export interface CustomPreset {
   name: string;
   base: PresetId;
   data: PresetData;
+  /** The gallery preset it was installed from (its id in gallery/index.json), so the gallery can say "Installed". */
+  galleryId?: string;
 }
 
 export function isCustomId(id: string): id is CustomId {
   return id.startsWith('custom-');
 }
 
-export const PANEL_IDS = [
-  'game',
-  'camera',
-  'chat',
-  'slots',
-  'run',
-  'progress',
-  'notes',
-  'match',
-  'record',
-  'character',
-  'discord',
-  'quests',
-  'steam',
-  'hud',
-  'teams',
-  'scoreboard',
-  'damage',
-] as const;
-export type PanelId = (typeof PANEL_IDS)[number];
+/**
+ * What a board item is: the kind of a panel there is only one of in a preset ('game', 'chat'),
+ * or the id of a widget you added ('wdg-…'). The kinds themselves are defined in
+ * src/widgets/registry.ts, so a new widget never has to be listed here.
+ */
+export type BoardId = string;
 
-/** App window panels can be added any number of times, so each gets its own id. */
-export type WindowId = `win-${string}`;
-/** So can widgets (a clock, the weather…); see src/widgets. */
+/** A widget you can have any number of (a clock, the weather, an app window…) gets its own id. */
 export type WidgetId = `wdg-${string}`;
-export type BoardId = PanelId | WindowId | WidgetId;
-
-export function isWindowId(id: string): id is WindowId {
-  return id.startsWith('win-');
-}
 
 export function isWidgetId(id: string): id is WidgetId {
   return id.startsWith('wdg-');
 }
 
-export const WIDGET_TYPES = ['clock', 'weather', 'media', 'notifications', 'system', 'countdown', 'text'] as const;
-export type WidgetType = (typeof WIDGET_TYPES)[number];
-
-/** Every widget type's settings in one shape; each type reads only its own. */
-export interface WidgetSettings {
-  /** Clock: an IANA time zone ("Europe/London"), or '' for this PC's. */
-  timeZone: string;
-  hour12: boolean;
-  seconds: boolean;
-  /** Weather: the place as found, and where it is. */
-  place: string;
-  lat: number;
-  lon: number;
-  celsius: boolean;
-  /** Notifications: only these apps (comma-separated, as listed), or '' for all. */
-  apps: string;
-  /** Notifications: show the message itself, not just who it's from. Off by default: it's on stream. */
-  showBody: boolean;
-  /** Countdown: when it ends (ms since 1970), or 0 if not set. */
-  target: number;
-  /** Text: what it says. Countdown: what's coming. */
-  text: string;
-}
-
-export interface Widget {
+/**
+ * One widget on a preset's board, of a kind with more than one allowed. Its `kind` is a key of
+ * the widget library (src/widgets/registry.ts), which also says what its settings hold; they are
+ * saved as they are and cleaned against the kind's defaults when loaded.
+ */
+export interface Widget<S = Record<string, unknown>> {
   id: WidgetId;
-  type: WidgetType;
-  /** Shown as the panel's title; '' uses the type's name. */
+  kind: string;
+  /** Shown as the panel's title; '' uses the kind's name. */
   title: string;
-  settings: WidgetSettings;
+  settings: S;
 }
 
 /** Position on the board grid, in cells. */
@@ -130,14 +92,6 @@ export interface CameraSettings {
   enabled: boolean;
   deviceId: string | null;
   mirrored: boolean;
-}
-
-/** Another app's window (Discord, Spotify, a popped-out chat…) captured into a themed panel. */
-export interface AppWindow {
-  id: WindowId;
-  title: string;
-  fit: VideoFit;
-  crop: Crop;
 }
 
 export interface SlotItem {
@@ -241,6 +195,40 @@ export interface HudRegion {
   at: number;
 }
 
+/** What a screen trigger does when its phrase shows up. */
+export type TriggerAction =
+  /** Adds 1 to one of the preset's counters (deaths, defeats). */
+  | { kind: 'counter'; counterId: string }
+  /** Marks the party member named in the text as down; the phrase has a {name} placeholder. */
+  | { kind: 'slotDown' }
+  /** Ticks the next milestone that isn't done. */
+  | { kind: 'milestone' };
+
+export const TRIGGER_ACTIONS: TriggerAction['kind'][] = ['counter', 'slotDown', 'milestone'];
+
+/**
+ * "When this shows up on the game's screen, do something": a box on the game picture (percent of
+ * the uncropped picture, like a Stats box), a phrase to look for in what Windows' OCR reads there,
+ * and an action. See src/hud/triggers.ts.
+ */
+export interface ScreenTrigger {
+  id: string;
+  label: string;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  phrase: string;
+  /** The phrase is a regular expression, not plain words. */
+  regex: boolean;
+  action: TriggerAction;
+  enabled: boolean;
+  /** Seconds the phrase must be gone before it can fire again, so one death screen counts once. */
+  cooldownSec: number;
+  /** When it last fired; 0 if never. */
+  at: number;
+}
+
 export interface PresetData {
   layout: GridItem[];
   /** What fills the space behind the panels; see src/backgrounds.ts. */
@@ -263,10 +251,12 @@ export interface PresetData {
   quests: Quest[];
   /** When the WoW addon last sent something new; 0 if it never has. */
   wowLinkAt: number;
-  windows: AppWindow[];
+  /** The widgets on the board (src/widgets); the panels there is only one of keep their data in the fields here. */
   widgets: Widget[];
   /** The Stats panel's screen reader boxes (src/hud). */
   hud: HudRegion[];
+  /** Phrases to watch for on the game's screen (src/hud/triggers.ts). */
+  triggers: ScreenTrigger[];
 }
 
 export interface PinnedChannel {
@@ -281,6 +271,42 @@ export interface ClipSettings {
   enabled: boolean;
   /** The clip key, as a KeyboardEvent.code ("Equal" is =). */
   key: string;
+  /** Upload each new clip to Google Drive as soon as it is saved (server/driveupload.mjs). */
+  driveAuto: boolean;
+  /** Clips put on Drive can be viewed by anyone with the link. */
+  driveShare: boolean;
+}
+
+/**
+ * "When this, do that" (src/automations). A game is a built-in preset's game ("smite2"), or 'any'
+ * for whatever Steam is running.
+ */
+export type AutomationGame = PresetId | 'any';
+
+export type AutomationWhen =
+  | { kind: 'gameStarts' | 'gameStops'; game: AutomationGame }
+  | { kind: 'streamStarts' | 'streamStops' | 'recordStarts' }
+  /** At a clock time ("21:30", this PC's time) on these days (0 is Sunday); no days means every day. */
+  | { kind: 'time'; at: string; days: number[] }
+  | { kind: 'focusStarts' | 'breakStarts' };
+
+export type AutomationThen =
+  | { kind: 'preset'; preset: PresetId | CustomId }
+  | { kind: 'stream'; on: boolean }
+  | { kind: 'scene'; scene: string }
+  | { kind: 'record'; on: boolean }
+  | { kind: 'focus' }
+  | { kind: 'note'; text: string };
+
+export interface Automation {
+  id: string;
+  enabled: boolean;
+  /** An optional label of your own; the sentence is built from the rule itself. */
+  name: string;
+  when: AutomationWhen;
+  then: AutomationThen[];
+  /** When it last ran (ms since 1970), so a time rule runs once a minute even across reloads. 0 if never. */
+  lastFired: number;
 }
 
 export interface AppState {
@@ -295,6 +321,8 @@ export interface AppState {
   presets: Record<PresetId, PresetData>;
   /** Presets of your own, after the built-in ones in the sidebar. */
   custom: CustomPreset[];
+  /** Shared by every preset, and not part of a preset's export. */
+  automations: Automation[];
 }
 
 export const GRID_COLS = 24;
@@ -304,8 +332,14 @@ export const MAX_MILESTONES = 24;
 export const MAX_HISTORY = 30;
 export const MAX_QUESTS = 50;
 export const MAX_HUD = 12;
+export const MAX_TRIGGERS = 12;
+export const MAX_PHRASE = 120;
+export const MAX_COOLDOWN = 600;
 export const MAX_CUSTOM = 50;
 export const MAX_PRESET_NAME = 60;
+export const MAX_AUTOMATIONS = 30;
+export const MAX_AUTOMATION_STEPS = 6;
+export const MAX_NOTE = 140;
 
 export function uid(): string {
   return Math.random().toString(36).slice(2, 10);
@@ -317,6 +351,23 @@ export function emptySlot(): SlotItem {
 
 export function milestone(name = ''): Milestone {
   return { id: uid(), name, done: false };
+}
+
+export function emptyTrigger(): ScreenTrigger {
+  return {
+    id: uid(),
+    label: '',
+    x: 25,
+    y: 40,
+    w: 50,
+    h: 20,
+    phrase: '',
+    regex: false,
+    action: { kind: 'counter', counterId: '' },
+    enabled: true,
+    cooldownSec: 5,
+    at: 0,
+  };
 }
 
 export function counter(label: string, value = 0): Counter {

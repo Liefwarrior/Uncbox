@@ -1,0 +1,521 @@
+{
+  "uncbox": "preset",
+  "version": 1,
+  "name": "Cozy desk",
+  "base": "desk",
+  "exportedAt": "2026-10-20T00:00:00.000Z",
+  "data": {
+    "layout": [
+      {
+        "i": "wdg-cozy-clock",
+        "x": 0,
+        "y": 0,
+        "w": 6,
+        "h": 5
+      },
+      {
+        "i": "wdg-cozy-weather",
+        "x": 6,
+        "y": 0,
+        "w": 6,
+        "h": 5
+      },
+      {
+        "i": "wdg-cozy-today",
+        "x": 12,
+        "y": 0,
+        "w": 6,
+        "h": 5
+      },
+      {
+        "i": "wdg-cozy-focus",
+        "x": 18,
+        "y": 0,
+        "w": 6,
+        "h": 9
+      },
+      {
+        "i": "wdg-cozy-media",
+        "x": 0,
+        "y": 5,
+        "w": 12,
+        "h": 4
+      },
+      {
+        "i": "wdg-cozy-launcher",
+        "x": 12,
+        "y": 5,
+        "w": 6,
+        "h": 4
+      },
+      {
+        "i": "progress",
+        "x": 0,
+        "y": 9,
+        "w": 8,
+        "h": 15
+      },
+      {
+        "i": "notes",
+        "x": 8,
+        "y": 9,
+        "w": 8,
+        "h": 15
+      },
+      {
+        "i": "wdg-cozy-notifications",
+        "x": 16,
+        "y": 9,
+        "w": 8,
+        "h": 15
+      }
+    ],
+    "background": "bubbles",
+    "game": {
+      "source": "none",
+      "deviceId": null,
+      "fit": "contain",
+      "pixelated": false,
+      "crop": {
+        "top": 0,
+        "right": 0,
+        "bottom": 0,
+        "left": 0
+      },
+      "chroma": "#00b140",
+      "nativeGame": null
+    },
+    "run": {
+      "title": "Cozy desk",
+      "subtitle": "",
+      "timer": {
+        "startedAt": null,
+        "elapsedMs": 0
+      }
+    },
+    "slots": [
+      {
+        "id": "cozy-slot-1",
+        "name": "",
+        "detail": "",
+        "image": "",
+        "down": false
+      },
+      {
+        "id": "cozy-slot-2",
+        "name": "",
+        "detail": "",
+        "image": "",
+        "down": false
+      },
+      {
+        "id": "cozy-slot-3",
+        "name": "",
+        "detail": "",
+        "image": "",
+        "down": false
+      },
+      {
+        "id": "cozy-slot-4",
+        "name": "",
+        "detail": "",
+        "image": "",
+        "down": false
+      },
+      {
+        "id": "cozy-slot-5",
+        "name": "",
+        "detail": "",
+        "image": "",
+        "down": false
+      },
+      {
+        "id": "cozy-slot-6",
+        "name": "",
+        "detail": "",
+        "image": "",
+        "down": false
+      }
+    ],
+    "counters": [
+      {
+        "id": "cozy-counter-1",
+        "label": "Cups of tea",
+        "value": 0
+      },
+      {
+        "id": "cozy-counter-2",
+        "label": "Breaks",
+        "value": 0
+      }
+    ],
+    "milestones": {
+      "label": "Today",
+      "items": [
+        {
+          "id": "cozy-goal-1",
+          "name": "Stretch",
+          "done": false
+        },
+        {
+          "id": "cozy-goal-2",
+          "name": "Drink some water",
+          "done": false
+        },
+        {
+          "id": "cozy-goal-3",
+          "name": "Tidy the desk",
+          "done": false
+        },
+        {
+          "id": "cozy-goal-4",
+          "name": "One deep-work block",
+          "done": false
+        },
+        {
+          "id": "cozy-goal-5",
+          "name": "Step outside",
+          "done": false
+        }
+      ]
+    },
+    "notes": [
+      {
+        "id": "cozy-note-1",
+        "text": "Open a window",
+        "done": false
+      },
+      {
+        "id": "cozy-note-2",
+        "text": "Snack within reach",
+        "done": false
+      }
+    ],
+    "match": {
+      "god": "",
+      "role": "",
+      "mode": "",
+      "k": 0,
+      "d": 0,
+      "a": 0
+    },
+    "record": {
+      "wins": 0,
+      "losses": 0,
+      "history": []
+    },
+    "character": {
+      "name": "",
+      "race": "",
+      "cls": "",
+      "level": 1,
+      "maxLevel": 60,
+      "xp": 0,
+      "zone": "",
+      "realm": "",
+      "guild": "",
+      "gold": "",
+      "hardcore": false
+    },
+    "quests": [],
+    "wowLinkAt": 0,
+    "windows": [],
+    "widgets": [
+      {
+        "id": "wdg-cozy-clock",
+        "type": "clock",
+        "title": "",
+        "settings": {
+          "timeZone": "",
+          "hour12": true,
+          "seconds": false,
+          "place": "",
+          "lat": 0,
+          "lon": 0,
+          "celsius": false,
+          "apps": "",
+          "showBody": false,
+          "target": 0,
+          "text": "",
+          "pingTarget": "",
+          "showRouter": true,
+          "focusWork": 25,
+          "focusShort": 5,
+          "focusLong": 15,
+          "focusRounds": 4,
+          "focusAuto": false,
+          "focusSound": true,
+          "focusPhase": "work",
+          "focusRound": 1,
+          "focusEndsAt": 0,
+          "focusLeft": 0,
+          "launcherTiles": [],
+          "url": "",
+          "homeUrl": "",
+          "searchEngine": "google",
+          "hideToolbar": false,
+          "zoom": 100,
+          "driveView": "recent",
+          "calendarDays": 3,
+          "calendarHideAllDay": false,
+          "gmailOnlyUnread": false,
+          "gmailLabel": "INBOX",
+          "showOnStream": false
+        }
+      },
+      {
+        "id": "wdg-cozy-weather",
+        "type": "weather",
+        "title": "",
+        "settings": {
+          "timeZone": "",
+          "hour12": true,
+          "seconds": false,
+          "place": "",
+          "lat": 0,
+          "lon": 0,
+          "celsius": false,
+          "apps": "",
+          "showBody": false,
+          "target": 0,
+          "text": "",
+          "pingTarget": "",
+          "showRouter": true,
+          "focusWork": 25,
+          "focusShort": 5,
+          "focusLong": 15,
+          "focusRounds": 4,
+          "focusAuto": false,
+          "focusSound": true,
+          "focusPhase": "work",
+          "focusRound": 1,
+          "focusEndsAt": 0,
+          "focusLeft": 0,
+          "launcherTiles": [],
+          "url": "",
+          "homeUrl": "",
+          "searchEngine": "google",
+          "hideToolbar": false,
+          "zoom": 100,
+          "driveView": "recent",
+          "calendarDays": 3,
+          "calendarHideAllDay": false,
+          "gmailOnlyUnread": false,
+          "gmailLabel": "INBOX",
+          "showOnStream": false
+        }
+      },
+      {
+        "id": "wdg-cozy-today",
+        "type": "text",
+        "title": "Today’s one thing",
+        "settings": {
+          "timeZone": "",
+          "hour12": true,
+          "seconds": false,
+          "place": "",
+          "lat": 0,
+          "lon": 0,
+          "celsius": false,
+          "apps": "",
+          "showBody": false,
+          "target": 0,
+          "text": "Pick one thing. Do that first.",
+          "pingTarget": "",
+          "showRouter": true,
+          "focusWork": 25,
+          "focusShort": 5,
+          "focusLong": 15,
+          "focusRounds": 4,
+          "focusAuto": false,
+          "focusSound": true,
+          "focusPhase": "work",
+          "focusRound": 1,
+          "focusEndsAt": 0,
+          "focusLeft": 0,
+          "launcherTiles": [],
+          "url": "",
+          "homeUrl": "",
+          "searchEngine": "google",
+          "hideToolbar": false,
+          "zoom": 100,
+          "driveView": "recent",
+          "calendarDays": 3,
+          "calendarHideAllDay": false,
+          "gmailOnlyUnread": false,
+          "gmailLabel": "INBOX",
+          "showOnStream": false
+        }
+      },
+      {
+        "id": "wdg-cozy-focus",
+        "type": "focus",
+        "title": "",
+        "settings": {
+          "timeZone": "",
+          "hour12": true,
+          "seconds": false,
+          "place": "",
+          "lat": 0,
+          "lon": 0,
+          "celsius": false,
+          "apps": "",
+          "showBody": false,
+          "target": 0,
+          "text": "",
+          "pingTarget": "",
+          "showRouter": true,
+          "focusWork": 50,
+          "focusShort": 10,
+          "focusLong": 25,
+          "focusRounds": 3,
+          "focusAuto": false,
+          "focusSound": true,
+          "focusPhase": "work",
+          "focusRound": 1,
+          "focusEndsAt": 0,
+          "focusLeft": 0,
+          "launcherTiles": [],
+          "url": "",
+          "homeUrl": "",
+          "searchEngine": "google",
+          "hideToolbar": false,
+          "zoom": 100,
+          "driveView": "recent",
+          "calendarDays": 3,
+          "calendarHideAllDay": false,
+          "gmailOnlyUnread": false,
+          "gmailLabel": "INBOX",
+          "showOnStream": false
+        }
+      },
+      {
+        "id": "wdg-cozy-media",
+        "type": "media",
+        "title": "",
+        "settings": {
+          "timeZone": "",
+          "hour12": true,
+          "seconds": false,
+          "place": "",
+          "lat": 0,
+          "lon": 0,
+          "celsius": false,
+          "apps": "",
+          "showBody": false,
+          "target": 0,
+          "text": "",
+          "pingTarget": "",
+          "showRouter": true,
+          "focusWork": 25,
+          "focusShort": 5,
+          "focusLong": 15,
+          "focusRounds": 4,
+          "focusAuto": false,
+          "focusSound": true,
+          "focusPhase": "work",
+          "focusRound": 1,
+          "focusEndsAt": 0,
+          "focusLeft": 0,
+          "launcherTiles": [],
+          "url": "",
+          "homeUrl": "",
+          "searchEngine": "google",
+          "hideToolbar": false,
+          "zoom": 100,
+          "driveView": "recent",
+          "calendarDays": 3,
+          "calendarHideAllDay": false,
+          "gmailOnlyUnread": false,
+          "gmailLabel": "INBOX",
+          "showOnStream": false
+        }
+      },
+      {
+        "id": "wdg-cozy-launcher",
+        "type": "launcher",
+        "title": "",
+        "settings": {
+          "timeZone": "",
+          "hour12": true,
+          "seconds": false,
+          "place": "",
+          "lat": 0,
+          "lon": 0,
+          "celsius": false,
+          "apps": "",
+          "showBody": false,
+          "target": 0,
+          "text": "",
+          "pingTarget": "",
+          "showRouter": true,
+          "focusWork": 25,
+          "focusShort": 5,
+          "focusLong": 15,
+          "focusRounds": 4,
+          "focusAuto": false,
+          "focusSound": true,
+          "focusPhase": "work",
+          "focusRound": 1,
+          "focusEndsAt": 0,
+          "focusLeft": 0,
+          "launcherTiles": [],
+          "url": "",
+          "homeUrl": "",
+          "searchEngine": "google",
+          "hideToolbar": false,
+          "zoom": 100,
+          "driveView": "recent",
+          "calendarDays": 3,
+          "calendarHideAllDay": false,
+          "gmailOnlyUnread": false,
+          "gmailLabel": "INBOX",
+          "showOnStream": false
+        }
+      },
+      {
+        "id": "wdg-cozy-notifications",
+        "type": "notifications",
+        "title": "",
+        "settings": {
+          "timeZone": "",
+          "hour12": true,
+          "seconds": false,
+          "place": "",
+          "lat": 0,
+          "lon": 0,
+          "celsius": false,
+          "apps": "",
+          "showBody": false,
+          "target": 0,
+          "text": "",
+          "pingTarget": "",
+          "showRouter": true,
+          "focusWork": 25,
+          "focusShort": 5,
+          "focusLong": 15,
+          "focusRounds": 4,
+          "focusAuto": false,
+          "focusSound": true,
+          "focusPhase": "work",
+          "focusRound": 1,
+          "focusEndsAt": 0,
+          "focusLeft": 0,
+          "launcherTiles": [],
+          "url": "",
+          "homeUrl": "",
+          "searchEngine": "google",
+          "hideToolbar": false,
+          "zoom": 100,
+          "driveView": "recent",
+          "calendarDays": 3,
+          "calendarHideAllDay": false,
+          "gmailOnlyUnread": false,
+          "gmailLabel": "INBOX",
+          "showOnStream": false
+        }
+      }
+    ],
+    "hud": []
+  }
+}

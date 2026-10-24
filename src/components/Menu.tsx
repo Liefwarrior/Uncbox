@@ -1,5 +1,6 @@
-import { type CSSProperties, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { useCover } from '../native';
 import { Icon, type IconName } from './Icon';
 
 export interface MenuItem {
@@ -26,6 +27,8 @@ export function Menu({ items, label = 'Options' }: { items: MenuEntry[]; label?:
   const [pos, setPos] = useState<CSSProperties>({});
   const button = useRef<HTMLButtonElement>(null);
   const list = useRef<HTMLDivElement>(null);
+  // An open menu is drawn by the page, so a web widget's real view (in the app) must not cover it.
+  useCover(open, true);
   const entries = items.filter((e): e is MenuItem | 'divider' => Boolean(e));
 
   useLayoutEffect(() => {
@@ -37,6 +40,35 @@ export function Menu({ items, label = 'Options' }: { items: MenuEntry[]; label?:
     setPos(b.bottom + 6 + h > window.innerHeight ? { right, bottom: window.innerHeight - b.top + 6 } : { right, top: b.bottom + 6 });
   }, [open]);
 
+  /** Shuts the menu; keyboard users get focus back on the button they opened it from. */
+  const close = (refocus: boolean) => {
+    setOpen(false);
+    if (refocus) button.current?.focus({ preventScroll: true });
+  };
+  const menuItems = () => [...(list.current?.querySelectorAll<HTMLElement>('[role^="menuitem"]:not(:disabled)') ?? [])];
+
+  // The first item takes focus when the menu opens, so arrow keys work straight away.
+  useEffect(() => {
+    if (open) menuItems()[0]?.focus({ preventScroll: true });
+  }, [open]);
+
+  const onListKey = (e: ReactKeyboardEvent) => {
+    const items = menuItems();
+    const at = items.indexOf(document.activeElement as HTMLElement);
+    const go = (i: number) => {
+      e.preventDefault();
+      items[(i + items.length) % items.length]?.focus({ preventScroll: true });
+    };
+    if (e.key === 'ArrowDown') go(at + 1);
+    else if (e.key === 'ArrowUp') go(at < 0 ? -1 : at - 1);
+    else if (e.key === 'Home') go(0);
+    else if (e.key === 'End') go(-1);
+    else if (e.key === 'Tab') {
+      e.preventDefault();
+      close(true);
+    }
+  };
+
   useEffect(() => {
     if (!open) {
       setArmed(null);
@@ -46,14 +78,18 @@ export function Menu({ items, label = 'Options' }: { items: MenuEntry[]; label?:
       const t = e.target as Node;
       if (!button.current?.contains(t) && !list.current?.contains(t)) setOpen(false);
     };
-    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setOpen(false);
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      e.stopPropagation();
+      close(true);
+    };
     const onResize = () => setOpen(false);
     document.addEventListener('pointerdown', onDown);
-    window.addEventListener('keydown', onKey);
+    window.addEventListener('keydown', onKey, true);
     window.addEventListener('resize', onResize);
     return () => {
       document.removeEventListener('pointerdown', onDown);
-      window.removeEventListener('keydown', onKey);
+      window.removeEventListener('keydown', onKey, true);
       window.removeEventListener('resize', onResize);
     };
   }, [open]);
@@ -67,6 +103,7 @@ export function Menu({ items, label = 'Options' }: { items: MenuEntry[]; label?:
         ref={button}
         className={`icon-btn ${open ? 'on' : ''}`}
         title={label}
+        aria-label={label}
         aria-haspopup="menu"
         aria-expanded={open}
         onClick={() => setOpen((o) => !o)}
@@ -75,7 +112,7 @@ export function Menu({ items, label = 'Options' }: { items: MenuEntry[]; label?:
       </button>
       {open &&
         createPortal(
-          <div ref={list} className="menu" role="menu" style={pos}>
+          <div ref={list} className="menu" role="menu" aria-label={label} style={pos} onKeyDown={onListKey}>
             {entries.map((e, i) =>
               e === 'divider' ? (
                 <hr key={i} />
@@ -84,12 +121,13 @@ export function Menu({ items, label = 'Options' }: { items: MenuEntry[]; label?:
                   key={i}
                   role={e.checked === undefined ? 'menuitem' : 'menuitemcheckbox'}
                   aria-checked={e.checked}
+                  tabIndex={-1}
                   className={`menu__item ${e.confirm ? 'is-danger' : ''} ${armed === i ? 'is-armed' : ''}`}
                   disabled={e.disabled}
                   onClick={() => {
                     if (e.confirm && armed !== i) return setArmed(i);
                     e.onSelect();
-                    if (e.checked === undefined) setOpen(false);
+                    if (e.checked === undefined) close(true);
                   }}
                 >
                   {e.checked !== undefined ? (

@@ -1,0 +1,247 @@
+{
+  "uncbox": "preset",
+  "version": 2,
+  "name": "Steam couch",
+  "base": "steam",
+  "exportedAt": "2026-10-20T00:00:00.000Z",
+  "data": {
+    "layout": [
+      {
+        "i": "game",
+        "x": 0,
+        "y": 0,
+        "w": 17,
+        "h": 17
+      },
+      {
+        "i": "camera",
+        "x": 17,
+        "y": 0,
+        "w": 7,
+        "h": 6
+      },
+      {
+        "i": "steam",
+        "x": 17,
+        "y": 6,
+        "w": 7,
+        "h": 10
+      },
+      {
+        "i": "chat",
+        "x": 17,
+        "y": 16,
+        "w": 7,
+        "h": 8
+      },
+      {
+        "i": "run",
+        "x": 0,
+        "y": 17,
+        "w": 4,
+        "h": 7
+      },
+      {
+        "i": "wdg-couch-network",
+        "x": 4,
+        "y": 17,
+        "w": 4,
+        "h": 7
+      },
+      {
+        "i": "wdg-couch-media",
+        "x": 8,
+        "y": 17,
+        "w": 5,
+        "h": 7
+      },
+      {
+        "i": "wdg-couch-launcher",
+        "x": 13,
+        "y": 17,
+        "w": 4,
+        "h": 7
+      }
+    ],
+    "widgets": [
+      {
+        "id": "wdg-couch-network",
+        "kind": "network",
+        "title": "",
+        "settings": {
+          "pingTarget": "",
+          "showRouter": true
+        }
+      },
+      {
+        "id": "wdg-couch-media",
+        "kind": "media",
+        "title": "",
+        "settings": {}
+      },
+      {
+        "id": "wdg-couch-launcher",
+        "kind": "launcher",
+        "title": "Quick launch",
+        "settings": {
+          "launcherTiles": []
+        }
+      }
+    ],
+    "background": "waves",
+    "game": {
+      "source": "none",
+      "deviceId": null,
+      "fit": "contain",
+      "pixelated": false,
+      "crop": {
+        "top": 0,
+        "right": 0,
+        "bottom": 0,
+        "left": 0
+      },
+      "chroma": "#00b140",
+      "nativeGame": null
+    },
+    "run": {
+      "title": "Couch night",
+      "subtitle": "Steam",
+      "timer": {
+        "startedAt": null,
+        "elapsedMs": 0
+      }
+    },
+    "slots": [
+      {
+        "id": "steam-slot-1",
+        "name": "",
+        "detail": "",
+        "image": "",
+        "down": false
+      },
+      {
+        "id": "steam-slot-2",
+        "name": "",
+        "detail": "",
+        "image": "",
+        "down": false
+      },
+      {
+        "id": "steam-slot-3",
+        "name": "",
+        "detail": "",
+        "image": "",
+        "down": false
+      },
+      {
+        "id": "steam-slot-4",
+        "name": "",
+        "detail": "",
+        "image": "",
+        "down": false
+      },
+      {
+        "id": "steam-slot-5",
+        "name": "",
+        "detail": "",
+        "image": "",
+        "down": false
+      },
+      {
+        "id": "steam-slot-6",
+        "name": "",
+        "detail": "",
+        "image": "",
+        "down": false
+      }
+    ],
+    "counters": [],
+    "milestones": {
+      "label": "Milestones",
+      "items": [
+        {
+          "id": "steam-goal-1",
+          "name": "",
+          "done": false
+        },
+        {
+          "id": "steam-goal-2",
+          "name": "",
+          "done": false
+        },
+        {
+          "id": "steam-goal-3",
+          "name": "",
+          "done": false
+        },
+        {
+          "id": "steam-goal-4",
+          "name": "",
+          "done": false
+        },
+        {
+          "id": "steam-goal-5",
+          "name": "",
+          "done": false
+        },
+        {
+          "id": "steam-goal-6",
+          "name": "",
+          "done": false
+        },
+        {
+          "id": "steam-goal-7",
+          "name": "",
+          "done": false
+        },
+        {
+          "id": "steam-goal-8",
+          "name": "",
+          "done": false
+        }
+      ]
+    },
+    "notes": [
+      {
+        "id": "steam-note-1",
+        "text": "Controller charged",
+        "done": false
+      },
+      {
+        "id": "steam-note-2",
+        "text": "Snacks and a drink",
+        "done": false
+      }
+    ],
+    "match": {
+      "god": "",
+      "role": "",
+      "mode": "",
+      "k": 0,
+      "d": 0,
+      "a": 0
+    },
+    "record": {
+      "wins": 0,
+      "losses": 0,
+      "history": []
+    },
+    "character": {
+      "name": "",
+      "race": "",
+      "cls": "",
+      "level": 1,
+      "maxLevel": 60,
+      "xp": 0,
+      "zone": "",
+      "realm": "",
+      "guild": "",
+      "gold": "",
+      "hardcore": false
+    },
+    "quests": [],
+    "wowLinkAt": 0,
+    "hud": [],
+    "triggers": []
+  }
+}

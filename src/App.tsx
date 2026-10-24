@@ -2,18 +2,23 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Backdrop } from './components/Backdrop';
 import { Board } from './components/Board';
 import { ClipPlayer, ClipToast } from './components/Clips';
+import { Gallery } from './components/Gallery';
 import { Sidebar } from './components/Sidebar';
+import { Palette } from './palette/Palette';
 import { UndoToast } from './components/UndoToast';
+import { useAutomations } from './automations/useAutomations';
 import { useClipKeyInPage } from './clips/replay';
-import { useGameDetect } from './hud/reader';
+import { useGameDetect, useGameStream, useScreenTriggers } from './hud/reader';
 import { useSmiteSync } from './smite';
 import { useSmiteScreen } from './smite/reader';
-import { renderPanel } from './panels';
+import { renderPanel } from './widgets/render';
 import { usePresetDrop } from './presetio';
 import type { BoardId } from './state/model';
 import { activePreset } from './state/presets';
 import { useAppState } from './state/useAppState';
-import { dismissUndoOnSwitch } from './undo';
+import { listen } from './events';
+import { useWowAutoSetup } from './wow';
+import { dismissUndoOnSwitch, showNotice } from './undo';
 
 function initialStreamMode() {
   const v = new URLSearchParams(window.location.search).get('stream');
@@ -38,12 +43,14 @@ export function App() {
     if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
   }, []);
 
+  // F8, and the command palette's "Toggle stream mode".
+  const toggleStream = useCallback(() => (streaming.current ? exitStream() : enterStream()), [enterStream, exitStream]);
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'F8') {
         e.preventDefault();
-        if (streaming.current) exitStream();
-        else enterStream();
+        toggleStream();
       } else if (e.key === 'Escape') {
         exitStream();
       }
@@ -58,9 +65,15 @@ export function App() {
       window.removeEventListener('keydown', onKey);
       document.removeEventListener('fullscreenchange', onFullscreen);
     };
-  }, [enterStream, exitStream]);
+  }, [toggleStream, exitStream]);
 
   useClipKeyInPage(state.clips);
+  useAutomations({
+    state,
+    mutate,
+    isStreaming: useCallback(() => streaming.current, []),
+    setStream: useCallback((on: boolean) => (on ? enterStream() : exitStream()), [enterStream, exitStream]),
+  });
 
   // The page itself never scrolls: everything fits the window. If something focused off screen
   // nudges it anyway, put it straight back, or the whole layout stays shifted.
@@ -75,11 +88,28 @@ export function App() {
   // Game-specific behavior follows the base, so a copy of the SMITE 2 preset still reads SMITE.
   const { base, def, data } = activePreset(state);
   useGameDetect(def.detect, mutatePreset);
+  useScreenTriggers(useGameStream(), data, mutatePreset);
   useSmiteSync(base === 'smite2', mutatePreset);
   useSmiteScreen(base === 'smite2', mutatePreset);
   usePresetDrop(state, mutate);
+  // With the WoW preset on, its addon is installed or brought up to date, and a toast says so.
+  useWowAutoSetup(base === 'wow');
 
   useEffect(dismissUndoOnSwitch, [state.preset]);
+
+  // The server says so when it had to bring back the last good copy of the saved settings.
+  useEffect(
+    () =>
+      listen('notice', (data) => {
+        try {
+          const { message } = JSON.parse(data);
+          if (typeof message === 'string' && message) showNotice(message);
+        } catch {
+          // Not a message we understand.
+        }
+      }),
+    [],
+  );
 
   const render = (id: BoardId) => renderPanel(id, { state, data, def, mutate, mutatePreset });
 
@@ -107,8 +137,10 @@ export function App() {
           renderPanel={render}
         />
         <UndoToast />
-        <ClipToast />
-        <ClipPlayer />
+        <ClipToast driveAuto={state.clips.driveAuto} />
+        <ClipPlayer settings={state.clips} data={data} mutatePreset={mutatePreset} />
+        <Gallery state={state} mutate={mutate} streaming={streamMode} />
+        <Palette state={state} mutate={mutate} mutatePreset={mutatePreset} streaming={streamMode} onToggleStream={toggleStream} />
       </main>
     </div>
   );

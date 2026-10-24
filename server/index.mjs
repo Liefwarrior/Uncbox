@@ -4,37 +4,53 @@
 //   node server/index.mjs          serve the built app from dist/
 //   node server/index.mjs --dev    serve through Vite with hot reload
 //
+// Options: --data=DIR (state and secrets), --clips=DIR, --port=N or PORT, HOST. UNCBOX_OFFLINE and
+// UNCBOX_NO_HELPERS keep it from touching anything outside itself (see switches.mjs).
+//
 // Always on http://localhost:5170. Once `npm run setup-domain` has made a certificate, the built
 // app is also served at https://unc.box (dev mode stays on localhost, where hot reload works).
 
 import http from 'node:http';
 import https from 'node:https';
-import { createReadStream } from 'node:fs';
-import { mkdir, readFile, rename, stat, writeFile } from 'node:fs/promises';
+import { createReadStream, readFileSync } from 'node:fs';
+import { stat } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import {
-  findInstalls,
-  install as installWowAddon,
-  reveal as revealWowAddon,
-  status as wowAddonStatus,
-  uninstall as uninstallWowAddon,
-} from '../integrations/wow/install.mjs';
 import { createClips } from './clips.mjs';
+import { createUpdate } from './update.mjs';
 import { createDiscordBridge } from './discord.mjs';
+import { createCalendar } from './calendar.mjs';
+import { createDrive } from './drive.mjs';
+import { createDriveUpload } from './driveupload.mjs';
+import { createGmail } from './gmail.mjs';
+import { createGoogle } from './google.mjs';
 import { openInBrowser, pageFor } from './open.mjs';
+import { createGallery } from './gallery.mjs';
 import { createGameSettings } from './gamesettings.mjs';
+import { createNetstats } from './netstats.mjs';
+import { createObs } from './obs.mjs';
 import { createOcr } from './ocr.mjs';
 import { createSmite } from './smite.mjs';
 import { createSteam } from './steam.mjs';
+import { createLauncher } from './launcher.mjs';
+import { createWeb } from './web.mjs';
+import { createYtdlp } from './ytdlp.mjs';
+import { createWowAh } from './wowah.mjs';
+import { createTwitch } from './twitch.mjs';
 import { createWidgets } from './widgets.mjs';
+import { createWow } from './wow.mjs';
+import { createGuardConfig, guardApi } from './guard.mjs';
+import { noHelpers, offline, offlineFetch } from './switches.mjs';
 import { DOMAIN, loadTls } from './tls.mjs';
+import { cleanStaleTemps } from './datafile.mjs';
+import { createShutdown } from './lifecycle.mjs';
+import { createStateStore } from './statestore.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const distDir = path.join(root, 'dist');
+// UNCBOX_DIST serves the built app from somewhere else (the server smoke test points it at a stand-in).
+const distDir = process.env.UNCBOX_DIST ? path.resolve(process.env.UNCBOX_DIST) : path.join(root, 'dist');
 const dataArg = process.argv.find((a) => a.startsWith('--data='));
 const dataDir = dataArg ? path.resolve(dataArg.slice(7)) : path.join(root, 'data');
-const stateFile = path.join(dataDir, 'state.json');
 const clipsArg = process.argv.find((a) => a.startsWith('--clips='));
 
 const isDev = process.argv.includes('--dev');
@@ -61,9 +77,19 @@ const MIME = {
   '.woff2': 'font/woff2',
 };
 
-/** @type {Set<http.ServerResponse>} */
-const listeners = new Set();
-let writeChain = Promise.resolve();
+/**
+ * The open live-update streams. The first one to join after the settings were restored from their
+ * backup is told so once ("Uncbox restored your last good settings").
+ * @type {Set<http.ServerResponse>}
+ */
+const listeners = new (class extends Set {
+  add(res) {
+    super.add(res);
+    const notice = store.takeNotice();
+    if (notice) res.write(`event: notice\ndata: ${JSON.stringify(notice)}\n\n`);
+    return this;
+  }
+})();
 
 function sendJson(res, status, body) {
   res.writeHead(status, { 'Content-Type': MIME['.json'], 'Cache-Control': 'no-store' });
@@ -88,25 +114,12 @@ function readBody(req) {
   });
 }
 
-async function loadState() {
-  try {
-    return JSON.parse(await readFile(stateFile, 'utf8'));
-  } catch (err) {
-    if (err.code === 'ENOENT') return null;
-    throw err;
-  }
-}
-
-// Writes are serialized and go through a temp file so a crash mid-write never leaves half a JSON file.
-function saveState(state) {
-  writeChain = writeChain.then(async () => {
-    await mkdir(dataDir, { recursive: true });
-    const tmp = `${stateFile}.tmp`;
-    await writeFile(tmp, JSON.stringify(state, null, 2));
-    await rename(tmp, stateFile);
-  });
-  return writeChain;
-}
+// Saves are serialized, atomic and backed up; a damaged state.json is restored from its backup
+// (see statestore.mjs).
+const store = createStateStore({ dataDir });
+const loadState = () => store.load();
+const saveState = (state) => store.save(state);
+const shutdown = createShutdown();
 
 function broadcast(state, fromClient) {
   const payload = `data: ${JSON.stringify({ clientId: fromClient, state })}\n\n`;
@@ -158,10 +171,15 @@ async function handleDiscord(req, res, url) {
 // server to the LAN.
 const isLocal = (req) => ['127.0.0.1', '::1', '::ffff:127.0.0.1'].includes(req.socket.remoteAddress ?? '');
 
+// Loopback is not proof the request came from Uncbox: any page open in the browser connects from
+// there too. Every /api route also has to pass this (see guard.mjs). UNCBOX_ALLOWED_HOSTS adds
+// extra names, comma separated, for a reverse proxy you set up yourself.
+const guard = createGuardConfig({ bindHost: host, domains: [DOMAIN], extra: process.env.UNCBOX_ALLOWED_HOSTS });
+
 /** Which of the given programs are running ("Dungeons.exe"), for presets that notice their game starting. */
 async function running(req, res, url) {
   const names = (url.searchParams.get('names') ?? '').split(',').map((n) => n.trim().toLowerCase()).filter(Boolean);
-  if (process.platform !== 'win32' || !names.length) return sendJson(res, 200, { running: [] });
+  if (process.platform !== 'win32' || noHelpers() || !names.length) return sendJson(res, 200, { running: [] });
   const { execFile } = await import('node:child_process');
   execFile('tasklist', ['/FO', 'CSV', '/NH'], { windowsHide: true, maxBuffer: 8 * 1024 * 1024 }, (err, out) => {
     const seen = new Set(err ? [] : out.split(/\r?\n/).map((l) => (/^"([^"]+)"/.exec(l)?.[1] ?? '').toLowerCase()));
@@ -178,44 +196,65 @@ const clips = createClips({
   readJson,
 });
 
-const widgets = createWidgets({ broadcastEvent, isLocal, sendJson });
+// UNCBOX_OFFLINE=1 (see switches.mjs): every call to the outside world fails like a lost connection.
+const fetchImpl = offline() ? offlineFetch : fetch;
+
+const widgets = createWidgets({ broadcastEvent, isLocal, sendJson, readJson });
+const netstats = createNetstats({ broadcastEvent, isLocal, sendJson });
+const web = createWeb({ isLocal, sendJson, fetchImpl });
 const steam = createSteam({ broadcastEvent, sendJson, isLocal, readJson, dataDir });
+const obs = createObs({ broadcastEvent, sendJson, isLocal, readJson, dataDir });
+const launcher = createLauncher({ sendJson, isLocal, readJson, dataDir });
+// Sign-in redirects to this server's own plain-http port, so Google needs `port`.
+const google = createGoogle({ broadcastEvent, sendJson, isLocal, readJson, dataDir, port, fetchImpl });
+// UNCBOX_DRIVE_FOLDER stands in for the Drive for desktop folder, to try the widget without it.
+const drive = createDrive({ google, isLocal, sendJson, readJson, localFolder: process.env.UNCBOX_DRIVE_FOLDER || '' });
+const driveUpload = createDriveUpload({ google, dir: clips.folder(), dataDir, broadcastEvent, isLocal, sendJson, readJson });
+clips.onSaved((name, options) => void driveUpload.queue(name, options));
+const calendar = createCalendar({ google, isLocal, sendJson, readJson });
+const gmail = createGmail({ google, isLocal, sendJson, readJson });
+const twitch = createTwitch({ broadcastEvent, sendJson, isLocal, readJson, dataDir, fetchImpl });
 const ocr = createOcr({ isLocal, sendJson, readBody });
 const smite = createSmite({ broadcastEvent, sendJson });
 const gameSettings = createGameSettings({ isLocal, sendJson, readJson });
+const gallery = createGallery({ dataDir, sendJson, isLocal, baseUrl: process.env.UNCBOX_GALLERY_URL, fetchImpl });
+// Downloads go to the clips folder's Downloads subfolder; the clip list is refreshed when one ends.
+const ytdlp = createYtdlp({ broadcastEvent, sendJson, isLocal, readJson, dataDir, clipsFolder: () => clips.folder(), onFinished: () => void clips.announce() });
+const update = createUpdate({ dataDir, fetchImpl, version: JSON.parse(readFileSync(path.join(root, 'package.json'), 'utf8')).version });
 
-async function handleWow(req, res, url) {
-  if (!isLocal(req)) return sendJson(res, 403, { error: 'Run this on the PC WoW is on.' });
-  try {
-    if (url.pathname === '/api/wow/installs' && req.method === 'GET') return sendJson(res, 200, { installs: await findInstalls() });
-    if (url.pathname === '/api/wow/status' && req.method === 'GET') return sendJson(res, 200, await wowAddonStatus());
-    // Without a path, these act on every WoW install found.
-    if (url.pathname === '/api/wow/install' && req.method === 'POST') {
-      return sendJson(res, 200, { ok: true, paths: await installWowAddon((await readJson(req)).path) });
-    }
-    if (url.pathname === '/api/wow/uninstall' && req.method === 'POST') {
-      return sendJson(res, 200, { ok: true, paths: await uninstallWowAddon((await readJson(req)).path) });
-    }
-    if (url.pathname === '/api/wow/reveal' && req.method === 'POST') {
-      revealWowAddon();
-      return sendJson(res, 200, { ok: true });
-    }
-    return sendJson(res, 404, { error: 'Not found' });
-  } catch (err) {
-    return sendJson(res, err.status || 500, { error: err.status ? err.message : `Couldn’t install the addon: ${err.message}` });
-  }
-}
+// The auction house engine (/api/wow/ah/*): reads what the UncboxAH addon saved and writes its prices back.
+const wowAh = createWowAh({ broadcastEvent, sendJson, isLocal, readJson, dataDir });
+
+// WoW: the addon, its settings and the guild and raid data (server/wow.mjs).
+const wow = createWow({ broadcastEvent, sendJson, isLocal, readJson, dataDir });
 
 async function handleApi(req, res, url) {
+  if (guardApi(req, res, guard, sendJson)) return;
+  // No CORS headers anywhere, so another site's preflight is always refused.
+  if (req.method === 'OPTIONS') return sendJson(res, 405, { error: 'Method not allowed' });
   if (url.pathname === '/api/discord' || url.pathname.startsWith('/api/discord/')) return handleDiscord(req, res, url);
-  if (url.pathname.startsWith('/api/wow/')) return handleWow(req, res, url);
+  if (url.pathname.startsWith('/api/wow/ah/')) return wowAh.handle(req, res, url);
+  if (url.pathname.startsWith('/api/wow/')) return wow(req, res, url);
   if (url.pathname === '/api/clips' || url.pathname.startsWith('/api/clips/')) return clips.handle(req, res, url);
-  if (['/api/system', '/api/media', '/api/notifications'].includes(url.pathname)) return widgets(req, res, url);
+  if (['/api/system', '/api/notifications'].includes(url.pathname) || url.pathname.startsWith('/api/media')) return widgets(req, res, url);
+  if (url.pathname === '/api/netstats') return netstats(req, res, url);
+  if (url.pathname === '/api/web/frameable') return web(req, res, url);
   if (url.pathname === '/api/steam' || url.pathname.startsWith('/api/steam/')) return steam(req, res, url);
+  if (url.pathname === '/api/obs' || url.pathname.startsWith('/api/obs/')) return obs(req, res, url);
+  if (url.pathname.startsWith('/api/launcher/')) return launcher(req, res, url);
+  if (url.pathname.startsWith('/api/google/')) return google.handle(req, res, url);
+  if (url.pathname === '/api/drive/upload' || url.pathname === '/api/drive/upload/cancel') return driveUpload.handle(req, res, url);
+  if (url.pathname.startsWith('/api/drive/')) return drive(req, res, url);
+  if (url.pathname.startsWith('/api/calendar/')) return calendar(req, res, url);
+  if (url.pathname.startsWith('/api/gmail/')) return gmail(req, res, url);
+  if (url.pathname.startsWith('/api/twitch/')) return twitch.handle(req, res, url);
+  if (url.pathname === '/api/ytdlp' || url.pathname.startsWith('/api/ytdlp/')) return ytdlp.handle(req, res, url);
   if (url.pathname === '/api/ocr') return ocr(req, res);
   if (url.pathname === '/api/smite') return smite(req, res);
   if (url.pathname === '/api/game-settings') return gameSettings(req, res);
   if (url.pathname === '/api/running') return running(req, res, url);
+  if (url.pathname === '/api/gallery' || url.pathname.startsWith('/api/gallery/')) return gallery.handle(req, res, url);
+  if (url.pathname === '/api/update' && req.method === 'GET') return sendJson(res, 200, await update.status());
 
   if (url.pathname === '/api/open' && req.method === 'POST') {
     if (!isLocal(req)) return sendJson(res, 403, { error: 'Local only' });
@@ -225,7 +264,7 @@ async function handleApi(req, res, url) {
     } catch (err) {
       return sendJson(res, err.status || 400, { error: err.message });
     }
-    const target = pageFor(body.target, { discordAppId: discord.snapshot().clientId || discord.appId() });
+    const target = pageFor(body.target, { discordAppId: discord.snapshot().clientId || discord.appId(), itemId: body.item });
     if (!target) return sendJson(res, 400, { error: 'Unknown page' });
     openInBrowser(target);
     return sendJson(res, 200, { ok: true, url: target });
@@ -246,6 +285,7 @@ async function handleApi(req, res, url) {
       }
       await saveState(state);
       clips.configure(state.clips);
+      wow.noteState(state);
       const clientId = req.headers['x-client-id'] || url.searchParams.get('client') || '';
       broadcast(state, String(clientId));
       return sendJson(res, 200, { ok: true });
@@ -333,10 +373,18 @@ async function handleRequest(req, res) {
 server.on('request', handleRequest);
 
 discord.start().catch((err) => console.error('Discord bridge:', err.message));
+wowAh.start().catch((err) => console.warn('Uncbox: the auction house data:', err.message));
 // The clip key follows the saved settings; with none saved yet, the default (=) is on.
 loadState()
-  .then((s) => clips.configure(s?.clips))
+  .then((s) => {
+    clips.configure(s?.clips);
+    // With the WoW preset on, the addon is kept installed and up to date from the start.
+    wow.noteState(s);
+  })
   .catch(() => clips.configure(null));
+
+// Look for a newer release now, so the answer is ready when the page asks (once a day at most).
+update.check().catch(() => {});
 
 server.listen(port, host, () => {
   const shown = host === '0.0.0.0' ? 'localhost' : host;
@@ -354,6 +402,7 @@ function listenLocal(srv, p, onReady) {
 
 const tls = isDev ? null : await loadTls(dataDir).catch((err) => console.warn(`Uncbox: can't read the ${DOMAIN} certificate: ${err.message}`));
 let secure = null;
+let redirectServer = null;
 try {
   if (tls) secure = https.createServer(tls, handleRequest);
 } catch (err) {
@@ -369,4 +418,45 @@ if (secure) {
     res.end();
   });
   listenLocal(redirect, redirectPort);
+  redirectServer = redirect;
 }
+
+// ---- stopping ----
+// Ctrl+C or a kill closes the servers, finishes any state save already accepted and stops every
+// helper process, so nothing is left running (a second Ctrl+C exits at once). When the Uncbox app
+// quits, it closes this server's input instead (--exit-with-stdin), which does the same; only a
+// hard kill skips it, and then the state file is still never half written.
+
+/** Stops a server from listening and drops its open connections (the live-update streams too). */
+function closeServer(srv) {
+  return new Promise((resolve) => {
+    if (!srv?.listening) return resolve();
+    srv.close(() => resolve());
+    srv.closeAllConnections?.();
+  });
+}
+
+// Added first so they stop last: the helpers and pollers.
+shutdown.add('helpers', () => {
+  for (const part of [widgets, ocr, netstats, steam, obs, smite, twitch, discord, clips, ytdlp, wowAh, wow]) {
+    try {
+      (part.close ?? part.stop)?.call(part);
+    } catch (err) {
+      console.warn('Uncbox: a helper did not stop cleanly:', err.message);
+    }
+  }
+});
+shutdown.add('saving your settings', () => store.flush());
+shutdown.add('the web servers', async () => {
+  for (const res of listeners) res.end();
+  await Promise.all([server, secure, redirectServer].map(closeServer));
+});
+if (vite) shutdown.add('the dev server', () => vite.close());
+shutdown.install();
+// Only when asked, since a server started in a terminal or a task has no meaningful stdin.
+if (process.argv.includes('--exit-with-stdin')) {
+  process.stdin.on('end', () => void shutdown.run('the app closed'));
+  process.stdin.on('error', () => {});
+  process.stdin.resume();
+}
+cleanStaleTemps(dataDir).catch(() => {});

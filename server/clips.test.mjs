@@ -1,12 +1,12 @@
 // Clip names, and the clip routes against a real server on a temporary folder. Sending to Discord
 // itself is covered with a fake fetch in webhook.test.mjs; nothing here can reach a real webhook.
 
-import { mkdtemp, readdir, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, readdir, rm, utimes, writeFile } from 'node:fs/promises';
 import http from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { NAME, clipName } from './clipnames.mjs';
+import { DOWNLOAD_NAME, NAME, clipName, isClipName } from './clipnames.mjs';
 import { createClips } from './clips.mjs';
 
 describe('clip names', () => {
@@ -96,6 +96,64 @@ describe('clip routes', () => {
     expect(bad.status).toBe(400);
   });
 
+  describe('downloads from the yt-dlp widget', () => {
+    const DL = 'Downloads/Some video [abc123].mp4';
+
+    async function seed() {
+      const clipsDir = path.join(tmp, 'clips');
+      await mkdir(path.join(clipsDir, 'Downloads'), { recursive: true });
+      await writeFile(path.join(clipsDir, clipName(new Date(2026, 0, 1, 1, 1, 1))), Buffer.alloc(10, 1));
+      await writeFile(path.join(clipsDir, 'Downloads', 'Some video [abc123].mp4'), Buffer.alloc(100, 2));
+      // Not videos we made: left out of the list.
+      await writeFile(path.join(clipsDir, 'Downloads', 'Some video [abc123].mp4.part'), Buffer.alloc(5));
+      await writeFile(path.join(clipsDir, 'Downloads', 'song.m4a'), Buffer.alloc(5));
+      await mkdir(path.join(clipsDir, 'Downloads', 'folder.mp4'));
+      // Make the download the newest.
+      const later = new Date(Date.now() + 5000);
+      await utimes(path.join(clipsDir, 'Downloads', 'Some video [abc123].mp4'), later, later);
+    }
+
+    it('lists them after the clips, marked as downloads', async () => {
+      await seed();
+      const { clips: list } = await (await fetch(base)).json();
+      expect(list.map((c) => [c.name, c.download ?? false])).toEqual([
+        [DL, true],
+        ['Uncbox 2026-01-01 01-01-01.mp4', false],
+      ]);
+    });
+
+    it('plays them, with Range support', async () => {
+      await seed();
+      const res = await fetch(`${base}/file/${encodeURIComponent(DL)}`, { headers: { Range: 'bytes=0-9' } });
+      expect(res.status).toBe(206);
+      expect((await res.arrayBuffer()).byteLength).toBe(10);
+    });
+
+    it('still keeps every name inside the clips and Downloads folders', async () => {
+      await seed();
+      for (const bad of [
+        'Downloads/../Uncbox 2026-01-01 01-01-01.mp4',
+        'Downloads/sub/x.mp4',
+        'Downloads\\x.mp4',
+        '../Downloads/Some video [abc123].mp4',
+        'Downloads/Some video [abc123].mp4.part',
+        'Downloads/song.m4a',
+        'downloads/Some video [abc123].mp4',
+        'Downloads//x.mp4',
+        'Downloads/.hidden.mp4',
+        'Downloads/a:b.mp4',
+      ]) {
+        expect(isClipName(bad), bad).toBe(false);
+        const res = await fetch(`${base}/file/${encodeURIComponent(bad)}`);
+        expect(res.status, bad).toBe(404);
+      }
+      expect(DOWNLOAD_NAME.test('Downloads/Ok [id].mp4')).toBe(true);
+      // The send route refuses them too, rather than reading some other file.
+      const res = await post(`${base}/discord/send`, { name: 'Downloads/../../secret.mp4' });
+      expect([400]).toContain(res.status);
+    });
+  });
+
   it('keeps the webhook to itself: set, replace and remove, never read back', async () => {
     const url = 'https://discord.com/api/webhooks/123456789012345678/abcDEF_123-ghiJKL456mnoPQR789stuVWX';
     expect(await (await fetch(`${base}/discord`)).json()).toEqual({ set: false, hint: '' });
@@ -131,5 +189,24 @@ describe('clip routes', () => {
       const res = await fetch(base + route, { method, ...(method === 'POST' ? { body: '{}' } : {}) });
       expect(res.status, `${method} ${route}`).toBe(403);
     }
+  });
+
+  it('hands each new clip to the Drive upload only while "upload new clips" is on', async () => {
+    const handed = [];
+    clips.onSaved((name, options) => handed.push([name, options]));
+    // Off to start with, and after settings with no Drive keys.
+    clips.configure(null);
+    await post(base, new Uint8Array([1]), 'video/mp4');
+    clips.configure({ enabled: false, key: 'Equal' });
+    await post(base, new Uint8Array([1]), 'video/mp4');
+    expect(handed).toEqual([]);
+
+    clips.configure({ enabled: false, key: 'Equal', driveAuto: true, driveShare: true });
+    const { name } = await (await post(base, new Uint8Array([1]), 'video/mp4')).json();
+    expect(handed).toEqual([[name, { share: true }]]);
+
+    // Vertical shorts are made by hand, so they don't go up on their own.
+    await post(`${base}?kind=vertical`, new Uint8Array([1]), 'video/mp4');
+    expect(handed).toHaveLength(1);
   });
 });
