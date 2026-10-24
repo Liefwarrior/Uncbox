@@ -105,9 +105,12 @@ The board is a 24 × 24 grid that fills the window, so a layout looks the same a
 
 - **Move** a panel by dragging its title. **Resize** it from the right or bottom edge.
 - **⋯** in a panel's title has its settings, all in plain words.
-- **×** hides a panel. An **Undo** shows up for a few seconds, and **On screen** in the sidebar
-  brings it back any time.
-- **Reset layout** puts the preset's panels back where they started.
+- **×** takes a panel off the board. An **Undo** shows up for a few seconds, and **Get More
+  Widgets** in the sidebar puts it back any time.
+- **On screen** in the sidebar lists what is on the board. **Show** points at a panel (handy on a
+  busy board), and **×** takes it off.
+- **Reset layout** puts the preset's panels and widgets back where they started. Widgets you
+  added go; the settings of the preset's own widgets stay.
 
 ### Sharing presets
 
@@ -156,17 +159,32 @@ Hover the game window for its toolbar.
 **Crop** trims menu bars and black borders. **Fit to game** sizes the window to the picture,
 which removes the black bars around a GBA or DS screen. **Sharp pixels** keeps pixel art crisp.
 
+### Get More Widgets
+
+Everything on the board, from the Game panel to a Clock, is a widget from one library, and **Get
+More Widgets** in the sidebar is where you browse it: search by name or what it does, narrow by
+category (Gaming, Streaming, Productivity, Media & info, and a game's own: SMITE 2, WoW, Steam),
+and **Add**. The widgets your preset recommends come first, under **Recommended for** its name.
+
+Some are panels there is only one of in a preset (Game, Chat, Notes…); once one is on the board
+its card says **On screen** and **Show**. The others you can add as many times as you like. In
+the command palette (Ctrl K) they are **Add widget: …**.
+
+Adding a widget fits it on the board by making room, so nothing ever ends up out of sight.
+Developers: [src/widgets/README.md](src/widgets/README.md) is how the library works and how to
+add a widget.
+
 ### App windows
 
-**Add an app window** shows any window on your PC (Spotify, a guide, a popped-out chat) in a
-panel that matches the preset. Add as many as you like.
+**App window** in the library shows any window on your PC (Spotify, a guide, a popped-out chat)
+in a panel that matches the preset. Add as many as you like.
 
 They are view only: a web page can show another window but can't click or type into it, and the
 browser asks you to pick each window again after a reload.
 
 ### Widgets
 
-**Add a widget** in the sidebar has small panels you can add as many of as you like:
+These small panels in the library can be added as many times as you like:
 
 | Widget | Shows |
 | --- | --- |
@@ -184,7 +202,7 @@ Settings are in each widget's **⋯** menu, and you can rename any of them.
 
 ### Stats read off the screen
 
-The **Stats** panel (featured in Minecraft Dungeons II, available in every preset) reads numbers
+The **Stats** panel (recommended for Minecraft Dungeons II, in the library for every preset) reads numbers
 off your game's picture as they change, for games that don't share their stats any other way.
 Choose **Set up boxes**, then drag a box around each number on the still of your game: emeralds,
 level, a timer. Uncbox reads the boxes once a second with Windows' own text recognition, and a
@@ -326,40 +344,36 @@ server/twitch.mjs          Twitch sign-in and stream info for the Twitch widget
 server/steam.mjs           the Steam panel, from the Steam app's files
 server/gallery.mjs         the preset gallery: reads gallery/ from GitHub (or a folder), keeps the list; scripts/gallery.mjs checks it
 server/ocr.mjs             Windows text recognition for the Stats panel
-src/widgets/               the widget library
 src/hud/                   the Stats panel's screen reader
 src/smite/                 SMITE 2 screens: parsers, image recipes, the reader, its store
 src/clips/                 instant replay: the encoder worker, its store, the clip keys
 src/events.ts              the page's one live connection to /api/events
 native/UncboxShell/        the Windows app, where the game can be played in its panel
                            (see native/README.md); src/native.ts is the page's side
-src/panels/catalog.ts      every panel type: title, sidebar hint, default and minimum size
-src/panels/index.tsx       which component draws each panel type
+src/widgets/               the widget library: everything that can sit on the board, one folder
+                           each; registry.ts lists them all (see src/widgets/README.md)
 src/presets.ts             presets: titles, default layouts, starting data
 src/presetfile.ts          the .uncbox preset file: what is left out, reading and checking one
 src/presetio.ts            downloading a preset, importing one, dropping one on the page
 src/state/                 saved state, loading and migration, the save/sync hook;
                            state/presets.ts is built-in and custom presets side by side
-src/components/            the board, the sidebar and one file per panel
+src/components/            the board, the sidebar (with the widget library) and other shared parts
 src/styles.css             theme tokens and all styling
 ```
 
-### Add a panel type
+### Add a widget
 
-1. Add its id to `PANEL_IDS` in `src/state/model.ts`, and any data it keeps to `PresetData`
-   (with a default in `baseData()` in `src/presets.ts`).
-2. Give it a title, hint and size in `src/panels/catalog.ts`.
-3. Write the component in `src/components/`, wrapped in `<Panel>`. Pass `empty` when it has
-   nothing to show, and `menu` for its settings.
-4. Map the id to the component in `src/panels/index.tsx`.
-
-TypeScript flags any step you miss, and the sidebar lists the new panel on its own.
+A widget is one folder in `src/widgets/` plus one line in `src/widgets/registry.ts`. The sidebar's
+Get More Widgets, the command palette, the smoke and accessibility tests and state loading all
+read the registry, so there is nothing else to wire up. `src/widgets/README.md` has the steps, an
+example and how presets recommend widgets.
 
 ### Add a preset
 
 1. Add an id to `PRESET_IDS` in `src/state/model.ts`.
 2. Add its entry to `PRESETS` in `src/presets.ts`: name, one-line blurb, any renamed panel
-   titles, a default layout and its starting data.
+   titles, a default layout, the widgets that layout uses and its starting data. Then add its id
+   to `presets` in the widgets you want it to recommend.
 3. Add a `.theme-<id>` block of color, font and radius tokens at the top of `src/styles.css`,
    and a `.preset-card--<id> strong` rule so its sidebar card previews the font and color.
 
