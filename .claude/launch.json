@@ -4,14 +4,39 @@
     {
       "name": "uncbox-dev",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "dev"],
+      "runtimeArgs": [
+        "run",
+        "dev"
+      ],
       "port": 5170
     },
     {
       "name": "uncbox-check",
       "runtimeExecutable": "node",
-      "runtimeArgs": ["C:/repositories/Uncbox/server/index.mjs", "--dev", "--port=5172", "--data=C:/repositories/Uncbox/data/test", "--clips=C:/repositories/Uncbox/data/test/clips"],
+      "runtimeArgs": [
+        "C:/repositories/Uncbox/server/index.mjs",
+        "--dev",
+        "--port=5172",
+        "--data=C:/repositories/Uncbox/data/test",
+        "--clips=C:/repositories/Uncbox/data/test/clips"
+      ],
       "port": 5172
+    },
+    {
+      "name": "uncbox-sandbox",
+      "runtimeExecutable": "node",
+      "runtimeArgs": [
+        "C:/repositories/Uncbox/server/index.mjs",
+        "--dev",
+        "--port=5173",
+        "--data=C:/repositories/Uncbox/data/sandbox",
+        "--clips=C:/repositories/Uncbox/data/sandbox/clips"
+      ],
+      "env": {
+        "UNCBOX_NO_HELPERS": "1",
+        "UNCBOX_OFFLINE": "1"
+      },
+      "port": 5173
     }
   ]
 }

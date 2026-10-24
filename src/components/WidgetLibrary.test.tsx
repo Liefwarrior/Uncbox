@@ -119,13 +119,10 @@ describe('Get More Widgets', () => {
     expect(screen.queryByRole('button', { name: 'Add Session' })).toBeNull();
   });
 
-  it('recommends the Auction House for WoW, and offers it once: added, then On screen with Show', () => {
+  it('recommends the Auction House for WoW, where it starts on the board, so it is offered as Show', () => {
     const { data } = setup('wow');
     const headings = screen.getAllByRole('heading', { level: 4 }).map((h) => h.textContent);
     expect(headings[0]).toBe('Recommended for WoW Forever');
-    // The WoW board has no room for a 12 x 12 workbench, so it is offered and not placed.
-    expect(data().widgets.some((w) => w.kind === 'auctionhouse')).toBe(false);
-    fireEvent.click(screen.getByRole('button', { name: 'Add Auction House' }));
     const made = data().widgets.filter((w) => w.kind === 'auctionhouse');
     expect(made).toHaveLength(1);
     expect(data().layout.some((i) => i.i === made[0].id)).toBe(true);

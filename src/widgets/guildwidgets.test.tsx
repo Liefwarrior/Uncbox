@@ -137,9 +137,9 @@ describe('the guild widgets in the library', () => {
     }
   });
 
-  it('start with the roster and the news on the WoW board', () => {
+  it('start with the roster and the news (and the Auction House) on the WoW board', () => {
     const { layout, widgets } = defaultPresetData('wow');
-    expect(widgets.map((w) => w.kind).sort()).toEqual(['guildfeed', 'guildroster']);
+    expect(widgets.map((w) => w.kind).sort()).toEqual(['auctionhouse', 'guildfeed', 'guildroster']);
     for (const w of widgets) expect(layout.some((item) => item.i === w.id)).toBe(true);
     expect(PRESETS.wow.layout.reduce((sum, item) => sum + item.w * item.h, 0)).toBe(24 * 24);
   });

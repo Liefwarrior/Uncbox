@@ -146,20 +146,21 @@ export const PRESETS: Record<PresetId, PresetDef> = {
     // The addon fills these in with your group; they can still be typed in by hand.
     slots: { variant: 'list', name: 'Name', detail: 'Level and class', showDown: true, down: 'Dead', tint: wowClassColor },
     layout: [
-      { i: 'game', x: 0, y: 0, w: 17, h: 17 },
-      { i: 'camera', x: 17, y: 0, w: 7, h: 7 },
-      { i: 'character', x: 17, y: 7, w: 7, h: 8 },
-      { i: 'chat', x: 17, y: 15, w: 7, h: 9 },
-      { i: 'wdg-wowroster', x: 0, y: 17, w: 5, h: 7 },
-      { i: 'quests', x: 5, y: 17, w: 4, h: 7 },
-      { i: 'discord', x: 9, y: 17, w: 4, h: 7 },
-      { i: 'wdg-wownews', x: 13, y: 17, w: 4, h: 7 },
+      { i: 'game', x: 0, y: 0, w: 16, h: 15 },
+      { i: 'camera', x: 16, y: 0, w: 8, h: 5 },
+      { i: 'character', x: 16, y: 5, w: 8, h: 6 },
+      { i: 'quests', x: 16, y: 11, w: 8, h: 7 },
+      { i: 'chat', x: 16, y: 18, w: 8, h: 6 },
+      { i: 'wdg-wowroster', x: 0, y: 15, w: 5, h: 9 },
+      { i: 'wdg-wownews', x: 5, y: 15, w: 4, h: 9 },
+      { i: 'wdg-wowah', x: 9, y: 15, w: 7, h: 9 },
     ],
-    // For leading a guild: who is online, and what is happening. The rest (raid group, attendance,
-    // loot, goals) are a click away in the widget library.
+    // For leading a guild: who is online, what is happening, and the auction house. The rest (raid
+    // group, attendance, loot, goals, Discord) are a click away in the widget library.
     widgets: [
       { id: 'wdg-wowroster', kind: 'guildroster' },
       { id: 'wdg-wownews', kind: 'guildfeed' },
+      { id: 'wdg-wowah', kind: 'auctionhouse' },
     ],
     data: () => {
       const d = baseData();
