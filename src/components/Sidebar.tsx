@@ -13,6 +13,7 @@ import { PaletteHint } from '../palette/Palette';
 import { AutomationsSection } from './Automations';
 import { BackgroundPicker } from './BackgroundPicker';
 import { ClipsSection } from './Clips';
+import { WowSection } from './WowSection';
 import { CustomPresetCard } from './CustomPresetCard';
 import { Icon } from './Icon';
 import { SetupList } from './SetupList';
@@ -114,6 +115,8 @@ export function Sidebar({ state, mutate, mutatePreset, status, onStreamMode }: P
           <StartWithWindows />
 
           <ClipsSection settings={state.clips} mutate={mutate} />
+
+          {base === 'wow' && <WowSection />}
 
           <AutomationsSection state={state} mutate={mutate} />
 

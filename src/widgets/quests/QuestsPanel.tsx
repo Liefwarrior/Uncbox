@@ -6,6 +6,8 @@ import type { PanelContext } from '../types';
 
 interface Install {
   flavor: string;
+  /** "WoW Forever (beta)", "Classic Era"…, as the server names it. */
+  label?: string;
   path: string;
   /** The installed addon's version, or null when it isn't installed there. */
   version: string | null;
@@ -16,9 +18,8 @@ const post = (url: string, body?: object) =>
     async (r) => (r.ok ? r.json() : Promise.reject(new Error((await r.json().catch(() => null))?.error ?? r.statusText))),
   );
 
-/** "_classic_era_" → "classic era"; the WoW Forever beta lives in _classic_beta_. */
-const flavorName = (flavor: string) =>
-  flavor === '_classic_beta_' ? 'Forever beta' : flavor.replace(/^_+|_+$/g, '').replace(/_/g, ' ');
+/** "WoW Forever (beta)"; from the folder name when the server doesn't say. */
+const flavorName = (i: Install) => i.label ?? i.flavor.replace(/^_+|_+$/g, '').replace(/_/g, ' ');
 
 /** "Kobold Vermin slain: 4/10" → ["Kobold Vermin slain", "4/10"] */
 function splitProgress(text: string): [string, string] {
@@ -57,7 +58,7 @@ function useAddon() {
     return () => clearTimeout(t);
   }, [message]);
 
-  const where = (list: Install[]) => list.map((i) => `WoW ${flavorName(i.flavor)}`).join(' and ');
+  const where = (list: Install[]) => list.map((i) => (i.label?.startsWith('WoW') ? i.label : `WoW ${flavorName(i)}`)).join(' and ');
   const run = async (action: 'install' | 'uninstall') => {
     setBusy(true);
     setMessage(null);

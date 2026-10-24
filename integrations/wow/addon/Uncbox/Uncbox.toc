@@ -1,9 +1,15 @@
 ## Interface: 16001, 16002, 11509
 ## Title: Uncbox
-## Notes: Shows your character and quest log on your Uncbox stream dashboard.
+## Notes: Shows your character, quest log, guild and raid on your Uncbox stream dashboard.
 ## Author: Liefwarrior
-## Version: 1.1.0
+## Version: 1.2.0
 ## SavedVariables: UncboxDB
 
+UncboxConfig.lua
 Codec.lua
+Util.lua
+Outbox.lua
+Sync.lua
+Guild.lua
+Raid.lua
 Uncbox.lua

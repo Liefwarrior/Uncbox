@@ -16,13 +16,6 @@ import { createReadStream, readFileSync } from 'node:fs';
 import { stat } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import {
-  findInstalls,
-  install as installWowAddon,
-  reveal as revealWowAddon,
-  status as wowAddonStatus,
-  uninstall as uninstallWowAddon,
-} from '../integrations/wow/install.mjs';
 import { createClips } from './clips.mjs';
 import { createUpdate } from './update.mjs';
 import { createDiscordBridge } from './discord.mjs';
@@ -45,6 +38,7 @@ import { createYtdlp } from './ytdlp.mjs';
 import { createWowAh } from './wowah.mjs';
 import { createTwitch } from './twitch.mjs';
 import { createWidgets } from './widgets.mjs';
+import { createWow } from './wow.mjs';
 import { createGuardConfig, guardApi } from './guard.mjs';
 import { noHelpers, offline, offlineFetch } from './switches.mjs';
 import { DOMAIN, loadTls } from './tls.mjs';
@@ -231,27 +225,8 @@ const update = createUpdate({ dataDir, fetchImpl, version: JSON.parse(readFileSy
 // The auction house engine (/api/wow/ah/*): reads what the UncboxAH addon saved and writes its prices back.
 const wowAh = createWowAh({ broadcastEvent, sendJson, isLocal, readJson, dataDir });
 
-async function handleWow(req, res, url) {
-  if (!isLocal(req)) return sendJson(res, 403, { error: 'Run this on the PC WoW is on.' });
-  try {
-    if (url.pathname === '/api/wow/installs' && req.method === 'GET') return sendJson(res, 200, { installs: await findInstalls() });
-    if (url.pathname === '/api/wow/status' && req.method === 'GET') return sendJson(res, 200, await wowAddonStatus());
-    // Without a path, these act on every WoW install found.
-    if (url.pathname === '/api/wow/install' && req.method === 'POST') {
-      return sendJson(res, 200, { ok: true, paths: await installWowAddon((await readJson(req)).path) });
-    }
-    if (url.pathname === '/api/wow/uninstall' && req.method === 'POST') {
-      return sendJson(res, 200, { ok: true, paths: await uninstallWowAddon((await readJson(req)).path) });
-    }
-    if (url.pathname === '/api/wow/reveal' && req.method === 'POST') {
-      revealWowAddon();
-      return sendJson(res, 200, { ok: true });
-    }
-    return sendJson(res, 404, { error: 'Not found' });
-  } catch (err) {
-    return sendJson(res, err.status || 500, { error: err.status ? err.message : `Couldn’t install the addon: ${err.message}` });
-  }
-}
+// WoW: the addon, its settings and the guild and raid data (server/wow.mjs).
+const wow = createWow({ broadcastEvent, sendJson, isLocal, readJson, dataDir });
 
 async function handleApi(req, res, url) {
   if (guardApi(req, res, guard, sendJson)) return;
@@ -259,7 +234,7 @@ async function handleApi(req, res, url) {
   if (req.method === 'OPTIONS') return sendJson(res, 405, { error: 'Method not allowed' });
   if (url.pathname === '/api/discord' || url.pathname.startsWith('/api/discord/')) return handleDiscord(req, res, url);
   if (url.pathname.startsWith('/api/wow/ah/')) return wowAh.handle(req, res, url);
-  if (url.pathname.startsWith('/api/wow/')) return handleWow(req, res, url);
+  if (url.pathname.startsWith('/api/wow/')) return wow(req, res, url);
   if (url.pathname === '/api/clips' || url.pathname.startsWith('/api/clips/')) return clips.handle(req, res, url);
   if (['/api/system', '/api/notifications'].includes(url.pathname) || url.pathname.startsWith('/api/media')) return widgets(req, res, url);
   if (url.pathname === '/api/netstats') return netstats(req, res, url);
@@ -310,6 +285,7 @@ async function handleApi(req, res, url) {
       }
       await saveState(state);
       clips.configure(state.clips);
+      wow.noteState(state);
       const clientId = req.headers['x-client-id'] || url.searchParams.get('client') || '';
       broadcast(state, String(clientId));
       return sendJson(res, 200, { ok: true });
@@ -400,7 +376,11 @@ discord.start().catch((err) => console.error('Discord bridge:', err.message));
 wowAh.start().catch((err) => console.warn('Uncbox: the auction house data:', err.message));
 // The clip key follows the saved settings; with none saved yet, the default (=) is on.
 loadState()
-  .then((s) => clips.configure(s?.clips))
+  .then((s) => {
+    clips.configure(s?.clips);
+    // With the WoW preset on, the addon is kept installed and up to date from the start.
+    wow.noteState(s);
+  })
   .catch(() => clips.configure(null));
 
 // Look for a newer release now, so the answer is ready when the page asks (once a day at most).
@@ -458,7 +438,7 @@ function closeServer(srv) {
 
 // Added first so they stop last: the helpers and pollers.
 shutdown.add('helpers', () => {
-  for (const part of [widgets, ocr, netstats, steam, obs, smite, twitch, discord, clips, ytdlp, wowAh]) {
+  for (const part of [widgets, ocr, netstats, steam, obs, smite, twitch, discord, clips, ytdlp, wowAh, wow]) {
     try {
       (part.close ?? part.stop)?.call(part);
     } catch (err) {

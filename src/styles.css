@@ -811,6 +811,30 @@ input[type='color'] {
   border-color: var(--accent);
   background: var(--accent);
 }
+.setup__text {
+  display: grid;
+  min-width: 0;
+}
+.setup__note {
+  color: var(--muted);
+  font-size: 13px;
+}
+.side-field {
+  display: grid;
+  gap: 4px;
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+.setup__also {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin: 6px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+}
 .side-link.side-link--quiet {
   color: var(--muted);
 }

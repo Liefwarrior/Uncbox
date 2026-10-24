@@ -201,7 +201,21 @@ export function route(scenario: Scenario, path: string, method: string): Reply {
   }
   if (p === '/api/running') return ok({ running: [] });
   if (p === '/api/web/frameable') return ok({ frameable: true });
-  if (p === '/api/wow/status') return ok({ bundled: '1.0.0', installs: data ? [{ flavor: 'classic', path: 'C:\\WoW', installed: '1.0.0' }] : [] });
+  if (p === '/api/wow/status' || (p === '/api/wow/auto' && method === 'POST')) {
+    const era = 'C:\\WoW\\_classic_era_\\Interface\\AddOns';
+    const installs = data ? [{ flavor: '_classic_era_', label: 'Classic Era', path: era, exes: ['WowClassic.exe'], version: '1.0.0', addons: { Uncbox: '1.0.0' } }] : [];
+    const modules = { character: true, quests: true, party: true, guild: true, raid: true, loot: true };
+    return ok({
+      bundled: '1.0.0',
+      addons: { Uncbox: '1.0.0' },
+      preferred: data ? era : null,
+      installs,
+      autoInstall: true,
+      flavor: '',
+      changed: [],
+      settings: { strip: { enabled: true, corner: 'TOPLEFT' }, modules, lootMinQuality: 2 },
+    });
+  }
   if (p === '/api/google/status') return ok(data ? googleIn : googleOut);
   if (p === '/api/drive/local') return ok({ available: false, name: '' });
   if (p === '/api/drive/files') return data ? ok({ files, nextPageToken: '' }) : { status: 401, body: { code: 'signin', error: 'Sign in to Google.' } };

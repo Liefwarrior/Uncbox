@@ -17,6 +17,7 @@ import type { BoardId } from './state/model';
 import { activePreset } from './state/presets';
 import { useAppState } from './state/useAppState';
 import { listen } from './events';
+import { useWowAutoSetup } from './wow';
 import { dismissUndoOnSwitch, showNotice } from './undo';
 
 function initialStreamMode() {
@@ -91,6 +92,8 @@ export function App() {
   useSmiteSync(base === 'smite2', mutatePreset);
   useSmiteScreen(base === 'smite2', mutatePreset);
   usePresetDrop(state, mutate);
+  // With the WoW preset on, its addon is installed or brought up to date, and a toast says so.
+  useWowAutoSetup(base === 'wow');
 
   useEffect(dismissUndoOnSwitch, [state.preset]);
 

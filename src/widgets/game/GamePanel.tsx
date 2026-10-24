@@ -6,6 +6,7 @@ import { shareGameStream } from '../../hud/reader';
 import { useDeviceStream, useVideoDevices, useWindowStream } from '../../media';
 import { send, shell } from '../../native';
 import { useSteam } from '../../steam';
+import { useWowRunning, useWowStatus, wowWindowMatch } from '../../wow';
 import type { GameSettings, VideoFit, VideoSource } from '../../state/model';
 import type { PanelContext } from '../types';
 import { useBoard } from '../../components/boardContext';
@@ -78,7 +79,17 @@ export function GamePanel({ state, data, def, mutatePreset }: PanelContext) {
   const stream = game.source === 'device' ? device.stream : game.source === 'window' || game.source === 'native' ? win.stream : null;
   const error = game.source === 'device' ? device.error : game.source === 'window' || game.source === 'native' ? win.error : null;
   const capturing = game.source === 'device' || game.source === 'window';
-  const stripPct = useWowLink(stream, wow, mutatePreset);
+  // The addon draws its strip in the corner chosen in the sidebar.
+  const wowStatus = useWowStatus(false);
+  const stripPct = useWowLink(stream, wow, mutatePreset, wowStatus?.settings?.strip?.corner);
+  // WoW running with no game set up yet: in the app it goes straight into the panel; in a browser,
+  // which can't capture without a click, a "Show WoW" button waits in the empty panel. A source the
+  // player chose is never changed.
+  const wowRunning = useWowRunning(wow !== null && game.source === 'none', wowStatus);
+  useEffect(() => {
+    if (shell && wowRunning && game.source === 'none') set({ source: 'native', nativeGame: wowWindowMatch(wowRunning) });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [wowRunning, game.source]);
   // Viewers never see the addon's strip: crop at least down to its bottom edge.
   const crop = stripPct > game.crop.top ? { ...game.crop, top: stripPct } : game.crop;
   // Clips get the same crop, so they never show the strip either.
@@ -141,6 +152,11 @@ export function GamePanel({ state, data, def, mutatePreset }: PanelContext) {
         <div className="game-empty">
           {game.source === 'none' && (
             <>
+              {wowRunning && !shell && (
+                <button className="btn btn--accent" data-setup="" onClick={() => choose('window')}>
+                  <Icon name="monitor" /> Show WoW
+                </button>
+              )}
               <h3>Where is your game?</h3>
               <div className="source-row">
                 {SOURCES.map((s, i) => (
