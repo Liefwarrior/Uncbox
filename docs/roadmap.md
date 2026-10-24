@@ -116,3 +116,38 @@ buttons, menus and dialogs with the right roles and focus trapping, reduced-moti
 contrast checked for each theme's text tokens. Done when: an automated axe-style check of each
 widget and panel finds nothing serious, and the palette, menus and clip player are fully usable
 without a mouse.
+
+## Wave 3: video downloads, the widget library, and WoW for guild leaders
+
+### UBX-16 · yt-dlp plugin — Building
+Download any video yt-dlp supports, at the source's own resolution and frame rate (no downscaling,
+60 fps stays 60 fps), into the Uncbox clips folder, so it plays in the clip player and can be made
+vertical, sent to Discord or saved to Drive. Uses the installed yt-dlp and ffmpeg, with one-click
+install through winget when they're missing. Also: "Download this video" from a Web widget and
+from Ctrl+K.
+
+### UBX-17 · Widget library ("Get More Widgets") — Building
+Every panel and widget becomes one kind of thing, a widget, defined in one place with its own
+folder. The sidebar gets a "Get More Widgets" library to browse, search and add them; "More panels"
+and "Add a widget" go away. Presets stay, with better defaults. Done when: adding a widget is one
+folder plus one registry line, documented, and the old panel/widget split is gone from the code.
+
+### UBX-18 · WoW addon sets itself up, and links your guild — Building
+The WoW preset installs and updates the addon by itself, writes its settings, and picks WoW as the
+game window. The addon reports your guild roster, raid group, ready checks, loot and boss kills,
+live over the strip and in full through its saved variables. Uncbox keeps guild history (who
+raids, attendance, loot) in a local database.
+
+### UBX-19 · WoW guild widgets — Queued (after UBX-17 and UBX-18)
+Widgets for running a 50+ person guild: roster and who's online, raid composition and roles,
+attendance, loot history, guild events feed, and recruitment notes.
+
+### UBX-20 · Uncbox AH engine — Building
+Our own auction house addon and price database, modelled on TradeSkillMaster and Auctionator:
+full and targeted scans, market value from scan history, sale rates from your mail, posting rules,
+undercut detection, deals, flips and crafting profit, with prices written back into the game for
+tooltips and one-click posting.
+
+### UBX-21 · Auction House widget — Queued (after UBX-17 and UBX-20)
+The Uncbox side of the AH tools: item search with price history charts, deals and flips,
+crafting profit, your auctions and sales, posting rules and shopping lists.
