@@ -1,7 +1,7 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import { Digits } from './Digits';
-import { formatDuration } from './RunPanel';
+import { formatDuration } from '../widgets/run/RunPanel';
 
 describe('Digits', () => {
   it('puts every digit in its own fixed-width cell and keeps separators apart', () => {

@@ -3,16 +3,17 @@ import type { ClipFile } from '../clips/replay';
 import type { IconName } from '../components/Icon';
 import { addWidgetTo, setPanelShown } from '../layout';
 import type { ObsAction, ObsSnapshot } from '../obs';
-import { panelTitle, PRESETS } from '../presets';
-import { PANEL_INFO } from '../panels/catalog';
-import { type AppState, PANEL_IDS, PRESET_IDS, WIDGET_TYPES, type Widget } from '../state/model';
+import { PRESETS } from '../presets';
+import { type AppState, PRESET_IDS, type Widget } from '../state/model';
 import { activePreset } from '../state/presets';
 import type { MutatePreset, Mutate } from '../state/useAppState';
 import { resolveAddress, SEARCH_ENGINES, searchUrl } from '../web';
-import { fileIcon, fileKind, type DriveFile } from '../widgets/drive';
-import { newWidget, WIDGET_INFO, widgetTitle } from '../widgets/catalog';
-import { isRunning, remaining, settle, stateOf, configOf, toggleFocus } from '../widgets/focus';
-import { TILE_KINDS, type Tile } from '../widgets/launcher';
+import { fileIcon, fileKind, type DriveFile } from '../widgets/drive/drive';
+import { isFocusWidget, isRunning, remaining, settle, stateOf, configOf, toggleFocus } from '../widgets/focus/focus';
+import { newWidget, panelTitle, WIDGETS, widgetTitle } from '../widgets/registry';
+import { isSingle } from '../widgets/types';
+import { isWebWidget } from '../widgets/web/settings';
+import { TILE_KINDS, type Tile } from '../widgets/launcher/launcher';
 import { fuzzyMatch, type Match } from './fuzzy';
 import { MAX_RECENT } from './recent';
 
@@ -114,42 +115,43 @@ const presetCommands: Provider = ({ state, mutate, actions }) => {
 
 // ---- panels and widgets ----
 
+// Show or hide each single panel (a kind there is only one of in a preset), and add the others
+// from the widget library (src/widgets/registry.ts), in the order the library lists them.
+
 const panelCommands: Provider = ({ state, mutatePreset }) => {
-  const { def, data } = activePreset(state);
+  const { base, def, data } = activePreset(state);
   const shown = new Set(data.layout.map((item) => item.i));
-  // The preset's own favorites first, as in the sidebar.
-  const ids = [...def.featured, ...PANEL_IDS.filter((id) => !def.featured.includes(id))];
-  return ids.map((id): Command => {
-    const on = shown.has(id);
+  const singles = WIDGETS.filter(isSingle);
+  // The ones this preset recommends first, as in the library.
+  const ordered = [...singles.filter((w) => w.presets?.includes(base)), ...singles.filter((w) => !w.presets?.includes(base))];
+  return ordered.map((w): Command => {
+    const on = shown.has(w.kind);
     return {
-      id: `panel:${id}`,
-      title: `${on ? 'Hide' : 'Show'} ${panelTitle(def, id)} panel`,
+      id: `panel:${w.kind}`,
+      title: `${on ? 'Hide' : 'Show'} ${panelTitle(def, w.kind)} panel`,
       group: 'Panels',
       icon: 'layout',
-      detail: PANEL_INFO[id].hint,
-      keywords: 'panel toggle on screen',
-      run: () => mutatePreset((d) => setPanelShown(d, id, !on)),
+      detail: w.hint,
+      keywords: `panel toggle on screen ${w.keywords ?? ''}`,
+      run: () => mutatePreset((d) => setPanelShown(d, w.kind, !on)),
     };
   });
 };
 
 const widgetCommands: Provider = ({ mutatePreset, actions }) =>
-  WIDGET_TYPES.map((type): Command => {
-    const info = WIDGET_INFO[type];
-    return {
-      id: `widget:add:${type}`,
-      title: `Add widget: ${info.name}`,
-      group: 'Widgets',
-      icon: info.icon,
-      detail: info.hint,
-      keywords: 'new panel',
-      run: () => {
-        const w = newWidget(type);
-        mutatePreset((d) => addWidgetTo(d, w));
-        actions.callOut(w.id);
-      },
-    };
-  });
+  WIDGETS.filter((w) => !isSingle(w)).map((w): Command => ({
+    id: `widget:add:${w.kind}`,
+    title: `Add widget: ${w.name}`,
+    group: 'Widgets',
+    icon: w.icon,
+    detail: w.hint,
+    keywords: `new panel ${w.keywords ?? ''}`,
+    run: () => {
+      const widget = newWidget(w.kind);
+      mutatePreset((d) => addWidgetTo(d, widget));
+      actions.callOut(widget.id);
+    },
+  }));
 
 // ---- clips and stream mode ----
 
@@ -223,7 +225,7 @@ const webCommands: Provider = ({ state, query, mutatePreset, actions }) => {
   const text = query.trim();
   if (!text) return [];
   const { data } = activePreset(state);
-  const widget = data.widgets.find((w) => w.type === 'web');
+  const widget = data.widgets.find(isWebWidget);
   const engineId = widget?.settings.searchEngine ?? 'google';
   const engine = SEARCH_ENGINES.find((e) => e.id === engineId) ?? SEARCH_ENGINES[0];
   const guess = classifyQuery(text, engineId);
@@ -268,7 +270,7 @@ const webCommands: Provider = ({ state, query, mutatePreset, actions }) => {
 
 // ---- video downloads ----
 
-/** A typed web address can also be downloaded as a video (yt-dlp, see widgets/downloads.ts). */
+/** A typed web address can also be downloaded as a video (yt-dlp, see widgets/downloads/downloads.ts). */
 const downloadCommands: Provider = ({ query, actions }) => {
   const guess = classifyQuery(query);
   if (guess.kind !== 'url') return [];
@@ -338,7 +340,7 @@ const obsCommands: Provider = ({ obs, actions }) => {
 
 const focusCommands: Provider = ({ state, mutatePreset, actions, now }) => {
   const { data } = activePreset(state);
-  const timers = data.widgets.filter((w) => w.type === 'focus');
+  const timers = data.widgets.filter(isFocusWidget);
   return timers.map((w): Command => {
     const s = w.settings;
     const timer = settle(stateOf(s), now, configOf(s)).state;
@@ -356,7 +358,7 @@ const focusCommands: Provider = ({ state, mutatePreset, actions, now }) => {
         if (!running) actions.primeAudio();
         mutatePreset((d) => {
           const target = d.widgets.find((x) => x.id === w.id);
-          if (target) Object.assign(target.settings, toggleFocus(target.settings, Date.now()));
+          if (target && isFocusWidget(target)) Object.assign(target.settings, toggleFocus(target.settings, Date.now()));
         });
       },
     };

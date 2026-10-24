@@ -1,18 +1,14 @@
 import { useRef } from 'react';
-import { panelTitle, PRESETS } from '../presets';
+import { PRESETS } from '../presets';
 import { openGallery } from '../gallery';
 import { downloadPreset, FULL_MESSAGE, importPresetFile } from '../presetio';
-import { type AppState, PANEL_IDS, type PanelId, PRESET_IDS, uid, WIDGET_TYPES, type WidgetType, type WindowId } from '../state/model';
+import { type AppState, PRESET_IDS } from '../state/model';
 import { activePreset, addCustom, canAddCustom, copyOfActive, newCustomId, takenNames, uniqueName } from '../state/presets';
 import { showNotice } from '../undo';
-import { newWidget, WIDGET_INFO } from '../widgets/catalog';
 import { resetLayout as resetPresetLayout } from '../state/hydrate';
 import type { Mutate, MutatePreset, SyncStatus } from '../state/useAppState';
 import { useArmed } from '../useArmed';
-import { callOut } from '../callout';
-import { addWidgetTo, placePanel, setPanelShown } from '../layout';
 import { send, shell } from '../native';
-import { PANEL_INFO } from '../panels/catalog';
 import { PaletteHint } from '../palette/Palette';
 import { AutomationsSection } from './Automations';
 import { BackgroundPicker } from './BackgroundPicker';
@@ -22,6 +18,7 @@ import { Icon } from './Icon';
 import { SetupList } from './SetupList';
 import { StartWithWindows } from './StartWithWindows';
 import { UpdateNotice } from './UpdateNotice';
+import { OnScreen, WidgetLibrary } from './WidgetLibrary';
 
 const STATUS_TEXT: Record<SyncStatus, string> = {
   loading: 'Loading…',
@@ -39,23 +36,10 @@ interface Props {
 }
 
 export function Sidebar({ state, mutate, mutatePreset, status, onStreamMode }: Props) {
-  const { base, def, data } = activePreset(state);
-  const shown = new Set(data.layout.map((item) => item.i));
-  const more = PANEL_IDS.filter((id) => !def.featured.includes(id));
+  const active = activePreset(state);
+  const { base, def, data } = active;
   const { armed, trigger } = useArmed();
 
-  const toggle = (id: PanelId, on: boolean) => mutatePreset((d) => setPanelShown(d, id, on));
-  const addWindow = () =>
-    mutatePreset((d) => {
-      const id: WindowId = `win-${uid()}`;
-      d.windows.push({ id, title: 'App window', fit: 'contain', crop: { top: 0, right: 0, bottom: 0, left: 0 } });
-      d.layout.push(placePanel(d.layout, id));
-    });
-  const addWidget = (type: WidgetType) => {
-    const w = newWidget(type);
-    mutatePreset((d) => addWidgetTo(d, w));
-    callOut(w.id);
-  };
   const resetLayout = () =>
     trigger(() => mutatePreset((d) => resetPresetLayout(d, base)));
   const picker = useRef<HTMLInputElement>(null);
@@ -70,18 +54,6 @@ export function Sidebar({ state, mutate, mutatePreset, status, onStreamMode }: P
     mutate((s) => addCustom(s, id, name, copy.base, copy.data));
     showNotice(`Saved a copy as “${name}”. You’re editing the copy now.`);
   };
-  const row = (id: PanelId) => (
-    <li key={id}>
-      <label>
-        <input type="checkbox" checked={shown.has(id)} onChange={(e) => toggle(id, e.target.checked)} />
-        <span className="toggle" />
-        <span className="toggles__text">
-          {panelTitle(def, id)}
-          <small>{PANEL_INFO[id].hint}</small>
-        </span>
-      </label>
-    </li>
-  );
 
   return (
     <aside className="sidebar">
@@ -146,34 +118,11 @@ export function Sidebar({ state, mutate, mutatePreset, status, onStreamMode }: P
           <AutomationsSection state={state} mutate={mutate} />
 
           <h3>On screen</h3>
-          <ul className="toggles">{def.featured.map(row)}</ul>
-          {more.length > 0 && (
-            <details className="more">
-              <summary>More panels</summary>
-              <ul className="toggles">{more.map(row)}</ul>
-            </details>
-          )}
-          <button className="side-link" onClick={addWindow}>
-            <Icon name="plus" /> Add an app window
-          </button>
-          <details className="more widget-library">
-            <summary>
-              <Icon name="plus" /> Add a widget
-            </summary>
-            <ul className="widget-library__list">
-              {WIDGET_TYPES.map((type) => (
-                <li key={type}>
-                  <button className="widget-library__item" onClick={() => addWidget(type)}>
-                    <Icon name={WIDGET_INFO[type].icon} />
-                    <span className="toggles__text">
-                      {WIDGET_INFO[type].name}
-                      <small>{WIDGET_INFO[type].hint}</small>
-                    </span>
-                  </button>
-                </li>
-              ))}
-            </ul>
-          </details>
+          <OnScreen active={active} mutatePreset={mutatePreset} />
+
+          <h3>Get More Widgets</h3>
+          <WidgetLibrary active={active} mutatePreset={mutatePreset} />
+
           <button className={`side-link side-link--quiet ${armed ? 'is-armed' : ''}`} onClick={resetLayout}>
             <Icon name="layout" /> {armed ? 'Reset layout?' : 'Reset layout'}
           </button>

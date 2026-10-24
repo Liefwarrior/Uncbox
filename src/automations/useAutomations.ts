@@ -147,7 +147,7 @@ export function useAutomations({ state, mutate, isStreaming, setStream }: Option
         const now = Date.now();
         // Asked of a copy first: a state update can run more than once, and the answer is needed now.
         const outcome = startFocusRound(structuredClone(s), now);
-        if (outcome === 'none') return { message: 'there’s no focus timer to start (add one from Add a widget)' };
+        if (outcome === 'none') return { message: 'there’s no focus timer to start (add one from Get More Widgets)' };
         if (outcome === 'started') change((d) => void startFocusRound(d, now));
         return { message: outcome === 'started' ? 'started a focus round' : 'a focus round is already running' };
       },

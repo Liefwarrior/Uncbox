@@ -2,12 +2,18 @@ import { defaultPresetData, hydratePreset } from './state/hydrate';
 import { PRESET_IDS, type PresetData, type PresetId } from './state/model';
 import { cleanName } from './state/presets';
 import { PRESETS } from './presets';
+import { widgetForSharing } from './widgets/registry';
 
 // A preset on its own, as a file you can hand to someone: a header that says what it is, then the
 // same data Uncbox saves for a preset. Both directions go through forSharing(), so a file never
 // carries your PC's devices or your progress, and one made by hand can't put them back.
 
-export const PRESET_FILE_VERSION = 1;
+/**
+ * Version 1 kept every widget's settings in one struct and app windows in a list of their own, and
+ * named a widget's kind `type`. Version 2 gives each widget its own kind's settings, and an app
+ * window is a widget. Both are read (hydratePreset knows the old shapes); only 2 is written.
+ */
+export const PRESET_FILE_VERSION = 2;
 export const PRESET_FILE_EXT = '.uncbox';
 export const MAX_PRESET_FILE_BYTES = 5 * 1024 * 1024;
 
@@ -66,8 +72,8 @@ export function forSharing(data: PresetData, base: PresetId): PresetData {
   d.hud = d.hud.map((r) => ({ ...r, value: '', at: 0 }));
   // Triggers are layout-ish and shared as they are; when one last fired is not.
   d.triggers = d.triggers.map((t) => ({ ...t, at: 0 }));
-  // A weather place is likely home. The widget asks again.
-  d.widgets = d.widgets.map((w) => (w.type === 'weather' ? { ...w, settings: { ...w.settings, place: '', lat: 0, lon: 0 } } : w));
+  // What a widget keeps that is personal (a weather place is likely home) is for its kind to say.
+  d.widgets = d.widgets.map(widgetForSharing);
   return d;
 }
 

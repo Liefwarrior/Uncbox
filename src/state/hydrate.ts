@@ -1,18 +1,18 @@
 import { hydrateAutomations } from '../automations/rules';
 import { isBackgroundId } from '../backgrounds';
 import { DEFAULT_CLIP_KEY, isClipKey } from '../clips/keys';
-import { clampZoom, cleanUrl, isSearchEngine } from '../web';
-import { defaultWidgetSettings } from '../widgets/catalog';
-import { sizeOf } from '../panels/catalog';
-import { PRESETS } from '../presets';
+import { fitToBoard, isValid } from '../layout';
+import { PRESETS, type PresetDef } from '../presets';
+import { boardDef, newWidget, settingsFor, sizeOf, widgetDef } from '../widgets/registry';
+import { isSingle } from '../widgets/types';
 import { cleanName } from './presets';
+import { isObj, overlay } from './overlay';
 import {
   type AppState,
-  type AppWindow,
-  type BoardId,
   type CustomPreset,
   type GridItem,
   GRID_COLS,
+  GRID_ROWS,
   isCustomId,
   MAX_CUSTOM,
   MAX_HISTORY,
@@ -26,8 +26,6 @@ import {
   type ScreenTrigger,
   MAX_QUESTS,
   MAX_SLOTS,
-  PANEL_IDS,
-  type PanelId,
   PRESET_IDS,
   type PresetData,
   type PresetId,
@@ -35,28 +33,35 @@ import {
   SMITE_ROLES,
   emptySlot,
   isWidgetId,
-  isWindowId,
   uid,
   type VideoFit,
   type VideoSource,
   type Widget,
-  WIDGET_TYPES,
 } from './model';
+
+/** The widgets a preset starts with, each with its kind's defaults and the preset's own settings laid over them. */
+function seedWidgets(def: PresetDef): Widget[] {
+  return (def.widgets ?? []).map((s) => newWidget(s.kind, { id: s.id, title: s.title, settings: s.settings }));
+}
 
 export function defaultPresetData(id: PresetId): PresetData {
   const def = PRESETS[id];
-  return { layout: def.layout.map((item) => ({ ...item })), ...def.data() };
+  return { layout: def.layout.map((item) => ({ ...item })), widgets: seedWidgets(def), ...def.data() };
 }
 
 /**
- * "Reset layout": the preset's own panels and widgets come back where they started; windows and
- * widgets you added go. Everything else (notes, counters, settings) stays.
+ * "Reset layout": the preset's own panels and widgets come back where they started; widgets you
+ * added go. The preset's own widgets keep the settings you gave them (a Web widget's home page,
+ * the Launcher's tiles), and everything else (notes, counters, game settings) stays.
  */
 export function resetLayout(d: PresetData, base: PresetId) {
   const fresh = defaultPresetData(base);
+  const mine = new Map(d.widgets.map((w) => [w.id, w]));
   d.layout = fresh.layout;
-  d.windows = [];
-  d.widgets = fresh.widgets;
+  d.widgets = fresh.widgets.map((w) => {
+    const have = mine.get(w.id);
+    return have && have.kind === w.kind ? have : w;
+  });
 }
 
 function eachPreset(make: (id: PresetId) => PresetData): Record<PresetId, PresetData> {
@@ -79,62 +84,81 @@ export function defaultState(): AppState {
 
 type Obj = Record<string, unknown>;
 
-function isObj(v: unknown): v is Obj {
-  return typeof v === 'object' && v !== null && !Array.isArray(v);
-}
-
-/**
- * Lay saved data over the defaults so fields added in newer versions still get a value.
- * Arrays are taken whole from the saved side; type mismatches fall back to the default.
- */
-function overlay<T>(base: T, saved: unknown): T {
-  if (saved === undefined || saved === null) return base;
-  if (isObj(base)) {
-    if (!isObj(saved)) return base;
-    const out: Obj = { ...base };
-    for (const key of Object.keys(base)) out[key] = overlay((base as Obj)[key], saved[key]);
-    return out as T;
-  }
-  if (Array.isArray(base)) return (Array.isArray(saved) ? saved : base) as T;
-  return (typeof saved === typeof base ? saved : base) as T;
-}
-
 const objects = (v: unknown[]) => v.filter(isObj);
 const str = (v: unknown) => (typeof v === 'string' ? v : null);
 const int = (v: unknown, fallback = 0) => (typeof v === 'number' && Number.isFinite(v) ? Math.round(v) : fallback);
 
-/** Web widgets: a hand-edited or shared file can't make one open anything but a web page. */
-function cleanWidgetSettings(s: Widget['settings']): Widget['settings'] {
-  s.url = cleanUrl(s.url);
-  s.homeUrl = cleanUrl(s.homeUrl);
-  if (!isSearchEngine(s.searchEngine)) s.searchEngine = 'google';
-  s.zoom = clampZoom(s.zoom);
-  return s;
+/**
+ * The widgets of a saved preset. A widget is read by its kind, which the library must know and
+ * allow more than one of; anything else (a kind from a newer Uncbox, a hand-edited file) is dropped,
+ * and so is a repeated id. Its settings are the kind's defaults with the saved ones laid over them,
+ * which is also how files from before each kind kept its own settings are read: those had a
+ * `type` instead of a `kind`, and one struct of everyone's settings, from which each kind takes its own.
+ *
+ * App windows used to be a list of their own ("win-..." ids); they are widgets of the kind `window`
+ * now. `renamed` maps their old ids to the new ones, for the layout.
+ */
+function cleanWidgets(saved: unknown, windows: unknown, renamed: Map<string, string>): Widget[] {
+  const widgets: Widget[] = [];
+  const taken = new Set<string>();
+  const add = (id: string, kind: string, title: unknown, settings: unknown) => {
+    const def = widgetDef(kind);
+    if (!def || isSingle(def) || !isWidgetId(id) || taken.has(id)) return false;
+    taken.add(id);
+    widgets.push({ id, kind, title: str(title) ?? '', settings: settingsFor(def, settings) });
+    return true;
+  };
+  for (const w of objects(Array.isArray(saved) ? saved : [])) {
+    const kind = str(w.kind) ?? str(w.type);
+    if (typeof w.id === 'string' && kind) add(w.id, kind, w.title, w.settings);
+  }
+  for (const win of objects(Array.isArray(windows) ? windows : [])) {
+    if (typeof win.id !== 'string' || !win.id.startsWith('win-')) continue;
+    let id = `wdg-${win.id.slice(4)}`;
+    if (taken.has(id)) id = `wdg-${uid()}`;
+    // Windows were called "App window" unless renamed, which is what an untitled window is called now.
+    const title = win.title === 'App window' ? '' : win.title;
+    if (add(id, 'window', title, { fit: win.fit, crop: win.crop })) renamed.set(win.id, id);
+  }
+  return widgets;
 }
 
-function cleanLayout(saved: unknown, fallback: GridItem[], windows: AppWindow[], widgets: Widget[]): GridItem[] {
-  if (!Array.isArray(saved)) return fallback;
+/** The preset's own widgets that a layout uses and the saved widgets lack, so a layout is never left with holes. */
+function withSeeds(layout: { i: string }[], widgets: Widget[], seeds: Widget[]): Widget[] {
+  const out = [...widgets];
+  for (const item of layout) {
+    if (!isWidgetId(item.i) || out.some((w) => w.id === item.i)) continue;
+    const seed = seeds.find((w) => w.id === item.i);
+    if (seed) out.push(seed);
+  }
+  return out;
+}
+
+/**
+ * The layout of a saved preset: only things this version can draw (single panels by kind,
+ * widgets that exist), none twice, each at least its smallest size and on the board. `renamed`
+ * is where old app window ids went. Null if nothing usable is left of a layout that had things in it.
+ */
+function cleanLayout(saved: unknown, widgets: Widget[], renamed: Map<string, string>): GridItem[] | null {
+  if (!Array.isArray(saved)) return null;
   const seen = new Set<string>();
   const items: GridItem[] = [];
   for (const raw of objects(saved)) {
-    const i = raw.i as BoardId;
-    const known = isWindowId(i)
-      ? windows.some((w) => w.id === i)
-      : isWidgetId(i)
-        ? widgets.some((w) => w.id === i)
-        : PANEL_IDS.includes(i);
-    if (!known || seen.has(i)) continue;
+    const i = typeof raw.i === 'string' ? (renamed.get(raw.i) ?? raw.i) : '';
+    if (!boardDef(i, widgets) || seen.has(i)) continue;
     seen.add(i);
     const { minW, minH } = sizeOf(i, widgets);
     const w = Math.min(GRID_COLS, Math.max(minW, int(raw.w, minW)));
     items.push({
       i,
       w,
-      h: Math.max(minH, int(raw.h, minH)),
+      h: Math.min(GRID_ROWS, Math.max(minH, int(raw.h, minH))),
       x: Math.min(GRID_COLS - w, Math.max(0, int(raw.x))),
       y: Math.max(0, int(raw.y)),
     });
   }
+  // Everything dropped: better the preset's own board than an empty one. (A board you emptied yourself stays empty.)
+  if (saved.length > 0 && items.length === 0) return null;
   return items;
 }
 
@@ -179,37 +203,25 @@ export function hydratePreset(id: PresetId, saved: unknown): PresetData {
   const run = isObj(s.run) && isObj(s.run.timer) ? s.run.timer : {};
   p.run.timer.startedAt = typeof run.startedAt === 'number' ? run.startedAt : null;
 
-  p.windows = objects(p.windows)
-    .map((w) => overlay<AppWindow>({ id: `win-${uid()}`, title: 'App window', fit: 'contain', crop: { ...base.game.crop } }, w))
-    .filter((w) => isWindowId(w.id));
-  for (const w of p.windows) if (!VIDEO_FITS.includes(w.fit)) w.fit = 'contain';
-  p.widgets = objects(p.widgets)
-    .filter((w) => typeof w.id === 'string' && isWidgetId(w.id) && WIDGET_TYPES.includes(w.type as never))
-    .map((w) => ({
-      id: w.id as Widget['id'],
-      type: w.type as Widget['type'],
-      title: str(w.title) ?? '',
-      settings: cleanWidgetSettings(overlay(defaultWidgetSettings(), w.settings)),
-    }));
-  for (const w of p.widgets) {
-    const f = w.settings;
-    if (!['work', 'short', 'long'].includes(f.focusPhase)) f.focusPhase = 'work';
-    f.focusRound = Math.max(1, f.focusRound);
-    f.launcherTiles = f.launcherTiles.filter((t) => typeof t === 'string');
-  }
-  for (const w of p.widgets) {
-    // Calendar looks 1, 3 or 7 days ahead; Gmail's label is a label id.
-    if (![1, 3, 7].includes(w.settings.calendarDays)) w.settings.calendarDays = 3;
-    if (!/^[A-Za-z0-9_-]{1,100}$/.test(w.settings.gmailLabel)) w.settings.gmailLabel = 'INBOX';
-  }
-  for (const w of p.widgets) if (w.type === 'drive' && !['recent', 'starred', 'shared', 'search'].includes(w.settings.driveView)) w.settings.driveView = 'recent';
+  // The board: widgets first (old app windows become widgets), then a layout made of things that exist.
+  const renamed = new Map<string, string>();
+  // The preset's own widgets that the saved layout mentions come back if the save lost them.
+  const kept = cleanWidgets(s.widgets, s.windows, renamed);
+  const mentioned = (Array.isArray(s.layout) ? objects(s.layout) : []).flatMap((item) => (typeof item.i === 'string' ? [{ i: renamed.get(item.i) ?? item.i }] : []));
+  const widgets = withSeeds(mentioned, kept, base.widgets);
+  let layout = cleanLayout(s.layout, widgets, renamed);
+  // A layout with panels on top of each other or off the board is squeezed back on; if it can't be, the preset's own is used.
+  if (layout && !isValid(layout, widgets)) layout = fitToBoard(layout, undefined, widgets);
+  p.layout = layout ?? base.layout;
+  // The preset's own board has widgets of its own, which a save without them (or one that lost them) gets back.
+  // A widget that is not on the board is nowhere to be seen, so it goes rather than pile up.
+  p.widgets = withSeeds(p.layout, widgets, base.widgets).filter((w) => p.layout.some((item) => item.i === w.id));
   p.hud = objects(p.hud)
     .map((r) => overlay({ id: uid(), label: '', x: 0, y: 0, w: 10, h: 5, numeric: true, value: '', at: 0 }, r))
     .slice(0, MAX_HUD);
   p.triggers = objects(Array.isArray(s.triggers) ? s.triggers : [])
     .map((t) => cleanTrigger(overlay(emptyTrigger(), t)))
     .slice(0, MAX_TRIGGERS);
-  p.layout = cleanLayout(s.layout, base.layout, p.windows, p.widgets);
   p.slots = objects(p.slots).map((m) => overlay(emptySlot(), m)).slice(0, MAX_SLOTS);
   p.counters = objects(p.counters).map((c) => overlay({ id: uid(), label: 'Counter', value: 0 }, c));
   p.notes = objects(p.notes).map((n) => overlay({ id: uid(), text: '', done: false }, n));
@@ -254,7 +266,7 @@ function migrateV1(v1: Obj): AppState {
   const milestones = isObj(v1.milestones) ? v1.milestones : {};
   const done = Array.isArray(milestones.done) ? milestones.done : [];
   const shown = isObj(v1.layout) && isObj(v1.layout.panels) ? v1.layout.panels : {};
-  const renamed: Record<string, PanelId> = { party: 'slots' };
+  const renamed: Record<string, string> = { party: 'slots' };
   const hidden = new Set<string>(
     Object.entries(shown)
       .filter(([, on]) => on === false)

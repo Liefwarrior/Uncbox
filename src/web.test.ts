@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
+import type { Widget } from './state/model';
 import { defaultState, hydrate } from './state/hydrate';
-import { newWidget } from './widgets/catalog';
+import { newWidget } from './widgets/registry';
 import {
   canGoBack,
   canGoForward,
@@ -132,9 +133,11 @@ describe('zoom and the frame', () => {
 });
 
 describe('web widgets in a saved file', () => {
-  const withWidgets = (widgets: ReturnType<typeof newWidget>[]) => {
+  // On the board, since a widget that isn't is dropped when a save is loaded.
+  const withWidgets = (widgets: Widget[]) => {
     const state = defaultState();
     state.presets.terminal.widgets = widgets;
+    state.presets.terminal.layout = widgets.map((w, n) => ({ i: w.id, x: n * 6, y: 0, w: 6, h: 6 }));
     return state;
   };
 

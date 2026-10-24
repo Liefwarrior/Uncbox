@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { PRESETS } from '../presets';
+import { newWidget } from '../widgets/registry';
 import { defaultState, hydrate } from './hydrate';
 
 /** Default slots and milestones get random ids, so compare everything else. */
@@ -24,8 +25,9 @@ describe('hydrate', () => {
       losses: 1,
       history: [{ id: 'a', god: 'Thor', role: 'Jungle', k: 4, d: 1, a: 7, win: true, at: 1 }],
     };
-    smite.windows = [{ id: 'win-abc', title: 'Spotify', fit: 'cover', crop: { top: 5, right: 0, bottom: 0, left: 0 } }];
-    smite.layout = [...smite.layout, { i: 'win-abc', x: 0, y: 20, w: 5, h: 4 }];
+    // An app window takes the Discord panel's place.
+    smite.widgets = [newWidget('window', { id: 'wdg-abc', title: 'Spotify', settings: { fit: 'cover', crop: { top: 5, right: 0, bottom: 0, left: 0 } } })];
+    smite.layout = smite.layout.map((item) => (item.i === 'discord' ? { i: 'wdg-abc', x: 13, y: 17, w: 4, h: 7 } : item));
     smite.run.timer = { startedAt: 1700000000000, elapsedMs: 5000 };
     smite.game.deviceId = 'capture-1';
 
@@ -191,18 +193,19 @@ describe('hydrate', () => {
 });
 
 describe('hydrate: focus and launcher widgets', () => {
-  const load = (settings: unknown, type = 'focus') => {
+  const load = (settings: unknown, kind = 'focus') => {
     const state = defaultState();
-    state.presets.pokemon.widgets = [{ id: 'wdg-1', type, title: '', settings }] as never;
+    state.presets.pokemon.widgets = [{ id: 'wdg-1', kind, title: '', settings }] as never;
+    state.presets.pokemon.layout.push({ i: 'wdg-1', x: 0, y: 30, w: 6, h: 6 });
     return hydrate(JSON.parse(JSON.stringify(state))).presets.pokemon.widgets[0];
   };
 
   it('accepts both new types and fills in missing settings', () => {
     const focus = load({ focusWork: 50 });
-    expect(focus.type).toBe('focus');
+    expect(focus.kind).toBe('focus');
     expect(focus.settings).toMatchObject({ focusWork: 50, focusShort: 5, focusLong: 15, focusRounds: 4, focusSound: true, focusPhase: 'work', focusRound: 1, focusEndsAt: 0 });
     const launcher = load({ launcherTiles: ['tile-0123456789ab', 7] }, 'launcher');
-    expect(launcher.type).toBe('launcher');
+    expect(launcher.kind).toBe('launcher');
     expect(launcher.settings.launcherTiles).toEqual(['tile-0123456789ab']);
     expect(load({}, 'launcher').settings.launcherTiles).toEqual([]);
   });
@@ -220,7 +223,7 @@ describe('hydrate: focus and launcher widgets', () => {
 describe('hydrate: Google Drive widget', () => {
   const withDrive = (settings: unknown) => {
     const saved = JSON.parse(JSON.stringify(defaultState()));
-    saved.presets.wow.widgets = [{ id: 'wdg-drive1', type: 'drive', title: '', settings }];
+    saved.presets.wow.widgets = [{ id: 'wdg-drive1', kind: 'drive', title: '', settings }];
     saved.presets.wow.layout.push({ i: 'wdg-drive1', x: 0, y: 30, w: 6, h: 6 });
     return hydrate(saved).presets.wow.widgets[0];
   };
@@ -237,19 +240,21 @@ describe('hydrate: Google Drive widget', () => {
 });
 
 describe('hydrate: Calendar and Gmail widgets', () => {
-  const load = (type: string, settings: unknown) => {
+  const load = (kind: string, settings: unknown) => {
     const saved = JSON.parse(JSON.stringify(defaultState()));
-    saved.presets.wow.widgets = [{ id: 'wdg-g1', type, title: '', settings }];
+    saved.presets.wow.widgets = [{ id: 'wdg-g1', kind, title: '', settings }];
     saved.presets.wow.layout.push({ i: 'wdg-g1', x: 0, y: 30, w: 6, h: 6 });
     return hydrate(saved).presets.wow.widgets[0];
   };
 
   it('accepts both types and fills in missing settings, keeping stream details off', () => {
-    for (const type of ['calendar', 'gmail']) {
-      const w = load(type, {});
-      expect(w.type).toBe(type);
-      expect(w.settings).toMatchObject({ calendarDays: 3, calendarHideAllDay: false, gmailOnlyUnread: false, gmailLabel: 'INBOX', showOnStream: false });
+    for (const kind of ['calendar', 'gmail']) {
+      const w = load(kind, {});
+      expect(w.kind).toBe(kind);
+      expect(w.settings).toMatchObject({ showOnStream: false });
     }
+    expect(load('calendar', {}).settings).toMatchObject({ calendarDays: 3, calendarHideAllDay: false });
+    expect(load('gmail', {}).settings).toMatchObject({ gmailOnlyUnread: false, gmailLabel: 'INBOX' });
   });
 
   it('keeps what was chosen', () => {

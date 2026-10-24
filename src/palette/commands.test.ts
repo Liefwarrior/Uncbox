@@ -1,10 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { ObsSnapshot } from '../obs';
 import { defaultState } from '../state/hydrate';
-import { PANEL_IDS, PRESET_IDS, WIDGET_TYPES } from '../state/model';
+import { PRESET_IDS } from '../state/model';
 import { activePreset } from '../state/presets';
-import { newWidget } from '../widgets/catalog';
-import type { DriveFile } from '../widgets/drive';
+import { MULTI_KINDS, newWidget, SINGLE_KINDS } from '../widgets/registry';
+import type { DriveFile } from '../widgets/drive/drive';
 import { arrange, buildCommands, classifyQuery, type Command, type PaletteActions, type PaletteContext, recentBoost } from './commands';
 import { bump, MAX_RECENT } from './recent';
 
@@ -99,8 +99,8 @@ describe('panels and widgets', () => {
   it('offers to hide a shown panel and show a hidden one, and does it', () => {
     const { state, find } = setup();
     const { data } = activePreset(state);
-    const shown = PANEL_IDS.find((id) => data.layout.some((i) => i.i === id))!;
-    const hidden = PANEL_IDS.find((id) => !data.layout.some((i) => i.i === id))!;
+    const shown = SINGLE_KINDS.find((id) => data.layout.some((i) => i.i === id))!;
+    const hidden = SINGLE_KINDS.find((id) => !data.layout.some((i) => i.i === id))!;
     expect(find(`panel:${shown}`)!.title).toMatch(/^Hide /);
     expect(find(`panel:${hidden}`)!.title).toMatch(/^Show /);
 
@@ -113,7 +113,7 @@ describe('panels and widgets', () => {
 
   it('adds a widget of each type, and points at it', () => {
     const { state, commands, find, actions } = setup();
-    expect(commands().filter((c) => c.id.startsWith('widget:add:')).map((c) => c.id)).toEqual(WIDGET_TYPES.map((t) => `widget:add:${t}`));
+    expect(commands().filter((c) => c.id.startsWith('widget:add:')).map((c) => c.id)).toEqual(MULTI_KINDS.map((t) => `widget:add:${t}`));
     expect(find('widget:add:clock')!.title).toBe('Add widget: Clock');
 
     const before = activePreset(state).data.widgets.length;
@@ -206,7 +206,7 @@ describe('web', () => {
   it('adds a Web widget when there is none, already on the page', () => {
     const { state, find, actions } = setup({ query: 'example.com' });
     find('web:open')!.run();
-    const web = activePreset(state).data.widgets.filter((w) => w.type === 'web');
+    const web = activePreset(state).data.widgets.filter((w) => w.kind === 'web');
     expect(web).toHaveLength(1);
     expect(web[0].settings.url).toBe('https://example.com/');
     expect(actions.callOut).toHaveBeenCalledWith(web[0].id);
@@ -221,7 +221,7 @@ describe('web', () => {
     const { find, actions } = setup({ state, query: 'cat videos' });
     find('web:search')!.run();
     expect(actions.openWeb).toHaveBeenCalledWith(first.id, 'https://duckduckgo.com/?q=cat%20videos');
-    expect(activePreset(state).data.widgets.filter((w) => w.type === 'web')).toHaveLength(2);
+    expect(activePreset(state).data.widgets.filter((w) => w.kind === 'web')).toHaveLength(2);
   });
 
   it('falls back to the widget’s saved page when it is not on screen', () => {

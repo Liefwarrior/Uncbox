@@ -1,37 +1,22 @@
 // @vitest-environment jsdom
 //
-// Smoke tests for the page: every built-in preset, panel type and widget type is drawn for real
-// (React, the board, the sidebar) against a faked server, in edit mode and stream mode, empty and
-// with data, at its smallest size. Nothing here checks how it looks; it catches the crash on first
+// Smoke tests for the page: every built-in preset, and every kind in the widget library (single
+// panels and widgets alike) in every preset's theme, is drawn for real (React, the board, the
+// sidebar) against a faked server, in edit mode and stream mode, empty and with data, at its
+// smallest size. Nothing here checks how it looks; it catches the crash on first
 // run, the React warning and the panel that comes up blank. The fakes are in ./smokeMocks.ts.
 
 import { act, cleanup, render } from '@testing-library/react';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { App } from './App';
 import { Board } from './components/Board';
-import { PANEL_INFO } from './panels/catalog';
-import { renderPanel } from './panels';
 import { PRESETS } from './presets';
+import { renderPanel } from './widgets/render';
 import { defaultState } from './state/hydrate';
-import {
-  type AppState,
-  type AppWindow,
-  type BoardId,
-  type GridItem,
-  type PanelId,
-  PANEL_IDS,
-  type PresetData,
-  type PresetId,
-  PRESET_IDS,
-  type Widget,
-  type WidgetId,
-  WIDGET_TYPES,
-  type WidgetType,
-  counter,
-} from './state/model';
+import { type AppState, type BoardId, type GridItem, type PresetData, type PresetId, PRESET_IDS, type Widget, counter } from './state/model';
 import { activePreset } from './state/presets';
 import { useAppState } from './state/useAppState';
-import { newWidget, WIDGET_INFO } from './widgets/catalog';
+import { boardDef, newWidget, SINGLE_KINDS, MULTI_KINDS, WIDGETS } from './widgets/registry';
 import { route, type Scenario } from './smokeMocks';
 
 // ---- the browser, as far as jsdom goes ----
@@ -224,7 +209,6 @@ function fill(d: PresetData) {
   d.quests = [{ title: 'Wolves', level: 5, state: 'open', objectives: [{ text: 'Wolves slain: 4/10', done: false }] }];
   d.wowLinkAt = Date.now();
   d.hud = [{ id: 'r1', label: 'Gold', x: 10, y: 10, w: 20, h: 10, numeric: true, value: '120', at: Date.now() }];
-  d.windows = [{ id: 'win-smoke', title: 'Spotify', fit: 'contain', crop: { top: 0, right: 0, bottom: 0, left: 0 } }];
   for (const w of d.widgets) dressWidget(w);
 }
 
@@ -249,12 +233,11 @@ function stateFor(preset: PresetId, edit: (d: PresetData) => void): AppState {
 }
 
 /** A preset with just this one panel on its board. */
-function stateWithPanel(id: BoardId, size: 'min' | 'default', populated: boolean, preset: PresetId, widget?: Widget, win?: AppWindow): AppState {
+function stateWithPanel(id: BoardId, size: 'min' | 'default', populated: boolean, preset: PresetId, widget?: Widget): AppState {
   return stateFor(preset, (d) => {
     if (populated) fill(d);
-    d.windows = win ? [win] : populated ? d.windows : [];
     d.widgets = widget ? [widget] : [];
-    const info = widget ? WIDGET_INFO[widget.type] : win ? { w: 7, h: 8, minW: 3, minH: 3 } : PANEL_INFO[id as PanelId];
+    const info = boardDef(id, d.widgets)!;
     const item: GridItem = size === 'min' ? { i: id, x: 0, y: 0, w: info.minW, h: info.minH } : { i: id, x: 0, y: 0, w: info.w, h: info.h };
     d.layout = [item];
     if (widget && populated) dressWidget(widget);
@@ -367,7 +350,7 @@ describe.each(PRESET_IDS)('preset %s', (id) => {
   });
 });
 
-describe.each(PANEL_IDS)('panel %s', (id) => {
+describe.each(SINGLE_KINDS)('panel %s', (id) => {
   // The preset whose own layout has this panel (its titles and slot style), else the desk.
   const preset = PRESET_IDS.find((p) => PRESETS[p].layout.some((i) => i.i === id)) ?? 'desk';
   it.each(MODES)('draws in $name', async (mode) => {
@@ -378,19 +361,10 @@ describe.each(PANEL_IDS)('panel %s', (id) => {
   });
 });
 
-describe('app window panel', () => {
-  it.each(MODES)('draws in $name', async (mode) => {
-    const win: AppWindow = { id: 'win-smoke', title: 'Spotify', fit: 'contain', crop: { top: 0, right: 0, bottom: 0, left: 0 } };
-    await renderStage(stateWithPanel(win.id, mode.size, mode.populated, 'desk', undefined, win), mode.streaming, mode.scenario);
-    if (!mode.streaming) expectDrawn(win.id);
-    expectClean();
-  });
-});
-
-describe.each(WIDGET_TYPES as readonly WidgetType[])('widget %s', (type) => {
+describe.each(MULTI_KINDS)('widget %s', (kind) => {
   it.each(WIDGET_MODES)('draws in $name', async (mode) => {
-    const widget = newWidget(type);
-    await renderStage(stateWithPanel(widget.id as WidgetId, mode.size, mode.populated, 'desk', widget), mode.streaming, mode.scenario);
+    const widget = newWidget(kind);
+    await renderStage(stateWithPanel(widget.id, mode.size, mode.populated, 'desk', widget), mode.streaming, mode.scenario);
     if (!mode.streaming) expectDrawn(widget.id);
     else expect(document.querySelector(`[data-panel="${widget.id}"]`)).not.toBeNull();
     expectClean();
@@ -398,7 +372,7 @@ describe.each(WIDGET_TYPES as readonly WidgetType[])('widget %s', (type) => {
 });
 
 // The fakes really reach the widgets: with data, each one shows something that only came from them.
-const SHOWS: Partial<Record<WidgetType, string>> = {
+const SHOWS: Record<string, string> = {
   media: 'Song',
   weather: '72',
   obs: 'Mic',
@@ -412,11 +386,22 @@ const SHOWS: Partial<Record<WidgetType, string>> = {
   system: '37%',
 };
 
-describe.each(Object.entries(SHOWS) as [WidgetType, string][])('widget %s with data', (type, text) => {
+describe.each(Object.entries(SHOWS))('widget %s with data', (kind, text) => {
   it(`shows "${text}"`, async () => {
-    const widget = newWidget(type);
-    await renderStage(stateWithPanel(widget.id as WidgetId, 'default', true, 'desk', widget), false, 'data');
+    const widget = newWidget(kind);
+    await renderStage(stateWithPanel(widget.id, 'default', true, 'desk', widget), false, 'data');
     expect(document.querySelector(`[data-panel="${widget.id}"]`)?.textContent).toContain(text);
+    expectClean();
+  });
+});
+
+// Every kind in the library, in every preset's theme (fonts, colors and shapes differ per theme).
+describe.each(WIDGETS.map((def) => def.kind))('%s in every preset theme', (kind) => {
+  it.each(PRESET_IDS)('draws in %s', async (preset) => {
+    const widget = MULTI_KINDS.includes(kind) ? newWidget(kind) : undefined;
+    await renderStage(stateWithPanel(widget?.id ?? kind, 'min', true, preset, widget), false, 'data');
+    expectDrawn(widget?.id ?? kind);
+    expect(document.querySelector('.app')?.classList.contains(`theme-${preset}`)).toBe(true);
     expectClean();
   });
 });

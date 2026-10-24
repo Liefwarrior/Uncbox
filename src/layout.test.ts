@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { fitResize, fitToBoard, placePanel, type Rect } from './layout';
-import { PANEL_INFO, sizeOf } from './panels/catalog';
+import { addWidgetTo, fitResize, fitToBoard, placePanel, type Rect, removeFromBoard, restoreToBoard, setPanelShown } from './layout';
+import { defaultPresetData } from './state/hydrate';
+import { newWidget, sizeOf } from './widgets/registry';
 import { PRESETS } from './presets';
 import { type BoardId, GRID_COLS, GRID_ROWS, type GridItem } from './state/model';
 
@@ -37,7 +38,7 @@ const row = (...cells: [BoardId, number][]) => {
 
 describe('placePanel', () => {
   it('uses the full default size on an empty board', () => {
-    const { w, h } = PANEL_INFO.notes;
+    const { w, h } = sizeOf('notes');
     expect(placePanel([], 'notes')).toEqual({ i: 'notes', x: 0, y: 0, w, h });
   });
 
@@ -52,7 +53,7 @@ describe('placePanel', () => {
     const layout: GridItem[] = [{ i: 'game', x: 0, y: 0, w: GRID_COLS - 4, h: 24 }];
     const placed = placePanel(layout, 'notes');
     expect(placed.x).toBe(GRID_COLS - 4);
-    expect(placed.w).toBe(PANEL_INFO.notes.minW);
+    expect(placed.w).toBe(sizeOf('notes').minW);
     expect(overlaps(placed, layout[0])).toBe(false);
   });
 
@@ -65,7 +66,7 @@ describe('placePanel', () => {
     const placed = placePanel(layout, 'steam');
     expect(placed).toMatchObject({ x: 17, w: 7 });
     expect(layout[0]).toEqual({ i: 'game', x: 0, y: 0, w: 17, h: 24 });
-    expect(layout[2].h).toBeGreaterThanOrEqual(PANEL_INFO.chat.minH);
+    expect(layout[2].h).toBeGreaterThanOrEqual(sizeOf('chat').minH);
     expect(placed.y).toBe(7 + layout[2].h);
     expect(placed.y + placed.h).toBe(24);
     for (const item of layout) expect(overlaps(placed, item)).toBe(false);
@@ -250,3 +251,43 @@ describe('fitToBoard', () => {
     expect(fitToBoard(start)).toBeNull();
   });
 });
+
+describe('showing, adding and removing', () => {
+  it('shows a hidden single panel once, and hides a shown one', () => {
+    const d = defaultPresetData('smite2');
+    setPanelShown(d, 'damage', true);
+    setPanelShown(d, 'damage', true);
+    expect(d.layout.filter((i) => i.i === 'damage')).toHaveLength(1);
+    setPanelShown(d, 'damage', false);
+    expect(d.layout.some((i) => i.i === 'damage')).toBe(false);
+  });
+
+  it('adds a widget with its panel, and takes both off again, and back', () => {
+    const d = defaultPresetData('smite2');
+    const w = newWidget('clock');
+    addWidgetTo(d, w);
+    expect(d.widgets).toContain(w);
+    expect(d.layout.some((i) => i.i === w.id)).toBe(true);
+
+    const removed = removeFromBoard(d, w.id);
+    expect(d.widgets).not.toContain(w);
+    expect(d.layout.some((i) => i.i === w.id)).toBe(false);
+    restoreToBoard(d, w.id, removed);
+    restoreToBoard(d, w.id, removed);
+    expect(d.widgets.filter((x) => x.id === w.id)).toHaveLength(1);
+    expect(d.layout.filter((i) => i.i === w.id)).toHaveLength(1);
+  });
+
+  it('removing a single panel leaves its data in the preset', () => {
+    const d = defaultPresetData('smite2');
+    d.notes = [{ id: 'n', text: 'keep me', done: false }];
+    d.layout.push(placePanel(d.layout, 'notes'));
+    const removed = removeFromBoard(d, 'notes');
+    expect(removed.widget).toBeUndefined();
+    expect(d.layout.some((i) => i.i === 'notes')).toBe(false);
+    expect(d.notes).toHaveLength(1);
+    restoreToBoard(d, 'notes', removed);
+    expect(d.layout.some((i) => i.i === 'notes')).toBe(true);
+  });
+});
+

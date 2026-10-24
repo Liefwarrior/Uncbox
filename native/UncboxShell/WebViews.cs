@@ -7,7 +7,7 @@ using Microsoft.Web.WebView2.Core;
 namespace UncboxShell;
 
 /// <summary>
-/// The page's web widgets (src/widgets/WebWidget.tsx). Each one gets its own WebView2 on the main
+/// The page's web widgets (src/widgets/web/WebWidget.tsx). Each one gets its own WebView2 on the main
 /// window, placed over its panel and kept there as the page reports the panel's box, so it can show
 /// any site, which an iframe can't. They all share one profile, separate from the dashboard's own,
 /// so sign-ins (Google and so on) last between widgets and restarts.

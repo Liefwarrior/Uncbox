@@ -1,7 +1,7 @@
 import { callOut } from '../callout';
 import { useDiscord } from '../discord';
 import { placePanel } from '../layout';
-import { type AppState, type PanelId } from '../state/model';
+import type { AppState, BoardId } from '../state/model';
 import { activePreset } from '../state/presets';
 import type { MutatePreset } from '../state/useAppState';
 import { normalizeChannel } from '../twitch';
@@ -23,7 +23,7 @@ export function SetupList({ state, mutatePreset }: Props) {
   const shown = new Set(data.layout.map((item) => item.i));
 
   // "always" lines show even when their panel is hidden; clicking one adds the panel back.
-  const steps: { id: PanelId; label: string; done: boolean; always?: boolean }[] = [
+  const steps: { id: BoardId; label: string; done: boolean; always?: boolean }[] = [
     { id: 'game', label: 'Show your game', done: data.game.source !== 'none' },
     { id: 'camera', label: 'Turn on your camera', done: state.camera.enabled },
     { id: 'chat', label: 'Add your Twitch chat', done: normalizeChannel(state.twitch.channel) !== '' },
@@ -34,7 +34,7 @@ export function SetupList({ state, mutatePreset }: Props) {
   const left = mine.filter((s) => !s.done).length;
   if (left === 0) return null;
 
-  const go = (id: PanelId) => {
+  const go = (id: BoardId) => {
     if (!shown.has(id)) mutatePreset((d) => void d.layout.push(placePanel(d.layout, id)));
     callOut(id);
   };

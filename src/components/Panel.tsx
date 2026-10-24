@@ -1,6 +1,6 @@
 import { type ReactNode, useId } from 'react';
 import type { BoardId } from '../state/model';
-import { useBoard } from './Board';
+import { useBoard } from './boardContext';
 import { Icon } from './Icon';
 import { Menu, type MenuEntry } from './Menu';
 

@@ -26,109 +26,31 @@ export function isCustomId(id: string): id is CustomId {
   return id.startsWith('custom-');
 }
 
-export const PANEL_IDS = [
-  'game',
-  'camera',
-  'chat',
-  'slots',
-  'run',
-  'progress',
-  'notes',
-  'match',
-  'record',
-  'character',
-  'discord',
-  'quests',
-  'steam',
-  'hud',
-  'teams',
-  'scoreboard',
-  'damage',
-] as const;
-export type PanelId = (typeof PANEL_IDS)[number];
+/**
+ * What a board item is: the kind of a panel there is only one of in a preset ('game', 'chat'),
+ * or the id of a widget you added ('wdg-…'). The kinds themselves are defined in
+ * src/widgets/registry.ts, so a new widget never has to be listed here.
+ */
+export type BoardId = string;
 
-/** App window panels can be added any number of times, so each gets its own id. */
-export type WindowId = `win-${string}`;
-/** So can widgets (a clock, the weather…); see src/widgets. */
+/** A widget you can have any number of (a clock, the weather, an app window…) gets its own id. */
 export type WidgetId = `wdg-${string}`;
-export type BoardId = PanelId | WindowId | WidgetId;
-
-export function isWindowId(id: string): id is WindowId {
-  return id.startsWith('win-');
-}
 
 export function isWidgetId(id: string): id is WidgetId {
   return id.startsWith('wdg-');
 }
 
-export const WIDGET_TYPES = ['clock', 'weather', 'media', 'notifications', 'system', 'network', 'countdown', 'text', 'obs', 'focus', 'launcher', 'web', 'drive', 'twitch', 'calendar', 'gmail', 'downloads'] as const;
-export type WidgetType = (typeof WIDGET_TYPES)[number];
-
-/** Every widget type's settings in one shape; each type reads only its own. */
-export interface WidgetSettings {
-  /** Clock: an IANA time zone ("Europe/London"), or '' for this PC's. */
-  timeZone: string;
-  hour12: boolean;
-  seconds: boolean;
-  /** Weather: the place as found, and where it is. */
-  place: string;
-  lat: number;
-  lon: number;
-  celsius: boolean;
-  /** Notifications: only these apps (comma-separated, as listed), or '' for all. */
-  apps: string;
-  /** Notifications: show the message itself, not just who it's from. Off by default: it's on stream. */
-  showBody: boolean;
-  /** Countdown: when it ends (ms since 1970), or 0 if not set. */
-  target: number;
-  /** Text: what it says. Countdown: what's coming. */
-  text: string;
-  /** Ping & FPS: the host (or host:port) to ping, or '' for the default. */
-  pingTarget: string;
-  /** Ping & FPS: also show the ping to this PC's router. */
-  showRouter: boolean;
-  /** Focus timer: minutes of work, short break and long break; work rounds before a long break. */
-  focusWork: number;
-  focusShort: number;
-  focusLong: number;
-  focusRounds: number;
-  /** Focus timer: start the next phase by itself, and chime when one ends. */
-  focusAuto: boolean;
-  focusSound: boolean;
-  /** Focus timer: where it is (see widgets/focus.ts). It's saved, so a reload carries on. */
-  focusPhase: 'work' | 'short' | 'long';
-  focusRound: number;
-  focusEndsAt: number;
-  focusLeft: number;
-  /** Launcher: the ids of the saved tiles it shows, in order. The tiles themselves live on this PC (server/launcher.mjs). */
-  launcherTiles: string[];
-  /** Web: the page it is on now (saved, so it comes back after a reload), and the one it starts on. */
-  url: string;
-  homeUrl: string;
-  /** Web: what an address that isn't a web address is searched with (an id from src/web.ts). */
-  searchEngine: string;
-  /** Web: leave the back / address / reload bar out, for a clean view on stream. */
-  hideToolbar: boolean;
-  /** Web: page zoom in percent, 50 to 200. */
-  zoom: number;
-  /** Drive: which list is showing (recent, starred, shared or search). */
-  driveView: string;
-  /** Calendar: how many days ahead to show (1, 3 or 7), and whether all-day events are left out. */
-  calendarDays: number;
-  calendarHideAllDay: boolean;
-  /** Gmail: only unread messages, and the label to watch (a Gmail label id; INBOX by default). */
-  gmailOnlyUnread: boolean;
-  gmailLabel: string;
-  /** Calendar and Gmail: show the details in stream mode too. Off by default: they're private. */
-  showOnStream: boolean;
-}
-
-export interface Widget {
+/**
+ * One widget on a preset's board, of a kind with more than one allowed. Its `kind` is a key of
+ * the widget library (src/widgets/registry.ts), which also says what its settings hold; they are
+ * saved as they are and cleaned against the kind's defaults when loaded.
+ */
+export interface Widget<S = Record<string, unknown>> {
   id: WidgetId;
-  type: WidgetType;
-  /** Shown as the panel's title; '' uses the type's name. */
+  kind: string;
+  /** Shown as the panel's title; '' uses the kind's name. */
   title: string;
-  settings: WidgetSettings;
+  settings: S;
 }
 
 /** Position on the board grid, in cells. */
@@ -170,14 +92,6 @@ export interface CameraSettings {
   enabled: boolean;
   deviceId: string | null;
   mirrored: boolean;
-}
-
-/** Another app's window (Discord, Spotify, a popped-out chat…) captured into a themed panel. */
-export interface AppWindow {
-  id: WindowId;
-  title: string;
-  fit: VideoFit;
-  crop: Crop;
 }
 
 export interface SlotItem {
@@ -337,7 +251,7 @@ export interface PresetData {
   quests: Quest[];
   /** When the WoW addon last sent something new; 0 if it never has. */
   wowLinkAt: number;
-  windows: AppWindow[];
+  /** The widgets on the board (src/widgets); the panels there is only one of keep their data in the fields here. */
   widgets: Widget[];
   /** The Stats panel's screen reader boxes (src/hud). */
   hud: HudRegion[];

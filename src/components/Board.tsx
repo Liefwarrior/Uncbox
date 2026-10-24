@@ -1,29 +1,16 @@
-import { createContext, type CSSProperties, type ReactNode, useCallback, useContext, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { type CSSProperties, type ReactNode, useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import ReactGridLayout, { type Compactor, type EventCallback, type Layout } from 'react-grid-layout';
 import 'react-grid-layout/css/styles.css';
 import 'react-resizable/css/styles.css';
-import { fitResize, fitToBoard } from '../layout';
+import { fitResize, fitToBoard, type Removed, removeFromBoard, restoreToBoard } from '../layout';
 import { nudgeRect } from '../nudge';
-import { sizeOf } from '../panels/catalog';
-import { type AppWindow, type BoardId, GRID_COLS, GRID_ROWS, type GridItem, isWidgetId, isWindowId, type Widget } from '../state/model';
-import { WIDGET_INFO } from '../widgets/catalog';
+import { type BoardId, GRID_COLS, GRID_ROWS, type GridItem, type Widget } from '../state/model';
+import { sizeOf } from '../widgets/registry';
 import type { MutatePreset } from '../state/useAppState';
 import { offerUndo } from '../undo';
+import { BoardContext, type BoardApi } from './boardContext';
 
 const MARGIN = 12;
-
-interface BoardApi {
-  editing: boolean;
-  /** Hides a built-in panel or deletes an app window panel, with an Undo toast named after it. */
-  hide: (id: BoardId, name?: string) => void;
-  /** Resize a panel's width so its content area matches an aspect ratio (width / height). */
-  fitWidthToAspect: (id: BoardId, aspect: number) => void;
-  /** Arrow keys on a panel's handle: moves it a cell, or resizes it with Shift. False for any other key. */
-  nudge: (id: BoardId, key: string, resize: boolean) => boolean;
-}
-
-const BoardContext = createContext<BoardApi>({ editing: false, hide: () => {}, fitWidthToAspect: () => {}, nudge: () => false });
-export const useBoard = () => useContext(BoardContext);
 
 function useElementSize<T extends HTMLElement>() {
   const ref = useRef<T>(null);
@@ -145,25 +132,10 @@ export function Board({ layout, widgets, editing, mutatePreset, renderPanel }: P
     () => ({
       editing,
       hide: (id, name) => {
-        let item: GridItem | undefined;
-        let win: AppWindow | undefined;
-        let widget: Widget | undefined;
-        mutatePreset((d) => {
-          item = d.layout.find((it) => it.i === id) ?? item;
-          win = d.windows.find((w) => w.id === id) ?? win;
-          widget = d.widgets.find((w) => w.id === id) ?? widget;
-          d.layout = d.layout.filter((it) => it.i !== id);
-          if (isWindowId(id)) d.windows = d.windows.filter((w) => w.id !== id);
-          if (isWidgetId(id)) d.widgets = d.widgets.filter((w) => w.id !== id);
-        });
-        const widgetName = widget && (widget.title || WIDGET_INFO[widget.type].name);
-        offerUndo(`${name || win?.title || widgetName || 'Panel'} hidden`, () =>
-          mutatePreset((d) => {
-            if (win && !d.windows.some((w) => w.id === id)) d.windows.push(win);
-            if (widget && !d.widgets.some((w) => w.id === id)) d.widgets.push(widget);
-            if (item && !d.layout.some((it) => it.i === id)) d.layout.push(item);
-          }),
-        );
+        let removed: Removed = {};
+        mutatePreset((d) => void (removed = removeFromBoard(d, id)));
+        const widgetName = removed.widget && (removed.widget.title || undefined);
+        offerUndo(`${name || widgetName || 'Panel'} hidden`, () => mutatePreset((d) => restoreToBoard(d, id, removed)));
       },
       fitWidthToAspect: (id, aspect) =>
         mutatePreset((d) => {

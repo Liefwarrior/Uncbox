@@ -1,7 +1,7 @@
 import { PRESETS } from '../presets';
 import type { AppState, Automation, AutomationGame, AutomationThen, AutomationWhen, PresetId, Widget } from '../state/model';
 import { activePreset } from '../state/presets';
-import { configOf, isRunning, nextPhase, patchOf, settle, start, stateOf } from '../widgets/focus';
+import { configOf, type FocusSettings, isFocusWidget, isRunning, nextPhase, patchOf, settle, start, stateOf } from '../widgets/focus/focus';
 import { steamMatches } from './rules';
 
 // The rules engine, as plain functions. It is given what the last look at the world was (Signals)
@@ -52,7 +52,7 @@ export function focusSignal(state: Pick<AppState, 'presets' | 'custom'>, now: nu
   let paused = false;
   for (const data of eachPreset(state)) {
     for (const w of data.widgets) {
-      if (w.type !== 'focus') continue;
+      if (!isFocusWidget(w)) continue;
       const timer = settle(stateOf(w.settings), now, configOf(w.settings)).state;
       if (isRunning(timer)) return timer.phase === 'work' ? 'work' : 'break';
       if (timer.left > 0) paused = true;
@@ -62,9 +62,9 @@ export function focusSignal(state: Pick<AppState, 'presets' | 'custom'>, now: nu
 }
 
 /** The focus timer "Start a focus round" would use: one on the preset showing, else the first anywhere. */
-function focusWidget(state: AppState): Widget | undefined {
-  const here = activePreset(state).data.widgets.find((w) => w.type === 'focus');
-  return here ?? eachPreset(state).flatMap((d) => d.widgets).find((w) => w.type === 'focus');
+function focusWidget(state: AppState): Widget<FocusSettings> | undefined {
+  const here = activePreset(state).data.widgets.find(isFocusWidget);
+  return here ?? eachPreset(state).flatMap((d) => d.widgets).find(isFocusWidget);
 }
 
 /**

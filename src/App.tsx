@@ -11,7 +11,7 @@ import { useClipKeyInPage } from './clips/replay';
 import { useGameDetect, useGameStream, useScreenTriggers } from './hud/reader';
 import { useSmiteSync } from './smite';
 import { useSmiteScreen } from './smite/reader';
-import { renderPanel } from './panels';
+import { renderPanel } from './widgets/render';
 import { usePresetDrop } from './presetio';
 import type { BoardId } from './state/model';
 import { activePreset } from './state/presets';

@@ -1,6 +1,6 @@
 {
   "uncbox": "preset",
-  "version": 1,
+  "version": 2,
   "name": "Nuzlocke run",
   "base": "pokemon",
   "exportedAt": "2026-10-20T00:00:00.000Z",
@@ -61,6 +61,16 @@
         "y": 17,
         "w": 4,
         "h": 7
+      }
+    ],
+    "widgets": [
+      {
+        "id": "wdg-nuzlocke-rules",
+        "kind": "text",
+        "title": "The rules",
+        "settings": {
+          "text": "First encounter only. If it faints, it’s gone. Name everyone."
+        }
       }
     ],
     "background": "stars",
@@ -262,51 +272,7 @@
     },
     "quests": [],
     "wowLinkAt": 0,
-    "windows": [],
-    "widgets": [
-      {
-        "id": "wdg-nuzlocke-rules",
-        "type": "text",
-        "title": "The rules",
-        "settings": {
-          "timeZone": "",
-          "hour12": true,
-          "seconds": false,
-          "place": "",
-          "lat": 0,
-          "lon": 0,
-          "celsius": false,
-          "apps": "",
-          "showBody": false,
-          "target": 0,
-          "text": "First encounter only. If it faints, it’s gone. Name everyone.",
-          "pingTarget": "",
-          "showRouter": true,
-          "focusWork": 25,
-          "focusShort": 5,
-          "focusLong": 15,
-          "focusRounds": 4,
-          "focusAuto": false,
-          "focusSound": true,
-          "focusPhase": "work",
-          "focusRound": 1,
-          "focusEndsAt": 0,
-          "focusLeft": 0,
-          "launcherTiles": [],
-          "url": "",
-          "homeUrl": "",
-          "searchEngine": "google",
-          "hideToolbar": false,
-          "zoom": 100,
-          "driveView": "recent",
-          "calendarDays": 3,
-          "calendarHideAllDay": false,
-          "gmailOnlyUnread": false,
-          "gmailLabel": "INBOX",
-          "showOnStream": false
-        }
-      }
-    ],
-    "hud": []
+    "hud": [],
+    "triggers": []
   }
 }

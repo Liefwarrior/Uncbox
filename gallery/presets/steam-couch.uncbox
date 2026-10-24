@@ -1,6 +1,6 @@
 {
   "uncbox": "preset",
-  "version": 1,
+  "version": 2,
   "name": "Steam couch",
   "base": "steam",
   "exportedAt": "2026-10-20T00:00:00.000Z",
@@ -61,6 +61,31 @@
         "y": 17,
         "w": 4,
         "h": 7
+      }
+    ],
+    "widgets": [
+      {
+        "id": "wdg-couch-network",
+        "kind": "network",
+        "title": "",
+        "settings": {
+          "pingTarget": "",
+          "showRouter": true
+        }
+      },
+      {
+        "id": "wdg-couch-media",
+        "kind": "media",
+        "title": "",
+        "settings": {}
+      },
+      {
+        "id": "wdg-couch-launcher",
+        "kind": "launcher",
+        "title": "Quick launch",
+        "settings": {
+          "launcherTiles": []
+        }
       }
     ],
     "background": "waves",
@@ -216,135 +241,7 @@
     },
     "quests": [],
     "wowLinkAt": 0,
-    "windows": [],
-    "widgets": [
-      {
-        "id": "wdg-couch-network",
-        "type": "network",
-        "title": "",
-        "settings": {
-          "timeZone": "",
-          "hour12": true,
-          "seconds": false,
-          "place": "",
-          "lat": 0,
-          "lon": 0,
-          "celsius": false,
-          "apps": "",
-          "showBody": false,
-          "target": 0,
-          "text": "",
-          "pingTarget": "",
-          "showRouter": true,
-          "focusWork": 25,
-          "focusShort": 5,
-          "focusLong": 15,
-          "focusRounds": 4,
-          "focusAuto": false,
-          "focusSound": true,
-          "focusPhase": "work",
-          "focusRound": 1,
-          "focusEndsAt": 0,
-          "focusLeft": 0,
-          "launcherTiles": [],
-          "url": "",
-          "homeUrl": "",
-          "searchEngine": "google",
-          "hideToolbar": false,
-          "zoom": 100,
-          "driveView": "recent",
-          "calendarDays": 3,
-          "calendarHideAllDay": false,
-          "gmailOnlyUnread": false,
-          "gmailLabel": "INBOX",
-          "showOnStream": false
-        }
-      },
-      {
-        "id": "wdg-couch-media",
-        "type": "media",
-        "title": "",
-        "settings": {
-          "timeZone": "",
-          "hour12": true,
-          "seconds": false,
-          "place": "",
-          "lat": 0,
-          "lon": 0,
-          "celsius": false,
-          "apps": "",
-          "showBody": false,
-          "target": 0,
-          "text": "",
-          "pingTarget": "",
-          "showRouter": true,
-          "focusWork": 25,
-          "focusShort": 5,
-          "focusLong": 15,
-          "focusRounds": 4,
-          "focusAuto": false,
-          "focusSound": true,
-          "focusPhase": "work",
-          "focusRound": 1,
-          "focusEndsAt": 0,
-          "focusLeft": 0,
-          "launcherTiles": [],
-          "url": "",
-          "homeUrl": "",
-          "searchEngine": "google",
-          "hideToolbar": false,
-          "zoom": 100,
-          "driveView": "recent",
-          "calendarDays": 3,
-          "calendarHideAllDay": false,
-          "gmailOnlyUnread": false,
-          "gmailLabel": "INBOX",
-          "showOnStream": false
-        }
-      },
-      {
-        "id": "wdg-couch-launcher",
-        "type": "launcher",
-        "title": "Quick launch",
-        "settings": {
-          "timeZone": "",
-          "hour12": true,
-          "seconds": false,
-          "place": "",
-          "lat": 0,
-          "lon": 0,
-          "celsius": false,
-          "apps": "",
-          "showBody": false,
-          "target": 0,
-          "text": "",
-          "pingTarget": "",
-          "showRouter": true,
-          "focusWork": 25,
-          "focusShort": 5,
-          "focusLong": 15,
-          "focusRounds": 4,
-          "focusAuto": false,
-          "focusSound": true,
-          "focusPhase": "work",
-          "focusRound": 1,
-          "focusEndsAt": 0,
-          "focusLeft": 0,
-          "launcherTiles": [],
-          "url": "",
-          "homeUrl": "",
-          "searchEngine": "google",
-          "hideToolbar": false,
-          "zoom": 100,
-          "driveView": "recent",
-          "calendarDays": 3,
-          "calendarHideAllDay": false,
-          "gmailOnlyUnread": false,
-          "gmailLabel": "INBOX",
-          "showOnStream": false
-        }
-      }
-    ],
-    "hud": []
+    "hud": [],
+    "triggers": []
   }
 }

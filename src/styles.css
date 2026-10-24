@@ -1202,52 +1202,132 @@ input[type='color'] {
   background: color-mix(in srgb, var(--accent) 14%, transparent);
 }
 
-/* ---------- widgets ---------- */
+/* ---------- the sidebar's "On screen" and "Get More Widgets" ---------- */
 
-.widget-library summary {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 7px 6px;
-  border-radius: var(--radius-sm);
-  color: var(--accent);
-  font-size: 16px;
-}
-.widget-library summary::before,
-.widget-library[open] summary::before {
-  content: none;
-}
-.widget-library summary:hover {
-  background: var(--panel);
-}
-.widget-library__list {
+.onscreen,
+.lib__list {
   display: grid;
   gap: 2px;
-  margin: 2px 0 6px 20px;
+  margin: 0;
   padding: 0;
   list-style: none;
 }
-.widget-library__item {
+.onscreen__row,
+.lib__card {
   display: flex;
   align-items: center;
-  gap: 12px;
-  width: 100%;
-  padding: 6px;
-  border: 0;
+  gap: 10px;
+  padding: 5px 6px;
   border-radius: var(--radius-sm);
+}
+.onscreen__row:hover,
+.lib__card:hover {
+  background: var(--panel);
+}
+.onscreen__icon,
+.lib__icon {
+  flex: none;
+  display: grid;
+  color: var(--accent);
+}
+.onscreen__name {
+  display: grid;
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+  border: 0;
   background: transparent;
   color: var(--text);
-  font-size: 15px;
+  font: inherit;
+  font-size: 16px;
+  line-height: 1.25;
   text-align: left;
   cursor: pointer;
 }
-.widget-library__item:hover {
-  background: var(--panel);
+.onscreen__name small,
+.lib__text small {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 13px;
+  text-overflow: ellipsis;
 }
-.widget-library__item svg {
-  flex: none;
+.lib__text {
+  display: grid;
+  flex: 1;
+  min-width: 0;
+  font-size: 16px;
+  line-height: 1.25;
+}
+.lib__count {
   color: var(--accent);
 }
+.lib__actions {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+}
+.lib__here {
+  color: var(--muted);
+  font-size: 13px;
+}
+.lib__search {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 9px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--panel-2);
+  color: var(--muted);
+}
+.lib__search:focus-within {
+  outline: 2px solid var(--focus, #ffd23f);
+  outline-offset: 2px;
+}
+.lib__search input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 15px;
+  outline: none;
+}
+.lib__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin: 8px 0 4px;
+}
+.lib__chip {
+  padding: 2px 10px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 13px;
+  cursor: pointer;
+}
+.lib__chip:hover {
+  color: var(--text);
+}
+.lib__chip[aria-pressed='true'] {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+  color: var(--text);
+}
+.lib__section h4 {
+  margin: 12px 0 4px;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 650;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+/* ---------- widgets ---------- */
 
 .panel--widget .panel__body {
   container-type: size;
@@ -2967,10 +3047,10 @@ kbd {
   font-size: 14px;
 }
 
-.panel--window .panel__body {
+.widget--window .panel__body {
   padding: 0;
 }
-.panel--window .cropped-video {
+.widget--window .cropped-video {
   inset: 0 10px 10px;
   border-radius: max(3px, calc(var(--radius) - 8px));
   background: var(--void);
@@ -4471,7 +4551,7 @@ p.chat-empty {
 /* These clip by design: chat drops its oldest lines off the top, video fills its frame. */
 .panel--chat .panel__body,
 .panel--bleed .panel__body,
-.panel--window .panel__body {
+.widget--window .panel__body {
   overflow: hidden;
 }
 

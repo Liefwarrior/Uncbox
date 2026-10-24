@@ -9,8 +9,8 @@ import { useCover } from '../native';
 import type { ClipSettings, PresetData } from '../state/model';
 import type { Mutate, MutatePreset } from '../state/useAppState';
 import { useDialog } from '../useDialog';
-import { newWidget } from '../widgets/catalog';
-import { useGoogle } from '../widgets/google';
+import { newWidget } from '../widgets/registry';
+import { useGoogle } from '../widgets/shared/google';
 import { StatusLine, VerticalEditor, useJob } from './ClipEditor';
 import { Icon } from './Icon';
 
@@ -281,7 +281,7 @@ export function ClipPlayer({ settings, data, mutatePreset }: { settings: ClipSet
   // Signing in to Google happens in a Drive widget: point at the one on the board, or add one.
   const setUpDrive = () => {
     watchClip(null);
-    const there = data.widgets.find((w) => w.type === 'drive' && data.layout.some((item) => item.i === w.id));
+    const there = data.widgets.find((w) => w.kind === 'drive' && data.layout.some((item) => item.i === w.id));
     if (there) return callOut(there.id);
     const w = newWidget('drive');
     mutatePreset((d) => {

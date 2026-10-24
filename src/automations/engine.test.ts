@@ -2,8 +2,8 @@ import { describe, expect, it, vi } from 'vitest';
 import { defaultState } from '../state/hydrate';
 import type { Automation, AutomationThen, AutomationWhen } from '../state/model';
 import { activePreset } from '../state/presets';
-import { newWidget } from '../widgets/catalog';
-import { isRunning, stateOf } from '../widgets/focus';
+import { type FocusSettings, isRunning, stateOf } from '../widgets/focus/focus';
+import { newWidget } from '../widgets/registry';
 import {
   admit,
   CAUSE_MS,
@@ -268,7 +268,7 @@ describe('running the steps', () => {
 /** A default state with the desk preset's own focus timer taken out, so a test adds the only one. */
 function stateWithoutTimers() {
   const state = defaultState();
-  for (const d of Object.values(state.presets)) d.widgets = d.widgets.filter((w) => w.type !== 'focus');
+  for (const d of Object.values(state.presets)) d.widgets = d.widgets.filter((w) => w.kind !== 'focus');
   return state;
 }
 
@@ -293,7 +293,7 @@ describe('reading the world', () => {
     const state = stateWithoutTimers();
     const now = 5_000_000;
     expect(focusSignal(state, now)).toBe('idle');
-    const w = newWidget('focus');
+    const w = newWidget<FocusSettings>('focus');
     state.presets.desk.widgets.push(w);
     expect(focusSignal(state, now)).toBe('idle');
     w.settings.focusEndsAt = now + 60_000;
@@ -307,7 +307,7 @@ describe('reading the world', () => {
 
   it('catches up a timer that ended while nobody looked', () => {
     const state = stateWithoutTimers();
-    const w = newWidget('focus');
+    const w = newWidget<FocusSettings>('focus');
     w.settings.focusAuto = true;
     state.presets.desk.widgets.push(w);
     const now = 10_000_000;
@@ -319,9 +319,9 @@ describe('reading the world', () => {
   it('starts a focus round on the timer of the preset showing', () => {
     const state = stateWithoutTimers();
     state.preset = 'desk';
-    const w = newWidget('focus');
+    const w = newWidget<FocusSettings>('focus');
     state.presets.desk.widgets.push(w);
-    const other = newWidget('focus');
+    const other = newWidget<FocusSettings>('focus');
     state.presets.wow.widgets.push(other);
     const now = 7_000_000;
     expect(startFocusRound(state, now)).toBe('started');
@@ -336,7 +336,7 @@ describe('reading the world', () => {
   it('starts the next round after a break, and says when there is no timer', () => {
     const state = stateWithoutTimers();
     expect(startFocusRound(state, 1)).toBe('none');
-    const w = newWidget('focus');
+    const w = newWidget<FocusSettings>('focus');
     activePreset(state).data.widgets.push(w);
     w.settings.focusPhase = 'short';
     w.settings.focusRound = 1;

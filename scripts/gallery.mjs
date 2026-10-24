@@ -25,16 +25,19 @@ const load = (file) => vite.ssrLoadModule(`/src/${file}`);
 const { toPresetFile, fromPresetFile, MAX_PRESET_FILE_BYTES } = await load('presetfile.ts');
 const { defaultPresetData, hydratePreset } = await load('state/hydrate.ts');
 const { forSharing } = await load('presetfile.ts');
-const { defaultWidgetSettings } = await load('widgets/catalog.ts');
-const { sizeOf } = await load('panels/catalog.ts');
+const { newWidget, sizeOf } = await load('widgets/registry.ts');
 const { GRID_COLS, GRID_ROWS, isWidgetId, PRESET_IDS } = await load('state/model.ts');
 
 // ---- the starter presets ----
 
 const UPDATED = '2026-10-20';
 
-/** A widget with settings that don't depend on this PC (the clock's 12 / 24 hour choice is made here). */
-const widget = (id, type, title = '', settings = {}) => ({ id, type, title, settings: { ...defaultWidgetSettings(), hour12: true, ...settings } });
+/** A widget of a kind in the widget library, with settings that don't depend on this PC (a 12 / 24 hour choice is made here). */
+const widget = (id, kind, title = '', settings = {}) => {
+  const w = newWidget(kind, { id, title, settings });
+  if ('hour12' in w.settings && !('hour12' in settings)) w.settings.hour12 = true;
+  return w;
+};
 
 /** Stable ids, so writing the files again gives the same files. */
 function steadyIds(d, prefix) {

@@ -9,8 +9,9 @@ import { focusableIn } from './useDialog';
 import { openPalette } from './palette/Palette';
 import { watchClip } from './clips/replay';
 import { defaultState } from './state/hydrate';
-import { type BoardId, type GridItem, PANEL_IDS, WIDGET_TYPES } from './state/model';
-import { newWidget } from './widgets/catalog';
+import { GRID_COLS, GRID_ROWS, type GridItem } from './state/model';
+import { newWidget, sizeOf, WIDGETS } from './widgets/registry';
+import { isSingle } from './widgets/types';
 import { dismissUndo, offerUndo, showNotice } from './undo';
 
 // ---------- the contrast of every theme ----------
@@ -130,14 +131,27 @@ function stubEnvironment(saved: unknown) {
   window.HTMLCanvasElement.prototype.getContext = (() => null) as never;
 }
 
-/** One of every built-in panel and every widget type, in a grid of equal cells. */
+/** One of every kind in the widget library, each at its smallest size, packed first-fit (a board that isn't valid is repaired on load). */
 function everythingState() {
   const state = defaultState();
   const data = state.presets.pokemon;
-  data.widgets = WIDGET_TYPES.map((type) => newWidget(type));
-  data.windows = [{ id: 'win-a11y', title: 'Some app', fit: 'contain', crop: { top: 0, right: 0, bottom: 0, left: 0 } }];
-  const ids: BoardId[] = [...PANEL_IDS, 'win-a11y', ...data.widgets.map((w) => w.id)];
-  data.layout = ids.map((i, n): GridItem => ({ i, x: (n % 6) * 4, y: Math.floor(n / 6) * 4, w: 4, h: 4 }));
+  data.widgets = WIDGETS.filter((def) => !isSingle(def)).map((def) => newWidget(def.kind));
+  const ids = [...WIDGETS.filter(isSingle).map((def) => def.kind), ...data.widgets.map((w) => w.id)];
+  const sorted = ids.sort((a, b) => sizeOf(b, data.widgets).minW * sizeOf(b, data.widgets).minH - sizeOf(a, data.widgets).minW * sizeOf(a, data.widgets).minH);
+  const taken = new Set<string>();
+  data.layout = sorted.map((i): GridItem => {
+    const { minW: w, minH: h } = sizeOf(i, data.widgets);
+    for (let y = 0; y + h <= GRID_ROWS; y++) {
+      for (let x = 0; x + w <= GRID_COLS; x++) {
+        let free = true;
+        for (let a = x; a < x + w && free; a++) for (let b = y; b < y + h && free; b++) free = !taken.has(`${a},${b}`);
+        if (!free) continue;
+        for (let a = x; a < x + w; a++) for (let b = y; b < y + h; b++) taken.add(`${a},${b}`);
+        return { i, x, y, w, h };
+      }
+    }
+    throw new Error(`no room for ${i}`);
+  });
   return state;
 }
 
@@ -175,7 +189,7 @@ describe('accessibility of the page', () => {
 
     // Every panel is a named section.
     const panels = root.querySelectorAll('section.panel');
-    expect(panels.length).toBeGreaterThanOrEqual(PANEL_IDS.length + WIDGET_TYPES.length);
+    expect(panels.length).toBeGreaterThanOrEqual(WIDGETS.length);
     for (const p of panels) expect(p.getAttribute('aria-labelledby') ?? p.getAttribute('aria-label'), p.className).toBeTruthy();
 
     await expectNoSeriousViolations(root, 'the board and sidebar');
@@ -226,7 +240,8 @@ describe('accessibility of the page', () => {
   it('menus: arrows, Home and End move between items; Esc closes and returns focus', async () => {
     const view = render(<App />);
     await waitFor(() => expect(view.container.querySelector('.board .panel')).not.toBeNull(), { timeout: 5000 });
-    const trigger = screen.getAllByRole('button', { name: /options$/i })[0];
+    // The camera's has several items.
+    const trigger = screen.getByRole('button', { name: 'Camera options' });
     trigger.focus();
     fireEvent.click(trigger);
     const menu = await screen.findByRole('menu');
@@ -274,7 +289,6 @@ describe('accessibility of the page', () => {
     // Just the notes panel, with room around it.
     const small = defaultState();
     small.presets.pokemon.widgets = [];
-    small.presets.pokemon.windows = [];
     small.presets.pokemon.layout = [{ i: 'notes', x: 4, y: 4, w: 6, h: 6 }];
     stubEnvironment(small);
     const view = render(<App />);

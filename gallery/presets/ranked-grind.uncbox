@@ -1,6 +1,6 @@
 {
   "uncbox": "preset",
-  "version": 1,
+  "version": 2,
   "name": "Ranked grind",
   "base": "smite2",
   "exportedAt": "2026-10-20T00:00:00.000Z",
@@ -61,6 +61,25 @@
         "y": 17,
         "w": 4,
         "h": 7
+      }
+    ],
+    "widgets": [
+      {
+        "id": "wdg-grind-focus",
+        "kind": "focus",
+        "title": "Break timer",
+        "settings": {
+          "focusWork": 45,
+          "focusShort": 10,
+          "focusLong": 20,
+          "focusRounds": 3,
+          "focusAuto": false,
+          "focusSound": true,
+          "focusPhase": "work",
+          "focusRound": 1,
+          "focusEndsAt": 0,
+          "focusLeft": 0
+        }
       }
     ],
     "background": "shards",
@@ -212,51 +231,7 @@
     },
     "quests": [],
     "wowLinkAt": 0,
-    "windows": [],
-    "widgets": [
-      {
-        "id": "wdg-grind-focus",
-        "type": "focus",
-        "title": "Break timer",
-        "settings": {
-          "timeZone": "",
-          "hour12": true,
-          "seconds": false,
-          "place": "",
-          "lat": 0,
-          "lon": 0,
-          "celsius": false,
-          "apps": "",
-          "showBody": false,
-          "target": 0,
-          "text": "",
-          "pingTarget": "",
-          "showRouter": true,
-          "focusWork": 45,
-          "focusShort": 10,
-          "focusLong": 20,
-          "focusRounds": 3,
-          "focusAuto": false,
-          "focusSound": true,
-          "focusPhase": "work",
-          "focusRound": 1,
-          "focusEndsAt": 0,
-          "focusLeft": 0,
-          "launcherTiles": [],
-          "url": "",
-          "homeUrl": "",
-          "searchEngine": "google",
-          "hideToolbar": false,
-          "zoom": 100,
-          "driveView": "recent",
-          "calendarDays": 3,
-          "calendarHideAllDay": false,
-          "gmailOnlyUnread": false,
-          "gmailLabel": "INBOX",
-          "showOnStream": false
-        }
-      }
-    ],
-    "hud": []
+    "hud": [],
+    "triggers": []
   }
 }

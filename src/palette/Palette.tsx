@@ -10,11 +10,11 @@ import type { AppState } from '../state/model';
 import type { Mutate, MutatePreset } from '../state/useAppState';
 import { showNotice } from '../undo';
 import { requestWebOpen } from '../web';
-import { primeAudio } from '../widgets/chime';
-import { downloadFromHere } from '../widgets/downloads';
-import { type DriveFile, openFile, searchDriveFiles } from '../widgets/drive';
-import { DRIVE_FEATURE, hasGoogleScopes, useGoogle } from '../widgets/google';
-import { launchTile, useTiles } from '../widgets/launcher';
+import { primeAudio } from '../widgets/focus/chime';
+import { downloadFromHere } from '../widgets/downloads/downloads';
+import { type DriveFile, openFile, searchDriveFiles } from '../widgets/drive/drive';
+import { DRIVE_FEATURE, hasGoogleScopes, useGoogle } from '../widgets/shared/google';
+import { launchTile, useTiles } from '../widgets/launcher/launcher';
 import { arrange, buildCommands, DRIVE_MIN_QUERY, type PaletteActions, type PaletteContext, type Row } from './commands';
 import { opensPalette } from './keys';
 import { bump, loadRecent, saveRecent } from './recent';
@@ -100,7 +100,7 @@ function Dialog({ state, mutate, mutatePreset, onToggleStream, onClose }: Props 
   const signedIn = Boolean(status?.signedIn && hasGoogleScopes(status, DRIVE_FEATURE.scopes));
   const results = useDriveResults(query, signedIn);
   // Reading OBS is what makes the server connect to it, so only where a widget already does.
-  const usesObs = [...Object.values(state.presets), ...state.custom.map((c) => c.data)].some((d) => d.widgets.some((w) => w.type === 'obs'));
+  const usesObs = [...Object.values(state.presets), ...state.custom.map((c) => c.data)].some((d) => d.widgets.some((w) => w.kind === 'obs'));
   const obs = useObs(usesObs);
 
   const actions: PaletteActions = useMemo(

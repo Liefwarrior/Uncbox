@@ -1,5 +1,5 @@
-import { sizeOf } from './panels/catalog';
-import { type BoardId, GRID_COLS, GRID_ROWS, type GridItem, type PanelId, type PresetData, type Widget } from './state/model';
+import { type BoardId, GRID_COLS, GRID_ROWS, type GridItem, isWidgetId, type PresetData, type Widget } from './state/model';
+import { sizeOf } from './widgets/registry';
 
 export interface Rect {
   x: number;
@@ -12,15 +12,41 @@ function overlaps(a: Rect, b: Rect) {
   return a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
 }
 
-/** Shows or hides a built-in panel of a preset being edited. */
-export function setPanelShown(d: PresetData, id: PanelId, on: boolean) {
-  d.layout = on ? [...d.layout, placePanel(d.layout, id)] : d.layout.filter((item) => item.i !== id);
+/** Shows or hides a single panel (a kind there is only one of: 'game', 'chat'…) of a preset being edited. */
+export function setPanelShown(d: PresetData, kind: BoardId, on: boolean) {
+  const shown = d.layout.some((item) => item.i === kind);
+  if (on && !shown) d.layout.push(placePanel(d.layout, kind, d.widgets));
+  else if (!on) d.layout = d.layout.filter((item) => item.i !== kind);
 }
 
 /** Adds a widget to a preset being edited, placed on the board. */
 export function addWidgetTo(d: PresetData, widget: Widget) {
   d.widgets.push(widget);
   d.layout.push(placePanel(d.layout, widget.id, d.widgets));
+}
+
+/** What taking something off the board leaves behind, to put it back with restoreToBoard. */
+export interface Removed {
+  item?: GridItem;
+  /** A widget is deleted with its panel; a single panel's data stays in the preset. */
+  widget?: Widget;
+}
+
+/** Takes a panel or widget off the board of a preset being edited. */
+export function removeFromBoard(d: PresetData, id: BoardId): Removed {
+  const removed: Removed = { item: d.layout.find((it) => it.i === id) };
+  d.layout = d.layout.filter((it) => it.i !== id);
+  if (isWidgetId(id)) {
+    removed.widget = d.widgets.find((w) => w.id === id);
+    d.widgets = d.widgets.filter((w) => w.id !== id);
+  }
+  return removed;
+}
+
+/** Puts back what removeFromBoard took, where it was (unless something has taken the place or it is already back). */
+export function restoreToBoard(d: PresetData, id: BoardId, removed: Removed) {
+  if (removed.widget && !d.widgets.some((w) => w.id === id)) d.widgets.push(removed.widget);
+  if (removed.item && !d.layout.some((it) => it.i === id)) d.layout.push(removed.item);
 }
 
 /**
@@ -82,7 +108,7 @@ type Side = 'n' | 's' | 'e' | 'w';
 const edgesOf = (r: Rect) => ({ left: r.x, right: r.x + r.w, top: r.y, bottom: r.y + r.h });
 
 /** Every panel is inside the board, at least its minimum size, and clear of the others. */
-function isValid(items: GridItem[], widgets: Widget[]) {
+export function isValid(items: GridItem[], widgets: Widget[]) {
   return items.every((a, n) => {
     const { minW, minH } = sizeOf(a.i, widgets);
     const inside = a.x >= 0 && a.y >= 0 && a.x + a.w <= GRID_COLS && a.y + a.h <= GRID_ROWS;
