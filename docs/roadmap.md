@@ -132,13 +132,13 @@ folder. The sidebar gets a "Get More Widgets" library to browse, search and add 
 and "Add a widget" go away. Presets stay, with better defaults. Done when: adding a widget is one
 folder plus one registry line, documented, and the old panel/widget split is gone from the code.
 
-### UBX-18 · WoW addon sets itself up, and links your guild — Building
+### UBX-18 · WoW addon sets itself up, and links your guild — Shipped (7d7b7b9)
 The WoW preset installs and updates the addon by itself, writes its settings, and picks WoW as the
 game window. The addon reports your guild roster, raid group, ready checks, loot and boss kills,
 live over the strip and in full through its saved variables. Uncbox keeps guild history (who
 raids, attendance, loot) in a local database.
 
-### UBX-19 · WoW guild widgets — Queued (after UBX-17 and UBX-18)
+### UBX-19 · WoW guild widgets — Building
 Widgets for running a 50+ person guild: roster and who's online, raid composition and roles,
 attendance, loot history, guild events feed, and recruitment notes.
 
