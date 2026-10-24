@@ -142,7 +142,7 @@ raids, attendance, loot) in a local database.
 Widgets for running a 50+ person guild: roster and who's online, raid composition and roles,
 attendance, loot history, guild events feed, and recruitment notes.
 
-### UBX-20 · Uncbox AH engine — Building
+### UBX-20 · Uncbox AH engine — Shipped (bec31a5)
 Our own auction house addon and price database, modelled on TradeSkillMaster and Auctionator:
 full and targeted scans, market value from scan history, sale rates from your mail, posting rules,
 undercut detection, deals, flips and crafting profit, with prices written back into the game for
