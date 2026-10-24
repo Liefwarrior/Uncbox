@@ -264,7 +264,7 @@ async function handleApi(req, res, url) {
     } catch (err) {
       return sendJson(res, err.status || 400, { error: err.message });
     }
-    const target = pageFor(body.target, { discordAppId: discord.snapshot().clientId || discord.appId() });
+    const target = pageFor(body.target, { discordAppId: discord.snapshot().clientId || discord.appId(), itemId: body.item });
     if (!target) return sendJson(res, 400, { error: 'Unknown page' });
     openInBrowser(target);
     return sendJson(res, 200, { ok: true, url: target });

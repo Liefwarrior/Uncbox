@@ -18,9 +18,10 @@ export function openInBrowser(url) {
 }
 
 const DISCORD_ID = /^\d{15,22}$/;
+const ITEM_ID = /^\d{1,7}$/;
 
 /** Resolves a named destination to its URL, or null if unknown. */
-export function pageFor(target, { discordAppId } = {}) {
+export function pageFor(target, { discordAppId, itemId } = {}) {
   switch (target) {
     case 'discord-portal':
       return 'https://discord.com/developers/applications';
@@ -42,6 +43,9 @@ export function pageFor(target, { discordAppId } = {}) {
       return 'https://dev.twitch.tv/console/apps';
     case 'twitch-activate':
       return 'https://www.twitch.tv/activate';
+    case 'wowhead-item':
+      // The auction house widget's "Wowhead" link: only a plain item number is ever put in the address.
+      return ITEM_ID.test(String(itemId ?? '')) ? `https://www.wowhead.com/classic/item=${itemId}` : null;
     default:
       return null;
   }

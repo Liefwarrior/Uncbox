@@ -58,6 +58,7 @@ widget's settings type:
 | `presets` | The presets that recommend it. See below. |
 | `w`, `h`, `minW`, `minH` | The size it starts at and the smallest it can shrink to, in board cells (the board is 24 × 24). |
 | `single` | `true` for a panel there is only one of. |
+| `onlyOne` | `true` for a widget (with its own settings) that makes no sense twice, like the Auction House workbench. The library shows **On screen** / **Show** once it is on the board, and the palette's "Add widget" points at it. Widgets only. |
 | `defaults()` | Its settings when added. Returns a new object each time. Widgets only. |
 | `clean(settings)` | Puts right settings that came from outside (a hand-edited or shared file). The saved values are already laid over `defaults()`; this checks them (a web address is a web address, a number is in range). Optional. |
 | `forSharing(settings)` | Takes out what is personal or only means something on this PC, when a preset is exported. Optional. |

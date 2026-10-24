@@ -5,7 +5,7 @@ import { PRESET_IDS } from '../state/model';
 import { activePreset } from '../state/presets';
 import { MULTI_KINDS, newWidget, SINGLE_KINDS } from '../widgets/registry';
 import type { DriveFile } from '../widgets/drive/drive';
-import { arrange, buildCommands, classifyQuery, type Command, type PaletteActions, type PaletteContext, recentBoost } from './commands';
+import { ahSearchTerm, arrange, buildCommands, classifyQuery, type Command, type PaletteActions, type PaletteContext, recentBoost } from './commands';
 import { bump, MAX_RECENT } from './recent';
 
 const fakeActions = (): PaletteActions => ({
@@ -295,6 +295,76 @@ describe('focus timer', () => {
     expect(w.settings.focusEndsAt).toBe(0);
     expect(w.settings.focusLeft).toBeGreaterThan(0);
     expect(setup({ state, now: Date.now() }).find('focus:toggle:main')!.title).toBe('Resume the focus timer');
+  });
+});
+
+describe('auction house', () => {
+  it('has AH: deals, which adds the widget on its Deals tab when the board has none', () => {
+    const { state, find, actions } = setup();
+    expect(find('ah:deals')!.title).toBe('AH: deals');
+    expect(activePreset(state).data.widgets.some((w) => w.kind === 'auctionhouse')).toBe(false);
+    find('ah:deals')!.run();
+    const { widgets, layout } = activePreset(state).data;
+    const made = widgets.find((w) => w.kind === 'auctionhouse')!;
+    expect(made.settings.tab).toBe('deals');
+    expect(layout.some((i) => i.i === made.id)).toBe(true);
+    expect(actions.callOut).toHaveBeenCalledWith(made.id);
+  });
+
+  it('uses the Auction House already on the board, and does not add a second', () => {
+    const state = defaultState();
+    const w = newWidget('auctionhouse');
+    activePreset(state).data.widgets.push(w);
+    const { find, actions } = setup({ state });
+    find('ah:deals')!.run();
+    expect(activePreset(state).data.widgets.filter((x) => x.kind === 'auctionhouse')).toHaveLength(1);
+    expect(w.settings.tab).toBe('deals');
+    expect(actions.callOut).toHaveBeenCalledWith(w.id);
+    // "Add widget: Auction House" points at it too, as there is only one.
+    find('widget:add:auctionhouse')!.run();
+    expect(activePreset(state).data.widgets.filter((x) => x.kind === 'auctionhouse')).toHaveLength(1);
+  });
+
+  it('reads "ah …" as a search for an item, and opens the Search tab with it', () => {
+    expect(ahSearchTerm('ah linen cloth')).toBe('linen cloth');
+    expect(ahSearchTerm('AH: search Arcanite Bar')).toBe('Arcanite Bar');
+    expect(ahSearchTerm('ah:linen')).toBe('linen');
+    expect(ahSearchTerm('ah')).toBeNull();
+    expect(ahSearchTerm('ahoy there')).toBeNull();
+    expect(ahSearchTerm('linen')).toBeNull();
+
+    const state = defaultState();
+    const w = newWidget('auctionhouse');
+    activePreset(state).data.widgets.push(w);
+    const { find } = setup({ state, query: 'ah: search Arcanite Bar' });
+    const search = find('ah:search')!;
+    expect(search.title).toBe('AH: search Arcanite Bar');
+    expect(search.live).toBeGreaterThan(0);
+    search.run();
+    expect(w.settings).toMatchObject({ tab: 'search', query: 'Arcanite Bar' });
+  });
+
+  it('offers to look up whatever is typed in the WoW preset, below the commands the words already match', () => {
+    const state = defaultState();
+    state.preset = 'wow';
+    const { find } = setup({ state, query: 'linen' });
+    expect(find('ah:search')!.title).toBe('AH: search linen');
+    expect(find('ah:search')!.live).toBeLessThan(0);
+    // Not in the other presets, nor with nothing typed.
+    expect(setup({ query: 'linen' }).find('ah:search')).toBeUndefined();
+    expect(setup({ state, query: '' }).find('ah:search')).toBeUndefined();
+  });
+
+  it('keeps "ah deals" for the deals command rather than searching for an item called deals', () => {
+    const { find } = setup({ query: 'ah deals' });
+    expect(find('ah:search')).toBeUndefined();
+    expect(find('ah:deals')).toBeDefined();
+  });
+
+  it('finds the deals command by searching for ah', () => {
+    const { commands } = setup();
+    const sections = arrange(commands(), 'ah deals', []);
+    expect(sections[0].rows[0].command.id).toBe('ah:deals');
   });
 });
 

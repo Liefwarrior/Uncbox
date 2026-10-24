@@ -90,6 +90,11 @@ export interface SingleDef extends Common {
 
 interface InstanceCommon<S extends object> extends Common {
   single?: false;
+  /**
+   * Only one of it makes sense on a board (a workbench like the Auction House). The library and
+   * the palette then show it instead of adding a second one. Its settings still live in the widget.
+   */
+  onlyOne?: boolean;
   /** Its settings when it is added. Every key it keeps is here; nothing else is saved. */
   defaults: () => S;
   /** Puts right settings that came from outside (a hand-edited or shared file); they are laid over `defaults` first. */

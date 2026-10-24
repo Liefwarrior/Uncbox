@@ -9,6 +9,7 @@ import { activePreset } from '../state/presets';
 import type { MutatePreset, Mutate } from '../state/useAppState';
 import { resolveAddress, SEARCH_ENGINES, searchUrl } from '../web';
 import { fileIcon, fileKind, type DriveFile } from '../widgets/drive/drive';
+import { isAuctionHouseWidget } from '../widgets/auctionhouse/settings';
 import { isFocusWidget, isRunning, remaining, settle, stateOf, configOf, toggleFocus } from '../widgets/focus/focus';
 import { newWidget, panelTitle, WIDGETS, widgetTitle } from '../widgets/registry';
 import { isSingle } from '../widgets/types';
@@ -86,7 +87,7 @@ export interface PaletteContext {
 export type Provider = (ctx: PaletteContext) => Command[];
 
 /** Headings in the order they are listed (before a search puts the best match's heading first). */
-export const GROUPS = ['Presets', 'Panels', 'Widgets', 'Clips', 'Stream', 'Launcher', 'Web', 'Downloads', 'Drive', 'OBS', 'Focus timer', 'Automations'] as const;
+export const GROUPS = ['Presets', 'Panels', 'Widgets', 'Clips', 'Stream', 'Launcher', 'Web', 'Downloads', 'Drive', 'OBS', 'Focus timer', 'Auction House', 'Automations'] as const;
 
 // ---- presets ----
 
@@ -138,7 +139,7 @@ const panelCommands: Provider = ({ state, mutatePreset }) => {
   });
 };
 
-const widgetCommands: Provider = ({ mutatePreset, actions }) =>
+const widgetCommands: Provider = ({ state, mutatePreset, actions }) =>
   WIDGETS.filter((w) => !isSingle(w)).map((w): Command => ({
     id: `widget:add:${w.kind}`,
     title: `Add widget: ${w.name}`,
@@ -147,6 +148,9 @@ const widgetCommands: Provider = ({ mutatePreset, actions }) =>
     detail: w.hint,
     keywords: `new panel ${w.keywords ?? ''}`,
     run: () => {
+      // A widget there is only one of is pointed at when it is already on the board.
+      const there = w.onlyOne ? activePreset(state).data.widgets.find((x) => x.kind === w.kind) : undefined;
+      if (there) return actions.callOut(there.id);
       const widget = newWidget(w.kind);
       mutatePreset((d) => addWidgetTo(d, widget));
       actions.callOut(widget.id);
@@ -365,6 +369,47 @@ const focusCommands: Provider = ({ state, mutatePreset, actions, now }) => {
   });
 };
 
+// ---- auction house ----
+
+/** "AH: search" typed with a name after it ("ah: search linen", "ah linen"): the name, else null. */
+export const ahSearchTerm = (query: string): string | null => {
+  const m = /^\s*ah\b\s*:?\s*(?:search\b\s*:?\s*)?(.*)$/i.exec(query);
+  return m && m[1].trim() ? m[1].trim() : null;
+};
+
+const ahCommands: Provider = ({ state, query, mutatePreset, actions }) => {
+  const { base, data } = activePreset(state);
+  const widget = data.widgets.find(isAuctionHouseWidget);
+  /** Opens the Auction House widget on a tab (adding one if the board has none), with a search if there is one. */
+  const open = (tab: 'search' | 'deals', search?: string) => {
+    if (widget) {
+      mutatePreset((d) => {
+        const w = d.widgets.find((x) => x.id === widget.id);
+        if (w) Object.assign(w.settings, { tab, ...(search !== undefined ? { query: search } : {}) });
+      });
+      actions.callOut(widget.id);
+      return;
+    }
+    const w = newWidget('auctionhouse', { settings: { tab, ...(search !== undefined ? { query: search } : {}) } });
+    mutatePreset((d) => addWidgetTo(d, w));
+    actions.callOut(w.id);
+  };
+  const commands: Command[] = [
+    { id: 'ah:deals', title: 'AH: deals', group: 'Auction House', icon: 'coins', detail: 'Listings worth buying', keywords: 'auction house flips bargains wow', run: () => open('deals') },
+  ];
+  const typed = ahSearchTerm(query);
+  // "ah deals" is the other command, not a search for an item called deals.
+  if (typed && typed.toLowerCase() === 'deals') return commands;
+  if (typed) {
+    // "ah linen" or "ah: search linen" is an ask for exactly this, so it leads.
+    commands.push({ id: 'ah:search', title: `AH: search ${short(typed)}`, group: 'Auction House', icon: 'search', detail: 'Prices in the Auction House widget', live: 800, run: () => open('search', typed) });
+  } else if (base === 'wow' && query.trim()) {
+    // In the WoW preset, whatever is typed can be looked up, below anything the words already match.
+    commands.push({ id: 'ah:search', title: `AH: search ${short(query.trim())}`, group: 'Auction House', icon: 'search', detail: 'Prices in the Auction House widget', live: -80, run: () => open('search', query.trim()) });
+  }
+  return commands;
+};
+
 // ---- automations ----
 
 const automationCommands: Provider = ({ actions }) => [
@@ -391,6 +436,7 @@ export const providers: Provider[] = [
   driveCommands,
   obsCommands,
   focusCommands,
+  ahCommands,
   automationCommands,
 ];
 

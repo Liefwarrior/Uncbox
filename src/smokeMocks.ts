@@ -3,6 +3,8 @@
 // "data" answer (everything connected and busy), so both the first-run and the lived-in screens
 // get drawn.
 
+import { ahRoute } from './widgets/auctionhouse/fixtures';
+
 export type Scenario = 'empty' | 'data';
 
 export interface Reply {
@@ -154,6 +156,9 @@ export function route(scenario: Scenario, path: string, method: string): Reply {
     if (path.includes('geocoding')) return ok({ results: data ? [{ name: 'Austin', admin1: 'Texas', country: 'United States', latitude: 30.27, longitude: -97.74 }] : [] });
     return ok({ current: { temperature_2m: 71.6, weather_code: 2, is_day: 1 }, daily: { temperature_2m_max: [80.1], temperature_2m_min: [60.4] } });
   }
+
+  const ah = ahRoute(scenario, path, method);
+  if (ah) return ah;
 
   if (p === '/api/system') {
     return ok({ cpu: data ? 37 : 0, memory: { used: data ? 12e9 : 0, total: 32e9 }, gpu: data ? { name: 'RTX 4080', load: 55, temp: 61, used: 6e9, total: 16e9 } : null });

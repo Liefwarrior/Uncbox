@@ -141,3 +141,22 @@ the "what to sell" list are the ones with a price.
 The widget talks to `/api/wow/ah/*` (local only; documented at the top of `server/wowah.mjs`),
 and hears the `wowah` server event whenever new data was ingested. Money is copper everywhere;
 `src/money.ts` has `formatMoney` / `parseMoney` for "12g 34s 56c".
+
+## The Auction House widget
+
+Add **Auction House** from Get More Widgets (it is recommended for the WoW preset; there is only
+one). It has seven tabs, and remembers the last one you used:
+
+| Tab | What it is for |
+| --- | --- |
+| Overview | How old the last full scan is, the realm picker (when you scanned several), your gold over time, today's sales and purchases, and the best few deals, flips and undercut alerts |
+| Search | Every item with prices, sortable; click one for its price history, the price ladder, your auctions, and buttons to add it to a group or shopping list or open it on Wowhead |
+| Deals | Deals, flips and vendor flips, with the percent of market, minimum sale rate and minimum market value you want |
+| Crafting | Recipes by profit, filtered by profession |
+| Selling | What to sell from your bags and bank, and the auctions someone has undercut |
+| Accounting | Sales, purchases, fees and net over 7, 30 or 90 days, every entry, and a gold chart |
+| Rules | Groups, posting and shopping rules (with a live preview of every price formula) and shopping lists, and a button that writes the game file |
+
+Stream mode (F8) hides your gold, sales, purchases and the Accounting tab unless the widget's
+**Show gold on stream** setting is on. Item prices are never hidden. The palette has **AH: deals**
+and **AH: search** (type `ah linen`, or anything at all in the WoW preset).

@@ -57,8 +57,8 @@ function countOf(data: PresetData, def: AnyWidgetDef) {
 
 /**
  * "Get More Widgets": every kind of panel and widget there is, to search, filter by category and
- * add. The preset's recommended ones come first. A panel there can only be one of shows "On screen"
- * once it is on the board; a widget can be added again and again.
+ * add. The preset's recommended ones come first. A panel there can only be one of (or a widget marked
+ * `onlyOne`) shows "On screen" once it is on the board; other widgets can be added again and again.
  */
 export function WidgetLibrary({ active, mutatePreset }: Props) {
   const { base, def: preset, data } = active;
@@ -101,7 +101,9 @@ export function WidgetLibrary({ active, mutatePreset }: Props) {
           <ul className="lib__list">
             {section.defs.map((def) => {
               const count = countOf(data, def);
-              const here = isSingle(def) && count > 0;
+              const here = (isSingle(def) || def.onlyOne === true) && count > 0;
+              // A single panel is pointed at by its kind, an only-one widget by its own id.
+              const target = isSingle(def) ? def.kind : data.widgets.find((w) => w.kind === def.kind)?.id ?? def.kind;
               return (
                 <li key={def.kind} className="lib__card">
                   <span className="lib__icon">
@@ -115,7 +117,7 @@ export function WidgetLibrary({ active, mutatePreset }: Props) {
                   {here ? (
                     <span className="lib__actions">
                       <span className="lib__here">On screen</span>
-                      <button className="btn btn--small" aria-label={`Show ${def.name}`} onClick={() => callOut(def.kind)}>
+                      <button className="btn btn--small" aria-label={`Show ${def.name}`} onClick={() => callOut(target)}>
                         Show
                       </button>
                     </span>

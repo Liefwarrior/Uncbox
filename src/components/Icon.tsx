@@ -76,6 +76,7 @@ const PATHS = {
   twitch: ['M21 2H3v16h5v4l4-4h5l4-4V2z', 'M11 11V7', 'M16 11V7'],
   skipForward: ['M5 4l10 8-10 8z', 'M19 5v14'],
   zap: ['M13 2 3 14h9l-1 8 10-12h-9z'],
+  coins: ['M14 8a6 6 0 1 1-12 0 6 6 0 0 1 12 0z', 'M18.09 10.37A6 6 0 1 1 10.34 18', 'M7 6h1v4', 'm16.71 13.88.7.71-2.82 2.82'],
 } as const;
 
 export type IconName = keyof typeof PATHS;

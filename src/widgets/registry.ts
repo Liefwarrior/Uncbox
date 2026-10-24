@@ -1,6 +1,7 @@
 import type { PresetDef } from '../presets';
 import { overlay } from '../state/overlay';
 import { type BoardId, isWidgetId, uid, type Widget } from '../state/model';
+import { auctionhouse } from './auctionhouse';
 import { calendar } from './calendar';
 import { camera } from './camera';
 import { character } from './character';
@@ -81,6 +82,7 @@ export const WIDGETS: readonly AnyWidgetDef[] = [
   damage,
   character,
   quests,
+  auctionhouse,
   steam,
 ];
 
