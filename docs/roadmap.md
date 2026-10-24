@@ -126,7 +126,7 @@ vertical, sent to Discord or saved to Drive. Uses the installed yt-dlp and ffmpe
 install through winget when they're missing. Also: "Download this video" from a Web widget and
 from Ctrl+K.
 
-### UBX-17 · Widget library ("Get More Widgets") — Building
+### UBX-17 · Widget library ("Get More Widgets") — Shipped (43aced6)
 Every panel and widget becomes one kind of thing, a widget, defined in one place with its own
 folder. The sidebar gets a "Get More Widgets" library to browse, search and add them; "More panels"
 and "Add a widget" go away. Presets stay, with better defaults. Done when: adding a widget is one
