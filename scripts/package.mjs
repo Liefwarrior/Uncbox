@@ -151,6 +151,8 @@ cpSync(path.join(root, 'server'), path.join(out, 'app', 'server'), {
 cpSync(path.join(root, 'integrations', 'wow', 'install.mjs'), path.join(out, 'app', 'integrations', 'wow', 'install.mjs'));
 cpSync(path.join(root, 'integrations', 'wow', 'addon'), path.join(out, 'app', 'integrations', 'wow', 'addon'), { recursive: true });
 cpSync(path.join(root, 'dist'), path.join(out, 'app', 'dist'), { recursive: true });
+// The MIT license asks for its notice in every copy, as do the licenses of what Uncbox bundles.
+for (const doc of ['LICENSE', 'PRIVACY.md', 'THIRD_PARTY_NOTICES.md']) cpSync(path.join(root, doc), path.join(out, doc));
 // Only what makes the folder recognisable as Uncbox's: no scripts or dependencies to install.
 writeFileSync(
   path.join(out, 'app', 'package.json'),

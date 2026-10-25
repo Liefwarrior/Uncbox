@@ -1,6 +1,7 @@
 {
   "name": "uncbox",
   "private": true,
+  "license": "MIT",
   "version": "0.2.0",
   "description": "A locally hosted stream dashboard: your game, chat, friends and music in one themed, rearrangeable layout.",
   "type": "module",
