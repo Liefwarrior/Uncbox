@@ -389,6 +389,8 @@ in `src/presetfile.ts`.
 Uncbox is free. If it makes your stream better, you can
 [buy me a coffee](https://www.buymeacoffee.com/liefwarrior).
 
+Uncbox keeps everything on your PC: see the [privacy policy](PRIVACY.md).
+
 Made by [Liefwarrior](https://github.com/Liefwarrior). Third-party licenses are in
 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md); run `npm run notices` after changing
 dependencies.
