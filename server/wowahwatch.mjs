@@ -35,6 +35,8 @@ export async function savedVariablesIn(addOnsPath) {
   for (const a of accounts) {
     if (!a.isDirectory()) continue;
     const dir = path.join(wtfAccounts, a.name, 'SavedVariables');
+    // WTF\Account also holds folders that aren't accounts (WoW's own SavedVariables, for one).
+    if (!(await stat(dir).then((s) => s.isDirectory(), () => false))) continue;
     dirs.push(dir);
     const file = path.join(dir, 'UncboxAH.lua');
     if (await stat(file).then((s) => s.isFile(), () => false)) files.push(file);

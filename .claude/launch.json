@@ -53,6 +53,17 @@
         "UNCBOX_OFFLINE": "1"
       },
       "port": 5174
+    },
+    {
+      "name": "uncbox-soak",
+      "runtimeExecutable": "node",
+      "runtimeArgs": [
+        "C:/repositories/Uncbox/server/index.mjs",
+        "--port=5175",
+        "--data=C:/repositories/Uncbox/data/soak",
+        "--clips=C:/repositories/Uncbox/data/soak/clips"
+      ],
+      "port": 5175
     }
   ]
 }
