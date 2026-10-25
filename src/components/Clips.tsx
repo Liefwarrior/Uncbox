@@ -1,9 +1,18 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { keyLabel, isClipKey } from '../clips/keys';
-import { CLIP_SECONDS, clipUrl, revealClip, saveClip, useClips, watchClip } from '../clips/replay';
+import { callOut } from '../callout';
+import { canSaveToDrive, saveToDrive, useDriveUploads } from '../clips/drive';
+import { CLIP_SECONDS, clipLabel, clipUrl, isVerticalClip, revealClip, saveClip, useClips, watchClip } from '../clips/replay';
+import { removeWebhook, sendToDiscord, setWebhook, useWebhook } from '../clips/share';
+import { placePanel } from '../layout';
+import { scrubText, usePrivate } from '../privacy';
 import { useCover } from '../native';
-import type { ClipSettings } from '../state/model';
-import type { Mutate } from '../state/useAppState';
+import type { ClipSettings, PresetData } from '../state/model';
+import type { Mutate, MutatePreset } from '../state/useAppState';
+import { useDialog } from '../useDialog';
+import { newWidget } from '../widgets/registry';
+import { useGoogle } from '../widgets/shared/google';
+import { StatusLine, VerticalEditor, useJob } from './ClipEditor';
 import { Icon } from './Icon';
 
 const TOAST_MS = 6000;
@@ -22,6 +31,8 @@ const megabytes = (bytes: number) => `${Math.max(1, Math.round(bytes / 1e6))} MB
 /** The sidebar's Clips section: on/off, the clip key, save now, and the latest clips. */
 export function ClipsSection({ settings, mutate }: { settings: ClipSettings; mutate: Mutate }) {
   const clips = useClips();
+  // The clips folder is a path under your Windows user name; on air the tooltip doesn't say it.
+  const hidden = usePrivate();
   const [binding, setBinding] = useState(false);
   const key = keyLabel(settings.key);
 
@@ -43,7 +54,9 @@ export function ClipsSection({ settings, mutate }: { settings: ClipSettings; mut
   const status = !settings.enabled
     ? 'Off'
     : clips.error
-      ? clips.error
+      ? hidden
+        ? scrubText(clips.error)
+        : clips.error
       : clips.recording
         ? clips.seconds >= CLIP_SECONDS
           ? `Keeping the last ${CLIP_SECONDS} seconds`
@@ -52,7 +65,6 @@ export function ClipsSection({ settings, mutate }: { settings: ClipSettings; mut
 
   return (
     <>
-      <h3>Clips</h3>
       <ul className="toggles">
         <li>
           <label>
@@ -70,6 +82,38 @@ export function ClipsSection({ settings, mutate }: { settings: ClipSettings; mut
             </span>
           </label>
         </li>
+        {settings.enabled && (
+          <>
+            <li>
+              <label>
+                <input
+                  type="checkbox"
+                  checked={settings.driveAuto}
+                  onChange={(e) => mutate((s) => void (s.clips.driveAuto = e.target.checked))}
+                />
+                <span className="toggle" />
+                <span className="toggles__text">
+                  Upload new clips to Drive automatically
+                  <small>Needs Google sign-in in a Drive widget</small>
+                </span>
+              </label>
+            </li>
+            <li>
+              <label>
+                <input
+                  type="checkbox"
+                  checked={settings.driveShare}
+                  onChange={(e) => mutate((s) => void (s.clips.driveShare = e.target.checked))}
+                />
+                <span className="toggle" />
+                <span className="toggles__text">
+                  Share links publicly
+                  <small>Anyone with the link can watch clips you put on Drive</small>
+                </span>
+              </label>
+            </li>
+          </>
+        )}
       </ul>
       {settings.enabled && (
         <>
@@ -101,76 +145,253 @@ export function ClipsSection({ settings, mutate }: { settings: ClipSettings; mut
             <li key={c.name}>
               <button className="side-link" title="Watch" onClick={() => watchClip(c.name)}>
                 <Icon name="play" size={13} />
-                <span>{when(c.at)}</span>
-                <small>{megabytes(c.size)}</small>
+                <span>{c.download ? (hidden ? 'Downloaded video' : clipLabel(c.name)) : when(c.at)}</span>
+                <small>
+                  {c.download && 'Download · '}
+                  {isVerticalClip(c.name) && 'Vertical · '}
+                  {megabytes(c.size)}
+                </small>
               </button>
             </li>
           ))}
         </ul>
       )}
-      <button className="side-link side-link--quiet" title={clips.dir} onClick={() => revealClip()}>
+      <DiscordWebhook />
+      <button className="side-link side-link--quiet" title={hidden ? 'Opens in Explorer' : clips.dir} onClick={() => revealClip()}>
         <Icon name="folder" /> Open clips folder
       </button>
     </>
   );
 }
 
-/** "Clip saved" with a Watch button, for a few seconds after each clip. Hidden in stream mode. */
-export function ClipToast() {
+/** Where "Send to Discord" sends clips. The server keeps the URL; this only ever shows its last characters. */
+function DiscordWebhook() {
+  const { set, hint } = useWebhook();
+  const hidden = usePrivate();
+  const [editing, setEditing] = useState(false);
+  const [url, setUrl] = useState('');
+  const [error, setError] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  const close = () => {
+    setEditing(false);
+    setUrl('');
+    setError('');
+  };
+  const save = async () => {
+    setSaving(true);
+    const problem = await setWebhook(url);
+    setSaving(false);
+    if (problem) setError(problem);
+    else close();
+  };
+
+  if (!editing) {
+    return (
+      <div className="clips__discord">
+        <p className="hint">
+          Discord webhook: {set ? (hidden ? 'set' : `set (${hint})`) : 'not set'}
+        </p>
+        <div className="clips__actions">
+          <button className="btn btn--small" onClick={() => setEditing(true)}>
+            {set ? 'Replace' : 'Add webhook'}
+          </button>
+          {set && (
+            <button className="btn btn--small" onClick={() => void removeWebhook()}>
+              Remove
+            </button>
+          )}
+        </div>
+      </div>
+    );
+  }
+  return (
+    <form
+      className="clips__discord"
+      onSubmit={(e) => {
+        e.preventDefault();
+        void save();
+      }}
+    >
+      {/* Hidden as you type, like a password: it lets anyone post to your channel. */}
+      <input
+        type="password"
+        autoComplete="off"
+        spellCheck={false}
+        autoFocus
+        placeholder="https://discord.com/api/webhooks/…"
+        aria-label="Discord webhook URL"
+        value={url}
+        onChange={(e) => setUrl(e.target.value)}
+      />
+      {error && <p className="error">{error}</p>}
+      <p className="hint">In Discord: channel settings, Integrations, Webhooks, Copy Webhook URL. It stays on this PC.</p>
+      <div className="clips__actions">
+        <button className="btn btn--small btn--accent" disabled={!url.trim() || saving}>
+          {saving ? 'Saving…' : 'Save'}
+        </button>
+        <button type="button" className="btn btn--small" onClick={close}>
+          Cancel
+        </button>
+      </div>
+    </form>
+  );
+}
+
+/**
+ * "Clip saved" with a Watch button, for a few seconds after each clip. With automatic upload on it
+ * goes on to say "uploading to Drive…" and then "on Drive". Hidden in stream mode.
+ */
+export function ClipToast({ driveAuto }: { driveAuto: boolean }) {
   const { saved, saveError } = useClips();
-  const key = saved ? `saved:${saved.at}` : saveError ? `error:${saveError}` : '';
+  const priv = usePrivate();
+  const clean = (text: string) => (priv ? scrubText(text) : text);
+  const drive = useDriveUploads()[saved?.name ?? ''];
+  const upload = driveAuto ? drive : undefined;
+  const key = saved ? `saved:${saved.at}:${upload?.state ?? ''}` : saveError ? `error:${saveError}` : '';
   const [hidden, setHidden] = useState('');
 
   useEffect(() => {
-    if (!key) return;
+    // Stays up while the upload is going; the next word on it shows again.
+    if (!key || upload?.state === 'uploading') return;
     const t = setTimeout(() => setHidden(key), TOAST_MS);
     return () => clearTimeout(t);
-  }, [key]);
+  }, [key, upload?.state]);
 
   if (!key || hidden === key) return null;
   return (
-    <div className="toast toast--clip" role="status">
+    <div className="toast toast--clip" role={saved ? 'status' : 'alert'} aria-live={saved ? 'polite' : 'assertive'}>
       {saved ? (
         <>
-          <span>Clip saved</span>
+          <span>
+            Clip saved
+            {upload?.state === 'uploading' && ' · uploading to Drive…'}
+            {upload?.state === 'done' && ' · on Drive'}
+            {upload?.state === 'error' && ` · not on Drive: ${clean(upload.error)}`}
+          </span>
           <button className="toast__undo" onClick={() => watchClip(saved.name)}>
             <Icon name="play" size={13} /> Watch
           </button>
         </>
       ) : (
-        <span className="error">{saveError}</span>
+        <span className="error">{clean(saveError)}</span>
       )}
     </div>
   );
 }
 
 /** Plays a saved clip over the dashboard. */
-export function ClipPlayer() {
-  const { playing } = useClips();
+export function ClipPlayer({ settings, data, mutatePreset }: { settings: ClipSettings; data: PresetData; mutatePreset: MutatePreset }) {
+  const { playing, playingEdit } = useClips();
   useCover(Boolean(playing));
+
+  // Signing in to Google happens in a Drive widget: point at the one on the board, or add one.
+  const setUpDrive = () => {
+    watchClip(null);
+    const there = data.widgets.find((w) => w.kind === 'drive' && data.layout.some((item) => item.i === w.id));
+    if (there) return callOut(there.id);
+    const w = newWidget('drive');
+    mutatePreset((d) => {
+      d.widgets.push(w);
+      d.layout.push(placePanel(d.layout, w.id, d.widgets));
+    });
+    callOut(w.id);
+  };
+
+  // Keyed, so each clip starts with a fresh editor and no leftover "Sent to Discord".
+  return playing ? <Player key={playing} playing={playing} startEditing={playingEdit} share={settings.driveShare} onSetUpDrive={setUpDrive} /> : null;
+}
+
+/** The player itself, with Make vertical, Send to Discord and Save to Drive. */
+function Player({ playing, startEditing, share, onSetUpDrive }: { playing: string; startEditing: boolean; share: boolean; onSetUpDrive: () => void }) {
+  const { set: discord } = useWebhook();
+  const google = useGoogle();
+  const onDrive = useDriveUploads()[playing];
+  const driveReady = google.reachable && canSaveToDrive(google.status);
+  const job = useJob();
+  const [editing, setEditing] = useState(startEditing && !isVerticalClip(playing));
+
+  // While something is being made, Esc and a click outside stop that rather than closing the player.
+  const { busy, cancel } = job;
+  const close = () => (busy ? cancel() : watchClip(null));
+  const closeRef = useRef(close);
+  closeRef.current = close;
   useEffect(() => {
-    if (!playing) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== 'Escape') return;
       e.stopPropagation();
-      watchClip(null);
+      closeRef.current();
     };
     window.addEventListener('keydown', onKey, true);
     return () => window.removeEventListener('keydown', onKey, true);
-  }, [playing]);
+  }, []);
 
-  if (!playing) return null;
+  // Focus moves into the player, stays there, and goes back to what opened it. Esc is handled above.
+  const box = useRef<HTMLDivElement>(null);
+  useDialog(box);
+
+  const vertical = isVerticalClip(playing);
+  // A downloaded video is named after its title, which can be private.
+  const hidden = usePrivate();
+  const label = hidden && playing.startsWith('Downloads/') ? 'Downloaded video' : clipLabel(playing);
   return (
-    <div className="clip-player" role="dialog" aria-label="Clip" onClick={() => watchClip(null)}>
-      <div className="clip-player__box" onClick={(e) => e.stopPropagation()}>
-        <video src={clipUrl(playing)} controls autoPlay />
+    <div className="clip-player" role="dialog" aria-modal="true" aria-label={`Clip ${label}`} onClick={close}>
+      <div ref={box} className={`clip-player__box ${editing ? 'is-editing' : ''}`} onClick={(e) => e.stopPropagation()}>
+        {editing ? (
+          <VerticalEditor name={playing} job={job} discord={discord} />
+        ) : (
+          <video src={clipUrl(playing)} controls autoPlay />
+        )}
+        <StatusLine job={job} />
         <div className="clip-player__bar">
-          <span>{playing.replace(/\.mp4$/, '')}</span>
+          <span>{label}</span>
           <span className="spacer" />
+          {!vertical && (
+            <button className={`btn btn--small ${editing ? 'btn--on' : ''}`} disabled={busy} onClick={() => setEditing((e) => !e)}>
+              <Icon name="crop" size={14} /> {editing ? 'Back to the clip' : 'Make vertical'}
+            </button>
+          )}
+          {!editing && (
+            <button
+              className="btn btn--small"
+              disabled={busy || !discord}
+              title={discord ? 'Send this clip to your Discord channel' : 'Add a Discord webhook under Clips first'}
+              onClick={() =>
+                job.run(async (report, signal) => {
+                  await sendToDiscord({ name: playing, trim: null, frame: null }, report, signal);
+                  return { text: 'Sent to Discord.' };
+                })
+              }
+            >
+              <Icon name="message" size={14} /> Send to Discord
+            </button>
+          )}
+          {!editing && (
+            <>
+              <button
+                className="btn btn--small"
+                disabled={busy || !driveReady || onDrive?.state === 'uploading'}
+                title={driveReady ? 'Save this clip to your Google Drive' : 'Sign in to Google in a Drive widget first'}
+                onClick={() =>
+                  job.run(async (report, signal) => {
+                    const link = await saveToDrive(playing, share, report, signal);
+                    return { text: 'Saved to Drive.', link };
+                  })
+                }
+              >
+                <Icon name="cloud" size={14} /> Save to Drive
+              </button>
+              {!driveReady && google.status !== null && (
+                <button className="btn btn--small" title="Opens a Drive widget where you can sign in to Google" onClick={onSetUpDrive}>
+                  Set up Drive
+                </button>
+              )}
+            </>
+          )}
           <button className="btn btn--small" onClick={() => revealClip(playing)}>
             <Icon name="folder" size={14} /> Show in folder
           </button>
-          <button className="icon-btn" title="Close" onClick={() => watchClip(null)}>
+          <button className="icon-btn" title="Close" aria-label="Close the clip" onClick={close}>
             <Icon name="x" size={14} />
           </button>
         </div>

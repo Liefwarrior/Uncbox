@@ -1,5 +1,5 @@
 import { circuitBoard, graphPaper, hexagons, wiggle } from 'hero-patterns';
-import { type CSSProperties, useEffect, useRef } from 'react';
+import { type CSSProperties, useEffect, useRef, useSyncExternalStore } from 'react';
 import { backgroundKind, type BackgroundId } from '../backgrounds';
 import type { Palette } from '../particles';
 import type { PresetId } from '../state/model';
@@ -26,18 +26,34 @@ function paletteOf(preset: PresetId, root: Element): Palette {
   return colors;
 }
 
+const REDUCED = '(prefers-reduced-motion: reduce)';
+
+/** True while the system asks for less motion; follows the setting if it changes. */
+function useReducedMotion() {
+  return useSyncExternalStore(
+    (on) => {
+      const q = window.matchMedia(REDUCED);
+      q.addEventListener('change', on);
+      return () => q.removeEventListener('change', on);
+    },
+    () => window.matchMedia(REDUCED).matches,
+    () => false,
+  );
+}
+
 export function Backdrop({ id, preset }: { id: BackgroundId; preset: PresetId }) {
   const host = useRef<HTMLDivElement>(null);
   const kind = backgroundKind(id);
+  // Particles never start under reduced motion, not even as a frozen picture.
+  const reduced = useReducedMotion();
 
   useEffect(() => {
     const el = host.current;
-    if (kind !== 'particles' || !el) return;
+    if (kind !== 'particles' || !el || reduced) return;
     let stopped = false;
     let stop: (() => void) | undefined;
-    const still = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     void import('../particles')
-      .then(({ startParticles }) => startParticles(el, id, paletteOf(preset, el.closest('.app') ?? document.body), still))
+      .then(({ startParticles }) => startParticles(el, id, paletteOf(preset, el.closest('.app') ?? document.body), false))
       .then((container) => {
         if (stopped) container?.destroy();
         else stop = () => container?.destroy();
@@ -47,12 +63,13 @@ export function Backdrop({ id, preset }: { id: BackgroundId; preset: PresetId })
       stopped = true;
       stop?.();
     };
-  }, [id, kind, preset]);
+  }, [id, kind, preset, reduced]);
 
   if (kind === 'plain') return null;
   if (kind === 'pattern') {
     const mask = PATTERNS[id];
     return <div className={`backdrop backdrop--pattern backdrop--${id}`} style={{ maskImage: mask, WebkitMaskImage: mask } as CSSProperties} aria-hidden="true" />;
   }
+  if (reduced) return null;
   return <div ref={host} id="uncbox-backdrop" className="backdrop backdrop--particles" aria-hidden="true" />;
 }

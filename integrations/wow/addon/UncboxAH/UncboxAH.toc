@@ -1,0 +1,18 @@
+## Interface: 16001, 16002, 11509
+## Title: Uncbox Auction House
+## Notes: Scans the auction house, keeps price history and your sales, and posts and shops with Uncbox's rules. Works with the Uncbox dashboard.
+## Author: Liefwarrior
+## Version: 1.0.0
+## SavedVariables: UncboxAHDB
+
+Util.lua
+Db.lua
+Rules.lua
+Scan.lua
+Accounting.lua
+Collect.lua
+Actions.lua
+Tooltip.lua
+UI.lua
+UncboxAHData.lua
+Core.lua

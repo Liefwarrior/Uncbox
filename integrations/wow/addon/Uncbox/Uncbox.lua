@@ -1,28 +1,25 @@
--- Shows your character and quest log on your Uncbox dashboard. Addons can't write files or talk
--- to the network while you play, so this draws them as a thin strip of colored blocks along the
--- top-left edge of the screen. Uncbox reads the strip from its capture of the game window and
+-- Shows your character, quest log, guild and raid on your Uncbox dashboard. Addons can't write
+-- files or talk to the network while you play, so this draws them as a thin strip of colored blocks
+-- along the top edge of the screen. Uncbox reads the strip from its capture of the game window and
 -- crops it out, so viewers never see it.
 --
--- The strip only shows while there's something to send: for a moment after your character or
--- quest log changes, and once a minute so a dashboard opened later catches up. The rest of the
--- time it's hidden. /uncbox turns it off or on, /uncbox sync sends everything now.
+-- The strip only shows while there's something to send: for a moment after your character, quest
+-- log, guild or raid changes, and once a minute so a dashboard opened later catches up. The rest
+-- of the time it's hidden. What to collect and where the strip sits are chosen in Uncbox, which
+-- writes UncboxConfig.lua; /reload picks up a change. /uncbox turns the strip off or on, and
+-- /uncbox sync sends everything now. The complete data (the whole guild roster with notes, raid
+-- history, loot) is saved in UncboxDB when you log out or /reload, and Uncbox reads it from there.
 
-local C = UncboxCodec
+local C, U, O = UncboxCodec, UncboxUtil, UncboxOutbox
 local band = bit.band
+local FIELD, RECORD = U.FIELD, U.RECORD
+local clean = U.clean
 
-local FIELD, RECORD = "\31", "\30"
 local TICK = 0.05 -- 20 pages a second while the strip shows
 local REPEATS = 3 -- each change is sent this many times over, in case a captured frame misses a page
 local HEARTBEAT = 60 -- seconds between catch-up sends while nothing changes
 
--- Plain text only: no control characters (they separate fields) and no |c color codes.
-local function clean(s)
-  if s == nil then
-    return ""
-  end
-  s = tostring(s):gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", "")
-  return (s:gsub("%c", ""))
-end
+local config = U.config()
 
 local function maxLevel()
   if GetMaxLevelForPlayerExpansion then
@@ -121,12 +118,14 @@ local function partyText()
 end
 
 -- Each channel sends its pages in turn while it has rounds left; seq changes only when its text
--- does, so a catch-up send of unchanged text never makes Uncbox redo anything.
-local channels = {
-  { kind = C.KIND_CHARACTER, read = characterText, every = 1, pages = {}, next = 1, rounds = 0 },
-  { kind = C.KIND_QUESTS, read = questsText, every = 2, pages = {}, next = 1, rounds = 0 },
-  { kind = C.KIND_PARTY, read = partyText, every = 1, pages = {}, next = 1, rounds = 0 },
+-- does, so a catch-up send of unchanged text never makes Uncbox redo anything. The last channel is
+-- the Outbox, which hands out guild and raid news one message at a time.
+local allChannels = {
+  { module = "character", kind = C.KIND_CHARACTER, read = characterText, every = 1, pages = {}, next = 1, rounds = 0 },
+  { module = "quests", kind = C.KIND_QUESTS, read = questsText, every = 2, pages = {}, next = 1, rounds = 0 },
+  { module = "party", kind = C.KIND_PARTY, read = partyText, every = 1, pages = {}, next = 1, rounds = 0 },
 }
+local channels = {}
 
 local function refresh(ch)
   local ok, text = pcall(ch.read)
@@ -143,11 +142,17 @@ end
 
 local function sendAll(rounds)
   for _, ch in ipairs(channels) do
-    ch.rounds = math.max(ch.rounds, rounds)
+    if ch.read then
+      ch.rounds = math.max(ch.rounds, rounds)
+    end
   end
 end
 
 local strip, cells, shown = nil, {}, {}
+
+local function hidden()
+  return UncboxDB.hidden or not config.strip.enabled
+end
 
 local function fitToPixels()
   -- With the parent's scale ignored, 768 / screen height makes one unit one physical pixel.
@@ -164,7 +169,8 @@ local function buildStrip()
   if strip.SetIgnoreParentScale then
     strip:SetIgnoreParentScale(true)
   end
-  strip:SetPoint("TOPLEFT", WorldFrame, "TOPLEFT", 0, 0)
+  local corner = config.strip.corner
+  strip:SetPoint(corner, WorldFrame, corner, 0, 0)
   strip:SetSize(C.COLS * C.BLOCK, C.ROWS * C.BLOCK)
   fitToPixels()
   for i = 1, C.COLS * C.ROWS do
@@ -193,12 +199,15 @@ local function draw(bytes)
 end
 
 local function pending(ch)
+  if ch.refill then
+    ch:refill()
+  end
   return ch.rounds > 0 and #ch.pages > 0
 end
 
 local turn = 0
 local function tick()
-  if UncboxDB.hidden then
+  if hidden() then
     return
   end
   -- Channels with something to send take turns, a page each; with nothing left, the strip hides.
@@ -235,13 +244,25 @@ events:SetScript("OnEvent", function(_, event)
     return
   end
   UncboxDB = UncboxDB or {}
+  config = U.config()
   buildStrip()
   strip:Hide()
-  for _, ch in ipairs(channels) do
-    refresh(ch)
-    C_Timer.NewTicker(ch.every, function()
+  O.setEnabled(not hidden())
+  for _, ch in ipairs(allChannels) do
+    if config.modules[ch.module] then
+      channels[#channels + 1] = ch
       refresh(ch)
-    end)
+      C_Timer.NewTicker(ch.every, function()
+        refresh(ch)
+      end)
+    end
+  end
+  channels[#channels + 1] = O.channel
+  if config.modules.guild then
+    UncboxGuild.start()
+  end
+  if config.modules.raid or config.modules.loot then
+    UncboxRaid.start(config)
   end
   C_Timer.NewTicker(HEARTBEAT, function()
     sendAll(1)
@@ -256,14 +277,28 @@ SlashCmdList.UNCBOX = function(msg)
   end
   if strtrim(msg or ""):lower() == "sync" then
     sendAll(REPEATS)
-    print("Uncbox: sending your character, quest log and party.")
+    if config.modules.guild then
+      UncboxGuild.syncNow()
+    end
+    if config.modules.raid then
+      UncboxRaid.syncNow()
+    end
+    print("Uncbox: sending your character, quest log, guild and raid.")
     return
   end
   UncboxDB.hidden = not UncboxDB.hidden
-  if UncboxDB.hidden then
+  O.setEnabled(not hidden())
+  if hidden() then
     strip:Hide()
   else
+    -- Whatever changed while it was off was never sent: start over.
     sendAll(REPEATS)
+    if config.modules.guild then
+      UncboxGuild.syncNow()
+    end
+    if config.modules.raid then
+      UncboxRaid.syncNow()
+    end
   end
   print(UncboxDB.hidden and "Uncbox: off. Your dashboard stops updating until you type /uncbox again."
     or "Uncbox: on.")

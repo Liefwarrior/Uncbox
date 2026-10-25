@@ -14,6 +14,38 @@ internal sealed class GameWindow(IntPtr hwnd)
     public IntPtr Handle { get; } = hwnd;
     public string Title => Native.TitleOf(Handle);
     public bool Alive => Native.IsWindow(Handle);
+    public bool Shown => Native.IsWindowVisible(Handle);
+
+    /// <summary>
+    /// The title bar or sizing border is back. Games (Unreal ones especially) restyle their own
+    /// window on load or a settings change, so the app checks this every time it re-places it.
+    /// </summary>
+    public bool HasFrame => (Native.GetWindowLongPtr(Handle, Native.GWL_STYLE) & (Native.WS_CAPTION | Native.WS_THICKFRAME)) != 0;
+
+    /// <summary>Whether the window is where it was put (a pixel or two either way is fine).</summary>
+    public bool Fits(Native.RECT at) =>
+        Native.GetWindowRect(Handle, out var now) &&
+        Math.Abs(now.Left - at.Left) <= 2 && Math.Abs(now.Top - at.Top) <= 2 &&
+        Math.Abs(now.Width - at.Width) <= 2 && Math.Abs(now.Height - at.Height) <= 2;
+
+    /// <summary>
+    /// The launch option that makes this game resizable, from its engine (found next to its exe),
+    /// or "" if it isn't one Uncbox knows.
+    /// </summary>
+    public string WindowedLaunchOption()
+    {
+        string exe = Native.ProcessPathOf(Handle);
+        string? dir = exe.Length > 0 ? Path.GetDirectoryName(exe) : null;
+        if (dir is null) return "";
+        // Windowed without a border; -window-mode borderless would still be full screen.
+        if (File.Exists(Path.Combine(dir, "UnityPlayer.dll"))) return "-screen-fullscreen 0 -popupwindow";
+        // Unreal games keep their exe in <game>/Binaries/Win64 with the Engine folder at the top.
+        for (var d = new DirectoryInfo(dir); d is not null && d.Parent is not null; d = d.Parent)
+        {
+            if (Directory.Exists(Path.Combine(d.FullName, "Engine", "Binaries"))) return "-windowed";
+        }
+        return "";
+    }
 
     public void MakeBorderless()
     {
