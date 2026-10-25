@@ -8,6 +8,7 @@ import { normalizeChannel } from '../twitch';
 import { showNotice } from '../undo';
 import { addonLine, installWowAddon, seenLine, useNow, useWowRunning, useWowSeenAt, useWowStatus, windowLine } from '../wow';
 import { Icon } from './Icon';
+import { Section } from './Section';
 
 interface Props {
   state: AppState;
@@ -17,7 +18,8 @@ interface Props {
 /**
  * "Get set up": one line per panel on the board that still needs something from you. Clicking a
  * line points at that panel. Hiding a panel you don't use removes its line, and the whole list
- * goes away once everything is ready.
+ * goes away once everything is ready. It folds into a single "Get set up · 3 of 4" line: open
+ * while nothing is done, folded once something is (unless you chose either way).
  */
 export function SetupList({ state, mutatePreset }: Props) {
   const discord = useDiscord();
@@ -68,10 +70,7 @@ export function SetupList({ state, mutatePreset }: Props) {
       .catch((err) => showNotice(err instanceof Error ? err.message : 'Couldn’t install the addon.', true));
 
   return (
-    <section className="setup">
-      <h3>
-        Get set up <span className="setup__count">{mine.length - left} of {mine.length}</span>
-      </h3>
+    <Section id="setup" title="Get set up" meta={`${mine.length - left} of ${mine.length}`} defaultOpen={left === mine.length}>
       <ol className="setup__steps">
         {mine.map((s) => (
           <li key={s.key}>
@@ -95,7 +94,7 @@ export function SetupList({ state, mutatePreset }: Props) {
           ))}
         </p>
       )}
-      <p className="hint">Not using one? Turn it off below.</p>
-    </section>
+      <p className="hint">Not using one? Take it off the board in On screen.</p>
+    </Section>
   );
 }

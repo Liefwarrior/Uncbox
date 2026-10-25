@@ -5,6 +5,7 @@ import { type CustomPreset, MAX_PRESET_NAME } from '../state/model';
 import { removeCustom, renameCustom, restoreCustom } from '../state/presets';
 import type { Mutate } from '../state/useAppState';
 import { offerUndo } from '../undo';
+import { Icon } from './Icon';
 import { Menu } from './Menu';
 
 interface Props {
@@ -12,6 +13,8 @@ interface Props {
   index: number;
   active: boolean;
   mutate: Mutate;
+  /** After it is picked, so the list it sits in can shut. */
+  onPick?: () => void;
 }
 
 function RenameInput({ initial, onDone }: { initial: string; onDone: (name: string | null) => void }) {
@@ -41,8 +44,8 @@ function RenameInput({ initial, onDone }: { initial: string; onDone: (name: stri
   );
 }
 
-/** A preset of your own: the base's look, its own name, and a ⋯ menu to rename, export or delete it. */
-export function CustomPresetCard({ preset, index, active, mutate }: Props) {
+/** A row for a preset of your own: the base's look, its own name, and a ⋯ menu to rename, export or delete it. */
+export function CustomPresetCard({ preset, index, active, mutate, onPick }: Props) {
   const [renaming, setRenaming] = useState(false);
 
   const remove = () => {
@@ -68,11 +71,21 @@ export function CustomPresetCard({ preset, index, active, mutate }: Props) {
         </div>
       ) : (
         <button
+          data-nav
+          aria-current={active ? 'true' : undefined}
           className={`preset-card preset-card--${preset.base} is-custom ${active ? 'on' : ''}`}
-          onClick={() => mutate((s) => void (s.preset = preset.id))}
+          onClick={() => {
+            mutate((s) => void (s.preset = preset.id));
+            onPick?.();
+          }}
         >
           <strong>{preset.name}</strong>
           <span>Based on {PRESETS[preset.base].name}</span>
+          {active && (
+            <span className="preset-card__check">
+              <Icon name="check" size={14} />
+            </span>
+          )}
         </button>
       )}
       <div className="preset-slot__menu">

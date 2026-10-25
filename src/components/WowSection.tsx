@@ -27,7 +27,6 @@ export function WowSection() {
 
   return (
     <>
-      <h3>WoW addon</h3>
       <ul className="toggles">
         <li>
           <label>

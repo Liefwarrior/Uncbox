@@ -2,6 +2,7 @@
 const PATHS = {
   plus: ['M5 12h14', 'M12 5v14'],
   minus: ['M5 12h14'],
+  chevronDown: ['m6 9 6 6 6-6'],
   x: ['M18 6 6 18', 'm6 6 12 12'],
   play: ['M6 3l14 9-14 9z'],
   pause: ['M6 4h4v16H6z', 'M14 4h4v16h-4z'],

@@ -118,11 +118,15 @@ export function AutomationsSection({ state, mutate }: { state: AppState; mutate:
   const startNew = () => {
     if (!canAddAutomation(state)) return showNotice('That’s as many automations as fit. Remove one to add another.');
     setDraft(newAutomation());
-    root.current?.scrollIntoView({ block: 'nearest' });
   };
   const startNewRef = useRef(startNew);
   startNewRef.current = startNew;
+  // The sidebar opens this section when something asks for the editor; scroll once it is showing.
   useEffect(() => onAutomationEditor(() => startNewRef.current()), []);
+  const drafting = draft !== null;
+  useEffect(() => {
+    if (drafting) root.current?.scrollIntoView({ block: 'nearest' });
+  }, [drafting]);
 
   const save = (rule: Automation) => {
     mutate((s) => {
@@ -151,7 +155,6 @@ export function AutomationsSection({ state, mutate }: { state: AppState; mutate:
 
   return (
     <div ref={root}>
-      <h3>Automations</h3>
       {rules.length > 0 && (
         <ul className="toggles autos">
           {rules.map((rule) => (

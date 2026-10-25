@@ -60,7 +60,6 @@ export function ClipsSection({ settings, mutate }: { settings: ClipSettings; mut
 
   return (
     <>
-      <h3>Clips</h3>
       <ul className="toggles">
         <li>
           <label>

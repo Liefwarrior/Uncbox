@@ -1,13 +1,13 @@
 // @vitest-environment jsdom
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { defaultState } from '../state/hydrate';
 import { type PresetData, type PresetId } from '../state/model';
 import { activePreset } from '../state/presets';
 import type { MutatePreset } from '../state/useAppState';
 import { dismissUndo } from '../undo';
 import { UndoToast } from './UndoToast';
-import { OnScreen, WidgetLibrary } from './WidgetLibrary';
+import { OnScreen, WidgetLibrary, WidgetLibraryDialog } from './WidgetLibrary';
 
 // The sidebar's "On screen" and "Get More Widgets", against a preset kept in a variable.
 
@@ -103,20 +103,41 @@ describe('Get More Widgets', () => {
     expect(data().widgets.filter((w) => w.kind === 'window')).toHaveLength(1);
   });
 
-  it('shows a single panel already on the board as On screen, with Show instead of Add', () => {
+  it('shows a single panel already on the board with just one Show button, no "On screen" label beside it', () => {
     setup('smite2');
     expect(screen.queryByRole('button', { name: 'Add Teams' })).toBeNull();
-    expect(screen.getByRole('button', { name: 'Show Teams' })).toBeTruthy();
-    expect(screen.getAllByText('On screen').length).toBeGreaterThan(0);
+    const row = screen.getByRole('button', { name: 'Show Teams' }).closest('li') as HTMLElement;
+    expect(within(row).getAllByRole('button')).toHaveLength(1);
+    expect(within(row).queryByText('On screen')).toBeNull();
+  });
+
+  it('calls a single panel what the board calls it: Build and Session on SMITE 2, not Party and Run', () => {
+    setup('smite2');
+    // The board's own list says "Build" and "Session"; so does the library.
+    expect(screen.getByRole('button', { name: 'Show Build' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /^(Show|Add) Session$/ })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /^(Show|Add) Party$/ })).toBeNull();
+    expect(screen.queryByRole('button', { name: /^(Show|Add) Run$/ })).toBeNull();
+    // The widget that is called Session elsewhere is this preset's Record panel.
+    expect(screen.getByRole('button', { name: 'Show Record' })).toBeTruthy();
+  });
+
+  it('finds a panel by the preset’s name for it, and still by its plain one', () => {
+    setup('smite2');
+    const box = screen.getByRole('searchbox', { name: 'Search widgets' });
+    fireEvent.change(box, { target: { value: 'build' } });
+    expect(screen.getByRole('button', { name: 'Show Build' })).toBeTruthy();
+    fireEvent.change(box, { target: { value: 'party' } });
+    expect(screen.getByRole('button', { name: 'Show Build' })).toBeTruthy();
   });
 
   it('adds a single panel that is hidden, once', () => {
     const { data } = setup('smite2');
     fireEvent.click(screen.getByRole('button', { name: 'Remove Record' }));
     expect(data().layout.some((i) => i.i === 'record')).toBe(false);
-    fireEvent.click(screen.getByRole('button', { name: 'Add Session' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Add Record' }));
     expect(data().layout.filter((i) => i.i === 'record')).toHaveLength(1);
-    expect(screen.queryByRole('button', { name: 'Add Session' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Add Record' })).toBeNull();
   });
 
   it('recommends the Auction House for WoW, where it starts on the board, so it is offered as Show', () => {
@@ -139,15 +160,66 @@ describe('Get More Widgets', () => {
     expect(screen.getByText('Nothing matches that.')).toBeTruthy();
   });
 
-  it('filters by category chip, and the chip says it is pressed', () => {
+  it('filters by the category list', () => {
     setup('desk');
-    const chip = screen.getByRole('button', { name: 'WoW' });
-    fireEvent.click(chip);
-    expect(chip.getAttribute('aria-pressed')).toBe('true');
+    const category = screen.getByRole('combobox', { name: 'Category' });
+    expect(within(category).getAllByRole('option')[0].textContent).toBe('All categories');
+    fireEvent.change(category, { target: { value: 'WoW' } });
     expect(screen.getByRole('button', { name: 'Add Character' })).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Add Clock' })).toBeNull();
-    fireEvent.click(chip);
-    expect(chip.getAttribute('aria-pressed')).toBe('false');
+    fireEvent.change(category, { target: { value: '' } });
     expect(screen.getByRole('button', { name: 'Add Clock' })).toBeTruthy();
+  });
+});
+
+describe('Get More Widgets window', () => {
+  function open(preset: PresetId = 'smite2') {
+    const state = defaultState();
+    state.preset = preset;
+    const onClose = vi.fn();
+    const mutatePreset: MutatePreset = (recipe) => {
+      act(() => recipe(state.presets[preset]));
+      view.rerender(ui());
+    };
+    const ui = () => <WidgetLibraryDialog active={activePreset(state)} mutatePreset={mutatePreset} onClose={onClose} />;
+    const view = render(ui());
+    return { onClose, data: () => state.presets[preset] as PresetData };
+  }
+
+  it('is a labelled, modal dialog that starts in the search box and lists the preset’s own names', () => {
+    open('smite2');
+    const dialog = screen.getByRole('dialog', { name: 'Get More Widgets' });
+    expect(dialog.getAttribute('aria-modal')).toBe('true');
+    expect(dialog.contains(document.activeElement)).toBe(true);
+    expect(document.activeElement).toBe(within(dialog).getByRole('searchbox', { name: 'Search widgets' }));
+    expect(within(dialog).getAllByRole('heading', { level: 4 })[0].textContent).toBe('Recommended for SMITE 2');
+    expect(within(dialog).getByRole('button', { name: 'Show Build' })).toBeTruthy();
+    expect(within(dialog).getByRole('button', { name: /^(Show|Add) Session$/ })).toBeTruthy();
+  });
+
+  it('filters by the category list and by search', () => {
+    open('desk');
+    const dialog = screen.getByRole('dialog');
+    fireEvent.change(within(dialog).getByRole('combobox', { name: 'Category' }), { target: { value: 'WoW' } });
+    expect(within(dialog).getByRole('button', { name: 'Add Character' })).toBeTruthy();
+    expect(within(dialog).queryByRole('button', { name: 'Add Clock' })).toBeNull();
+    fireEvent.change(within(dialog).getByRole('searchbox'), { target: { value: 'guild' } });
+    expect(within(dialog).queryByRole('button', { name: 'Add Character' })).toBeNull();
+  });
+
+  it('adds a widget and shuts', () => {
+    const { onClose, data } = open('desk');
+    const before = data().widgets.filter((w) => w.kind === 'clock').length;
+    fireEvent.click(screen.getByRole('button', { name: 'Add Clock' }));
+    expect(data().widgets.filter((w) => w.kind === 'clock')).toHaveLength(before + 1);
+    expect(onClose).toHaveBeenCalled();
+  });
+
+  it('shuts on Esc and on the ×', () => {
+    const { onClose } = open();
+    fireEvent.keyDown(window, { key: 'Escape' });
+    expect(onClose).toHaveBeenCalledTimes(1);
+    fireEvent.click(screen.getByRole('button', { name: 'Close the widget library' }));
+    expect(onClose).toHaveBeenCalledTimes(2);
   });
 });
