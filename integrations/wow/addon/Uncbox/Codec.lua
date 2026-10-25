@@ -7,8 +7,9 @@
 --
 --   0x55, kind, seq, index, count, length, payload (length bytes), crc16 high, crc16 low
 --
--- kind 1 is the character, kind 2 the quest log, kind 3 the party. seq changes whenever the text does, and a long
--- text is split over several pages (index of count) that Uncbox puts back together.
+-- kind 1 is the character, 2 the quest log, 3 the party, 4 the guild roster, 5 guild events, 6 the
+-- raid group and 7 raid events (see Guild.lua and Raid.lua). seq changes whenever the text does,
+-- and a long text is split over several pages (index of count) that Uncbox puts back together.
 
 local band, bor, bxor, lshift, rshift = bit.band, bit.bor, bit.bxor, bit.lshift, bit.rshift
 
@@ -21,6 +22,10 @@ local C = {
   KIND_CHARACTER = 1,
   KIND_QUESTS = 2,
   KIND_PARTY = 3,
+  KIND_GUILD = 4,
+  KIND_GUILD_EVENTS = 5,
+  KIND_RAID = 6,
+  KIND_RAID_EVENTS = 7,
 }
 -- 512 blocks minus the sync pattern, at 3 bits each, less the 8 bytes of header and checksum.
 C.PAGE_BYTES = math.floor((C.COLS * C.ROWS - #C.SYNC) * 3 / 8)

@@ -11,6 +11,7 @@
 import { execFile, spawn } from 'node:child_process';
 import { readdir, readFile, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
+import { writeJsonAtomic } from './datafile.mjs';
 
 /** The option that starts a game in a window, from its engine, or '' if Uncbox doesn't know it. */
 export async function engineOption(dir) {
@@ -167,7 +168,7 @@ export function createSteamWindowed({ steam, record }) {
         added[game.appid] = option;
       }
       await writeFile(configFile(), withLaunchOptions(text, changes));
-      await writeFile(record, JSON.stringify({ apps: added }, null, 2));
+      await writeJsonAtomic(record, { apps: added }, { pretty: true });
     });
     return { on: true, games: Object.keys(added).length };
   }
@@ -180,7 +181,7 @@ export function createSteamWindowed({ steam, record }) {
       // Only what's still exactly as Uncbox set it; anything you've changed since stays.
       const changes = new Map(Object.entries(added).filter(([id, option]) => now.get(id) === option).map(([id]) => [id, null]));
       await writeFile(configFile(), withLaunchOptions(text, changes));
-      await writeFile(record, JSON.stringify({ apps: {} }, null, 2));
+      await writeJsonAtomic(record, { apps: {} }, { pretty: true });
     });
     return { on: false, games: 0 };
   }

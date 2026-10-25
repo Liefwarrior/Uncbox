@@ -7,6 +7,10 @@
 //
 // The app finds node/ and app/ beside itself (native/UncboxShell/ServerHost.cs). Only Node's
 // official Windows zip is downloaded, and only after its SHA-256 matches nodejs.org's SHASUMS256.txt.
+//
+// It also makes release/Uncbox-Setup-<version>.exe: the same app with node\ and app\ zipped inside
+// the exe, so that one file is both the installer and the app (native/UncboxShell/Installer.cs).
+// Run from Downloads it offers to install; the zip's Uncbox.exe offers the same from an unzipped folder.
 
 import { execFileSync, execSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
@@ -25,6 +29,7 @@ const cache = path.join(release, '.cache');
 const out = path.join(release, 'Uncbox');
 const version = JSON.parse(readFileSync(path.join(root, 'package.json'), 'utf8')).version;
 const zip = path.join(release, `Uncbox-${version}-win-x64.zip`);
+const setup = path.join(release, `Uncbox-Setup-${version}.exe`);
 
 if (process.platform !== 'win32') {
   console.error('The Uncbox app is for Windows, so it can only be packaged on Windows.');
@@ -105,20 +110,31 @@ if (!dotnet) {
   process.exit(1);
 }
 const published = path.join(release, '.publish');
-rmSync(published, { recursive: true, force: true });
+
+/** Publishes the app as one self-contained exe into outDir. With a payload zip, it's embedded (the Setup exe). */
+function publishApp(outDir, payloadZip) {
+  rmSync(outDir, { recursive: true, force: true });
+  // The up-to-date check wouldn't notice the payload being added or dropped, so build from scratch.
+  rmSync(path.join(root, 'native', 'UncboxShell', 'obj', 'Release'), { recursive: true, force: true });
+  execFileSync(
+    dotnet,
+    [
+      'publish', path.join(root, 'native', 'UncboxShell'),
+      '-c', 'Release', '-r', 'win-x64', '--self-contained', 'true',
+      '-p:PublishSingleFile=true', '-p:IncludeNativeLibrariesForSelfExtract=true',
+      // The version Settings > Apps shows, taken from package.json.
+      `-p:Version=${version}`,
+      ...(payloadZip ? [`-p:PayloadZip=${payloadZip}`] : []),
+      // No debug symbols: they're only useful to the developer and add several MB.
+      '-p:DebugType=none', '-p:DebugSymbols=false',
+      '-nologo', '-v', 'q', '-o', outDir,
+    ],
+    { stdio: 'inherit' },
+  );
+}
+
 console.log('Publishing the app…');
-execFileSync(
-  dotnet,
-  [
-    'publish', path.join(root, 'native', 'UncboxShell'),
-    '-c', 'Release', '-r', 'win-x64', '--self-contained', 'true',
-    '-p:PublishSingleFile=true', '-p:IncludeNativeLibrariesForSelfExtract=true',
-    // No debug symbols: they're only useful to the developer and add several MB.
-    '-p:DebugType=none', '-p:DebugSymbols=false',
-    '-nologo', '-v', 'q', '-o', published,
-  ],
-  { stdio: 'inherit' },
-);
+publishApp(published);
 
 // ---- 3. the folder ----
 const node = await nodeZip();
@@ -135,6 +151,8 @@ cpSync(path.join(root, 'server'), path.join(out, 'app', 'server'), {
 cpSync(path.join(root, 'integrations', 'wow', 'install.mjs'), path.join(out, 'app', 'integrations', 'wow', 'install.mjs'));
 cpSync(path.join(root, 'integrations', 'wow', 'addon'), path.join(out, 'app', 'integrations', 'wow', 'addon'), { recursive: true });
 cpSync(path.join(root, 'dist'), path.join(out, 'app', 'dist'), { recursive: true });
+// The MIT license asks for its notice in every copy, as do the licenses of what Uncbox bundles.
+for (const doc of ['LICENSE', 'PRIVACY.md', 'THIRD_PARTY_NOTICES.md']) cpSync(path.join(root, doc), path.join(out, doc));
 // Only what makes the folder recognisable as Uncbox's: no scripts or dependencies to install.
 writeFileSync(
   path.join(out, 'app', 'package.json'),
@@ -154,6 +172,24 @@ rmSync(zip, { force: true });
 powershell('Compress-Archive -LiteralPath $env:SRC -DestinationPath $env:ZIP -CompressionLevel Optimal', { SRC: out, ZIP: zip });
 rmSync(published, { recursive: true, force: true });
 
+// ---- 5. the Setup exe ----
+// The payload is node\ and app\ only: the installer copies its own exe in beside them.
+const payload = path.join(cache, 'payload.zip');
+rmSync(payload, { force: true });
+powershell('Compress-Archive -LiteralPath $env:NODE, $env:APP -DestinationPath $env:ZIP -CompressionLevel Optimal', {
+  NODE: path.join(out, 'node'),
+  APP: path.join(out, 'app'),
+  ZIP: payload,
+});
+const publishedSetup = path.join(release, '.publish-setup');
+console.log('Publishing the Setup exe…');
+publishApp(publishedSetup, payload);
+rmSync(setup, { force: true });
+cpSync(path.join(publishedSetup, 'Uncbox.exe'), setup);
+rmSync(publishedSetup, { recursive: true, force: true });
+rmSync(payload, { force: true });
+
 console.log('');
 console.log(`Folder: ${out} (${megabytes(folderSize(out))})`);
 console.log(`Zip:    ${zip} (${megabytes(statSync(zip).size)})`);
+console.log(`Setup:  ${setup} (${megabytes(statSync(setup).size)})`);

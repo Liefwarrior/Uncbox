@@ -9,6 +9,8 @@ export interface Undoable {
   undo?: () => void;
   /** Stays up when the active preset changes (a deleted preset, an import) instead of being dismissed. */
   keepOnSwitch?: boolean;
+  /** Something went wrong: read out at once instead of waiting for a pause. */
+  urgent?: boolean;
 }
 
 const UNDO_MS = 6000;
@@ -22,8 +24,8 @@ export function offerUndo(message: string, undo: () => void, keepOnSwitch = fals
 }
 
 /** A short message in the same spot, for things that happened (an import, an error) rather than things to undo. */
-export function showNotice(message: string) {
-  show({ message, keepOnSwitch: true });
+export function showNotice(message: string, urgent = false) {
+  show({ message, keepOnSwitch: true, urgent });
 }
 
 function show(item: Undoable) {

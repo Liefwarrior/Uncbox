@@ -158,6 +158,14 @@ app/integrations/wow/   install.mjs and the addon the server copies into WoW
 app/dist/               the built page
 ```
 
+It also makes `release/Uncbox-Setup-<version>.exe`: the same app published a second time with
+`node/` and `app/` zipped inside the exe. That one file is both installer and app (`Installer.cs`):
+run from anywhere but `%LOCALAPPDATA%\Programs\Uncbox` it offers to install (copies itself and
+unpacks the payload, adds shortcuts and the Settings > Apps entry), and `Uncbox.exe --uninstall`
+removes it. The zip's `Uncbox.exe` offers the same from an unzipped folder. Start with Windows is a
+`HKCU\...\Run` value running `Uncbox.exe --tray` (`Autostart.cs`; page messages `autostart` and
+`autostartstate`).
+
 The Node zip comes from nodejs.org and is checked against the `SHASUMS256.txt` published beside
 it; packaging stops if they differ. It's cached in `release/.cache/`, which, like the rest of
 `release/`, git ignores.

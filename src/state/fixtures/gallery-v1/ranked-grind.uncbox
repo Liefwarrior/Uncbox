@@ -1,0 +1,262 @@
+{
+  "uncbox": "preset",
+  "version": 1,
+  "name": "Ranked grind",
+  "base": "smite2",
+  "exportedAt": "2026-10-20T00:00:00.000Z",
+  "data": {
+    "layout": [
+      {
+        "i": "game",
+        "x": 0,
+        "y": 0,
+        "w": 17,
+        "h": 17
+      },
+      {
+        "i": "camera",
+        "x": 17,
+        "y": 0,
+        "w": 7,
+        "h": 7
+      },
+      {
+        "i": "teams",
+        "x": 17,
+        "y": 7,
+        "w": 7,
+        "h": 6
+      },
+      {
+        "i": "chat",
+        "x": 17,
+        "y": 13,
+        "w": 7,
+        "h": 11
+      },
+      {
+        "i": "match",
+        "x": 0,
+        "y": 17,
+        "w": 5,
+        "h": 7
+      },
+      {
+        "i": "record",
+        "x": 5,
+        "y": 17,
+        "w": 4,
+        "h": 7
+      },
+      {
+        "i": "progress",
+        "x": 9,
+        "y": 17,
+        "w": 4,
+        "h": 7
+      },
+      {
+        "i": "wdg-grind-focus",
+        "x": 13,
+        "y": 17,
+        "w": 4,
+        "h": 7
+      }
+    ],
+    "background": "shards",
+    "game": {
+      "source": "none",
+      "deviceId": null,
+      "fit": "contain",
+      "pixelated": false,
+      "crop": {
+        "top": 0,
+        "right": 0,
+        "bottom": 0,
+        "left": 0
+      },
+      "chroma": "#00b140",
+      "nativeGame": null
+    },
+    "run": {
+      "title": "Ranked grind",
+      "subtitle": "Climb tonight",
+      "timer": {
+        "startedAt": null,
+        "elapsedMs": 0
+      }
+    },
+    "slots": [
+      {
+        "id": "ranked-slot-1",
+        "name": "",
+        "detail": "",
+        "image": "",
+        "down": false
+      },
+      {
+        "id": "ranked-slot-2",
+        "name": "",
+        "detail": "",
+        "image": "",
+        "down": false
+      },
+      {
+        "id": "ranked-slot-3",
+        "name": "",
+        "detail": "",
+        "image": "",
+        "down": false
+      },
+      {
+        "id": "ranked-slot-4",
+        "name": "",
+        "detail": "",
+        "image": "",
+        "down": false
+      },
+      {
+        "id": "ranked-slot-5",
+        "name": "",
+        "detail": "",
+        "image": "",
+        "down": false
+      },
+      {
+        "id": "ranked-slot-6",
+        "name": "",
+        "detail": "",
+        "image": "",
+        "down": false
+      }
+    ],
+    "counters": [
+      {
+        "id": "ranked-counter-1",
+        "label": "Games today",
+        "value": 0
+      },
+      {
+        "id": "ranked-counter-2",
+        "label": "Tilt breaks",
+        "value": 0
+      }
+    ],
+    "milestones": {
+      "label": "Tonight",
+      "items": [
+        {
+          "id": "ranked-goal-1",
+          "name": "Warm up",
+          "done": false
+        },
+        {
+          "id": "ranked-goal-2",
+          "name": "Win 3 ranked games",
+          "done": false
+        },
+        {
+          "id": "ranked-goal-3",
+          "name": "Take a break after 2 losses",
+          "done": false
+        },
+        {
+          "id": "ranked-goal-4",
+          "name": "Review one death",
+          "done": false
+        }
+      ]
+    },
+    "notes": [
+      {
+        "id": "ranked-note-1",
+        "text": "Ward before every objective",
+        "done": false
+      },
+      {
+        "id": "ranked-note-2",
+        "text": "Check for anti-heal by second item",
+        "done": false
+      },
+      {
+        "id": "ranked-note-3",
+        "text": "Mute and breathe if tilted",
+        "done": false
+      }
+    ],
+    "match": {
+      "god": "",
+      "role": "Mid",
+      "mode": "Ranked Conquest",
+      "k": 0,
+      "d": 0,
+      "a": 0
+    },
+    "record": {
+      "wins": 0,
+      "losses": 0,
+      "history": []
+    },
+    "character": {
+      "name": "",
+      "race": "",
+      "cls": "",
+      "level": 1,
+      "maxLevel": 60,
+      "xp": 0,
+      "zone": "",
+      "realm": "",
+      "guild": "",
+      "gold": "",
+      "hardcore": false
+    },
+    "quests": [],
+    "wowLinkAt": 0,
+    "windows": [],
+    "widgets": [
+      {
+        "id": "wdg-grind-focus",
+        "type": "focus",
+        "title": "Break timer",
+        "settings": {
+          "timeZone": "",
+          "hour12": true,
+          "seconds": false,
+          "place": "",
+          "lat": 0,
+          "lon": 0,
+          "celsius": false,
+          "apps": "",
+          "showBody": false,
+          "target": 0,
+          "text": "",
+          "pingTarget": "",
+          "showRouter": true,
+          "focusWork": 45,
+          "focusShort": 10,
+          "focusLong": 20,
+          "focusRounds": 3,
+          "focusAuto": false,
+          "focusSound": true,
+          "focusPhase": "work",
+          "focusRound": 1,
+          "focusEndsAt": 0,
+          "focusLeft": 0,
+          "launcherTiles": [],
+          "url": "",
+          "homeUrl": "",
+          "searchEngine": "google",
+          "hideToolbar": false,
+          "zoom": 100,
+          "driveView": "recent",
+          "calendarDays": 3,
+          "calendarHideAllDay": false,
+          "gmailOnlyUnread": false,
+          "gmailLabel": "INBOX",
+          "showOnStream": false
+        }
+      }
+    ],
+    "hud": []
+  }
+}

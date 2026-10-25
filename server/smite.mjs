@@ -112,12 +112,23 @@ export function createSmite({ broadcastEvent, sendJson }) {
     }
   }
 
-  return async function handle(req, res) {
+  // This one deliberately has no idle shutdown. The page asks for it once, when the SMITE preset
+  // opens, and then only listens for events, and the log is the only record of the draft and the
+  // build: a tail that paused would lose what happens while it is off. It costs one stat() a
+  // second (and a read when the log grows), only after the SMITE preset was first opened.
+  async function handle(req, res) {
     if (!polling) {
       // The whole current log first, so a match already under way shows up right away.
       await poll().catch(() => {});
-      polling = setInterval(() => void poll().catch(() => {}), POLL_MS);
+      polling ??= setInterval(() => void poll().catch(() => {}), POLL_MS);
     }
     return sendJson(res, 200, snap);
+  }
+
+  /** Stops the tail (the server is shutting down). */
+  handle.close = () => {
+    clearInterval(polling);
+    polling = null;
   };
+  return handle;
 }

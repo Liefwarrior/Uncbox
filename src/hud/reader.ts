@@ -1,6 +1,8 @@
 import { useEffect, useRef, useSyncExternalStore } from 'react';
-import type { HudRegion } from '../state/model';
+import type { HudRegion, PresetData } from '../state/model';
 import type { MutatePreset } from '../state/useAppState';
+import { offerUndo } from '../undo';
+import { type DebounceState, freshDebounce, planFire, readingKey, stepDebounce } from './triggers';
 
 // The Stats panel's screen reader. The game panel shares its capture here; every second, each box
 // is cut out of the latest frame, enlarged (OCR reads small game fonts much better bigger), and
@@ -42,13 +44,18 @@ export function cleanReading(text: string, numeric: boolean): string {
     .replace(/[^\d]/g, '');
 }
 
+/** A box on the game picture, in percent of it. */
+export type Box = Pick<HudRegion, 'x' | 'y' | 'w' | 'h'>;
+/** Wider than this is shrunk, so a big box (a whole death screen) stays a small upload. */
+const MAX_WIDTH = 1280;
+
 /** A box cut out of the frame and enlarged, as base64 PNG (no data: prefix). */
-export function cutOut(source: CanvasImageSource, vw: number, vh: number, r: HudRegion, canvas: HTMLCanvasElement): string {
+export function cutOut(source: CanvasImageSource, vw: number, vh: number, r: Box, canvas: HTMLCanvasElement): string {
   const sx = (r.x / 100) * vw;
   const sy = (r.y / 100) * vh;
   const sw = Math.max(1, (r.w / 100) * vw);
   const sh = Math.max(1, (r.h / 100) * vh);
-  const scale = Math.min(6, Math.max(1, TARGET_HEIGHT / sh));
+  const scale = Math.min(6, MAX_WIDTH / sw, Math.max(1, TARGET_HEIGHT / sh));
   canvas.width = Math.round(sw * scale);
   canvas.height = Math.round(sh * scale);
   const ctx = canvas.getContext('2d')!;
@@ -57,11 +64,24 @@ export function cutOut(source: CanvasImageSource, vw: number, vh: number, r: Hud
   return canvas.toDataURL('image/png').slice('data:image/png;base64,'.length);
 }
 
+/** The text Windows' OCR reads in each box of the latest frame; null if the server could not read them. */
+export async function readBoxes(v: HTMLVideoElement, boxes: Box[], canvas: HTMLCanvasElement): Promise<string[] | null> {
+  if (!v.videoWidth || !boxes.length) return null;
+  const images = boxes.map((r) => cutOut(v, v.videoWidth, v.videoHeight, r, canvas));
+  const res = await fetch('/api/ocr', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ images }),
+  });
+  if (!res.ok) return null;
+  return ((await res.json()) as { texts: string[] }).texts;
+}
+
 /** A video element playing the stream, for grabbing frames from. */
-export function useVideo(stream: MediaStream | null) {
+export function useVideo(stream: MediaStream | null, enabled = true) {
   const video = useRef<HTMLVideoElement | null>(null);
   useEffect(() => {
-    if (!stream) return;
+    if (!stream || !enabled) return;
     const v = document.createElement('video');
     v.muted = true;
     v.playsInline = true;
@@ -72,7 +92,7 @@ export function useVideo(stream: MediaStream | null) {
       v.srcObject = null;
       video.current = null;
     };
-  }, [stream]);
+  }, [stream, enabled]);
   return video;
 }
 
@@ -96,14 +116,8 @@ export function useHudReader(stream: MediaStream | null, regions: HudRegion[], m
       if (busy || !v || !v.videoWidth || !boxes.length) return;
       busy = true;
       try {
-        const images = boxes.map((r) => cutOut(v, v.videoWidth, v.videoHeight, r, canvas));
-        const res = await fetch('/api/ocr', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ images }),
-        });
-        if (!res.ok) return;
-        const { texts } = (await res.json()) as { texts: string[] };
+        const texts = await readBoxes(v, boxes, canvas);
+        if (!texts) return;
         const changed: Record<string, string> = {};
         boxes.forEach((r, i) => {
           const reading = cleanReading(texts[i] ?? '', r.numeric);
@@ -125,6 +139,85 @@ export function useHudReader(stream: MediaStream | null, regions: HudRegion[], m
             }
           });
         }
+      } catch {
+        // Server busy or restarting; the next second tries again.
+      } finally {
+        busy = false;
+      }
+    };
+    const t = setInterval(() => void tick(), EVERY_MS);
+    return () => clearInterval(t);
+  }, [on, video, mutatePreset]);
+}
+
+// ---------- screen triggers ----------
+
+/** How many times each trigger has fired since Uncbox opened (not saved), for the Stats panel. */
+const fired = new Map<string, number>();
+const firedListeners = new Set<() => void>();
+let firedSnapshot: ReadonlyMap<string, number> = new Map();
+
+function countFired(id: string) {
+  fired.set(id, (fired.get(id) ?? 0) + 1);
+  firedSnapshot = new Map(fired);
+  firedListeners.forEach((l) => l());
+}
+
+export function useFiredCounts(): ReadonlyMap<string, number> {
+  return useSyncExternalStore(
+    (l) => {
+      firedListeners.add(l);
+      return () => firedListeners.delete(l);
+    },
+    () => firedSnapshot,
+  );
+}
+
+/**
+ * Watches the boxes of the switched-on screen triggers, once a second and only while a game
+ * picture is up. A phrase seen does its action once (see stepDebounce) and offers an Undo, since
+ * OCR is sometimes wrong. Runs from the app root, so it works without the Stats panel on the board.
+ */
+export function useScreenTriggers(stream: MediaStream | null, data: PresetData, mutatePreset: MutatePreset) {
+  const on = Boolean(stream) && data.triggers.some((t) => t.enabled);
+  const video = useVideo(stream, on);
+  const latest = useRef(data);
+  useEffect(() => {
+    latest.current = data;
+  });
+
+  useEffect(() => {
+    if (!on) return;
+    const canvas = document.createElement('canvas');
+    const states = new Map<string, DebounceState>();
+    let busy = false;
+    const tick = async () => {
+      const v = video.current;
+      const active = latest.current.triggers.filter((t) => t.enabled);
+      if (busy || !v || !v.videoWidth || !active.length) return;
+      busy = true;
+      try {
+        const texts = await readBoxes(v, active, canvas);
+        if (!texts) return;
+        const now = Date.now();
+        // Triggers switched off start over when they come back on.
+        for (const id of [...states.keys()]) if (!active.some((t) => t.id === id)) states.delete(id);
+        active.forEach((t, i) => {
+          const data = latest.current;
+          const { key, name } = readingKey(data, t, texts[i] ?? '');
+          const step = stepDebounce(states.get(t.id) ?? freshDebounce(), key, now, t.cooldownSec);
+          states.set(t.id, step.state);
+          if (!step.fire) return;
+          const plan = planFire(data, t, name);
+          if (!plan) return;
+          mutatePreset((d) => {
+            plan.apply(d);
+            const x = d.triggers.find((k) => k.id === t.id);
+            if (x) x.at = now;
+          });
+          countFired(t.id);
+          offerUndo(plan.message, () => mutatePreset(plan.undo));
+        });
       } catch {
         // Server busy or restarting; the next second tries again.
       } finally {

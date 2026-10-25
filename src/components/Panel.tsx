@@ -1,6 +1,6 @@
-import type { ReactNode } from 'react';
+import { type ReactNode, useId } from 'react';
 import type { BoardId } from '../state/model';
-import { useBoard } from './Board';
+import { useBoard } from './boardContext';
 import { Icon } from './Icon';
 import { Menu, type MenuEntry } from './Menu';
 
@@ -22,22 +22,33 @@ interface Props {
 }
 
 export function Panel({ id, title, label, actions, menu, bleed = false, empty = false, className, children }: Props) {
-  const { editing, hide } = useBoard();
+  const { editing, hide, nudge } = useBoard();
+  const heading = useId();
   const name = label ?? (typeof title === 'string' ? title : undefined);
   return (
-    <section className={`panel panel--${id} ${bleed ? 'panel--bleed' : ''} ${empty ? 'is-empty' : ''} ${className ?? ''}`}>
+    <section aria-labelledby={heading} className={`panel panel--${id} ${bleed ? 'panel--bleed' : ''} ${empty ? 'is-empty' : ''} ${className ?? ''}`}>
       <header className="panel__head drag-handle">
         {editing && (
-          <span className="panel__grip" aria-hidden="true">
+          <span
+            className="panel__grip"
+            role="button"
+            tabIndex={0}
+            aria-label={`Move or resize ${name ?? 'panel'}`}
+            aria-description="Arrow keys move it one cell. Shift and the arrow keys make it wider, narrower, taller or shorter."
+            onKeyDown={(e) => {
+              if (e.ctrlKey || e.metaKey || e.altKey) return;
+              if (nudge(id, e.key, e.shiftKey)) e.preventDefault();
+            }}
+          >
             <Icon name="grip" size={14} />
           </span>
         )}
-        <h2>{title}</h2>
+        <h2 id={heading}>{title}</h2>
         <div className="panel__actions ctl">
           {actions}
           {menu && <Menu items={menu} label={`${name ?? 'Panel'} options`} />}
           {editing && (
-            <button className="icon-btn" title={`Hide ${name ?? 'panel'}`} onClick={() => hide(id, name)}>
+            <button className="icon-btn" title={`Hide ${name ?? 'panel'}`} aria-label={`Hide ${name ?? 'panel'}`} onClick={() => hide(id, name)}>
               <Icon name="x" size={14} />
             </button>
           )}
