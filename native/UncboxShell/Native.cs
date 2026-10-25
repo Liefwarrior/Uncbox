@@ -123,20 +123,111 @@ internal static partial class Native
         }
     }
 
+    [LibraryImport("kernel32.dll")]
+    public static partial IntPtr OpenProcess(uint access, [MarshalAs(UnmanagedType.Bool)] bool inherit, uint pid);
+
+    [LibraryImport("kernel32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static partial bool CloseHandle(IntPtr handle);
+
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode)]
+    public static extern bool QueryFullProcessImageName(IntPtr process, int flags, StringBuilder name, ref int size);
+
+    // ---- DWM thumbnails: a live, scaled picture of another window, drawn by the compositor ----
+
+    [StructLayout(LayoutKind.Sequential)]
+    public struct THUMBNAIL_PROPERTIES
+    {
+        public int Flags;
+        public RECT Destination;
+        public RECT Source;
+        public byte Opacity;
+        public int Visible;
+        public int SourceClientAreaOnly;
+    }
+
+    public const int TNP_RECTDESTINATION = 0x1, TNP_OPACITY = 0x4, TNP_VISIBLE = 0x8, TNP_SOURCECLIENTAREAONLY = 0x10;
+
+    [LibraryImport("dwmapi.dll")]
+    public static partial int DwmRegisterThumbnail(IntPtr destination, IntPtr source, out IntPtr thumbnail);
+
+    [LibraryImport("dwmapi.dll")]
+    public static partial int DwmUnregisterThumbnail(IntPtr thumbnail);
+
+    [DllImport("dwmapi.dll")]
+    public static extern int DwmUpdateThumbnailProperties(IntPtr thumbnail, ref THUMBNAIL_PROPERTIES properties);
+
+    [LibraryImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static partial bool GetClientRect(IntPtr hwnd, out RECT rect);
+
+    /// <summary>The full path of the program that owns a window, or "" if Windows won't say.</summary>
+    public static string ProcessPathOf(IntPtr hwnd)
+    {
+        GetWindowThreadProcessId(hwnd, out uint pid);
+        // PROCESS_QUERY_LIMITED_INFORMATION: enough for the path, and allowed for most processes.
+        IntPtr process = OpenProcess(0x1000, false, pid);
+        if (process == IntPtr.Zero) return "";
+        try
+        {
+            var name = new StringBuilder(1024);
+            int size = name.Capacity;
+            return QueryFullProcessImageName(process, 0, name, ref size) ? name.ToString() : "";
+        }
+        finally
+        {
+            CloseHandle(process);
+        }
+    }
+
+    // ---- WinEvent hooks: Windows tells the app when windows appear, so it doesn't have to poll ----
+
+    public const uint EVENT_SYSTEM_FOREGROUND = 0x0003;
+    public const uint EVENT_OBJECT_SHOW = 0x8002;
+    public const uint EVENT_OBJECT_NAMECHANGE = 0x800C;
+    public const uint WINEVENT_OUTOFCONTEXT = 0x0000;
+    public const uint WINEVENT_SKIPOWNPROCESS = 0x0002;
+    public const uint GA_ROOT = 2;
+
+    public delegate void WinEventProc(IntPtr hook, uint eventType, IntPtr hwnd, int idObject, int idChild, uint thread, uint time);
+
+    [LibraryImport("user32.dll")]
+    public static partial IntPtr SetWinEventHook(uint eventMin, uint eventMax, IntPtr module, WinEventProc proc, uint pid, uint thread, uint flags);
+
+    [LibraryImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static partial bool UnhookWinEvent(IntPtr hook);
+
+    [LibraryImport("user32.dll")]
+    public static partial IntPtr GetAncestor(IntPtr hwnd, uint flags);
+
+    /// <summary>
+    /// Whether this is a window Alt+Tab would list: top-level, visible, titled, not a tool window,
+    /// and not one of the app's own. Cheap calls only, since it runs on every window event.
+    /// </summary>
+    public static bool IsAppWindow(IntPtr hwnd)
+    {
+        if (GetAncestor(hwnd, GA_ROOT) != hwnd || !IsWindowVisible(hwnd)) return false;
+        if ((GetWindowLongPtr(hwnd, GWL_EXSTYLE) & WS_EX_TOOLWINDOW) != 0) return false;
+        GetWindowThreadProcessId(hwnd, out uint pid);
+        if (pid == (uint)Environment.ProcessId) return false;
+        if (GetWindowTextLength(hwnd) == 0) return false;
+        return TitleOf(hwnd) != "Program Manager";
+    }
+
     /// <summary>Visible, titled, top-level app windows other than the shell's own, like Alt+Tab shows.</summary>
     public static List<(IntPtr Hwnd, string Title, string Process)> AppWindows(IntPtr exclude)
     {
-        var found = new List<(IntPtr, string, string)>();
-        uint self = (uint)Environment.ProcessId;
+        return TopLevelWindows(exclude).Select(hwnd => (hwnd, TitleOf(hwnd), ProcessNameOf(hwnd))).ToList();
+    }
+
+    /// <summary>The same windows without their program names, which are the slow part to look up.</summary>
+    public static List<IntPtr> TopLevelWindows(IntPtr exclude)
+    {
+        var found = new List<IntPtr>();
         EnumWindows((hwnd, _) =>
         {
-            if (hwnd == exclude || !IsWindowVisible(hwnd)) return true;
-            if ((GetWindowLongPtr(hwnd, GWL_EXSTYLE) & WS_EX_TOOLWINDOW) != 0) return true;
-            GetWindowThreadProcessId(hwnd, out uint pid);
-            if (pid == self) return true;
-            string title = TitleOf(hwnd);
-            if (title.Length == 0 || title == "Program Manager") return true;
-            found.Add((hwnd, title, ProcessNameOf(hwnd)));
+            if (hwnd != exclude && IsAppWindow(hwnd)) found.Add(hwnd);
             return true;
         }, IntPtr.Zero);
         return found;

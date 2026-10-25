@@ -1,24 +1,29 @@
-import { PANEL_INFO } from './panels/catalog';
-import {
-  type GridItem,
-  type PanelId,
-  type PresetData,
-  type PresetId,
-  counter,
-  emptySlot,
-  milestone,
-  note,
-} from './state/model';
+import type { RecipeId } from './hud/recipes';
+import { type GridItem, type PresetData, type PresetId, counter, emptySlot, milestone, note, type WidgetId } from './state/model';
+
+/** A widget a preset starts with: its kind (see src/widgets/registry.ts), and any settings that differ from the kind's defaults. */
+export interface SeedWidget {
+  id: WidgetId;
+  kind: string;
+  title?: string;
+  settings?: Record<string, unknown>;
+}
 
 export interface PresetDef {
   id: PresetId;
   name: string;
   /** One line under the name in the preset switcher. */
   blurb: string;
-  /** Panel titles that differ from the defaults in panels/catalog.ts. */
-  titles: Partial<Record<PanelId, string>>;
-  /** Panels listed first in the sidebar; the rest are still available. */
-  featured: PanelId[];
+  /** Single-panel titles that differ from the kind's name in the widget library ("Build" for SMITE's slots), by kind. */
+  titles: Record<string, string>;
+  /** Names the Stats panel suggests for its screen-reading boxes. */
+  hud?: string[];
+  /** Screen trigger recipes (src/hud/recipes.ts) listed first in the Stats panel's "Add from a recipe". */
+  triggers?: RecipeId[];
+  /** The game's program ("Dungeons.exe"): the run timer starts when it does and pauses when it closes. */
+  detect?: string;
+  /** What Steam calls the game (any of these, in any case), so Automations can tell it started. */
+  steamNames?: string[];
   slots: {
     variant: 'list' | 'tiles';
     name: string;
@@ -30,12 +35,14 @@ export interface PresetDef {
     tint?: (detail: string) => string | undefined;
   };
   layout: GridItem[];
-  data: () => Omit<PresetData, 'layout'>;
+  /** The widgets the layout has ('wdg-…' ids). A kind's panels are recommended to a preset by the kind itself (`presets` in its definition). */
+  widgets?: SeedWidget[];
+  data: () => Omit<PresetData, 'layout' | 'widgets'>;
 }
 
 const timer = () => ({ startedAt: null, elapsedMs: 0 });
 
-const baseData = (): Omit<PresetData, 'layout'> => ({
+const baseData = (): Omit<PresetData, 'layout' | 'widgets'> => ({
   background: 'plain',
   game: {
     source: 'none',
@@ -68,7 +75,8 @@ const baseData = (): Omit<PresetData, 'layout'> => ({
   },
   quests: [],
   wowLinkAt: 0,
-  windows: [],
+  hud: [],
+  triggers: [],
 });
 
 // Layouts are on a 24 × 24 grid sized to fill the window. At 1920 × 1080 a 17 × 17 game
@@ -79,7 +87,7 @@ export const PRESETS: Record<PresetId, PresetDef> = {
     name: 'Pokémon',
     blurb: 'Party, badges, Nuzlocke',
     titles: {},
-    featured: ['game', 'camera', 'slots', 'chat', 'discord', 'run', 'progress', 'notes'],
+    triggers: ['nuzlocke', 'defeat'],
     slots: { variant: 'list', name: 'Pokémon', detail: 'Level, nature', showDown: true },
     layout: [
       { i: 'game', x: 0, y: 0, w: 17, h: 17 },
@@ -105,15 +113,15 @@ export const PRESETS: Record<PresetId, PresetDef> = {
   smite2: {
     id: 'smite2',
     name: 'SMITE 2',
-    blurb: 'KDA, record, build',
+    blurb: 'Live god, build and teams; record',
+    steamNames: ['SMITE 2'],
     titles: { slots: 'Build', run: 'Session', notes: 'Game plan', record: 'Record' },
-    featured: ['game', 'camera', 'chat', 'discord', 'match', 'record', 'slots', 'run', 'notes'],
     slots: { variant: 'tiles', name: 'Item', detail: '', showDown: false },
     layout: [
       { i: 'game', x: 0, y: 0, w: 17, h: 17 },
       { i: 'camera', x: 17, y: 0, w: 7, h: 7 },
-      { i: 'chat', x: 17, y: 7, w: 7, h: 12 },
-      { i: 'run', x: 17, y: 19, w: 7, h: 5 },
+      { i: 'teams', x: 17, y: 7, w: 7, h: 6 },
+      { i: 'chat', x: 17, y: 13, w: 7, h: 11 },
       { i: 'match', x: 0, y: 17, w: 5, h: 7 },
       { i: 'record', x: 5, y: 17, w: 4, h: 7 },
       { i: 'slots', x: 9, y: 17, w: 4, h: 7 },
@@ -135,18 +143,24 @@ export const PRESETS: Record<PresetId, PresetDef> = {
     name: 'WoW Forever',
     blurb: 'Leveling, raids',
     titles: { run: '/played' },
-    featured: ['game', 'camera', 'character', 'quests', 'slots', 'chat', 'discord', 'progress', 'run'],
     // The addon fills these in with your group; they can still be typed in by hand.
     slots: { variant: 'list', name: 'Name', detail: 'Level and class', showDown: true, down: 'Dead', tint: wowClassColor },
     layout: [
-      { i: 'game', x: 0, y: 0, w: 17, h: 17 },
-      { i: 'camera', x: 17, y: 0, w: 7, h: 7 },
-      { i: 'character', x: 17, y: 7, w: 7, h: 8 },
-      { i: 'chat', x: 17, y: 15, w: 7, h: 9 },
-      { i: 'progress', x: 0, y: 17, w: 5, h: 7 },
-      { i: 'quests', x: 5, y: 17, w: 4, h: 7 },
-      { i: 'discord', x: 9, y: 17, w: 4, h: 7 },
-      { i: 'run', x: 13, y: 17, w: 4, h: 7 },
+      { i: 'game', x: 0, y: 0, w: 16, h: 15 },
+      { i: 'camera', x: 16, y: 0, w: 8, h: 5 },
+      { i: 'character', x: 16, y: 5, w: 8, h: 6 },
+      { i: 'quests', x: 16, y: 11, w: 8, h: 7 },
+      { i: 'chat', x: 16, y: 18, w: 8, h: 6 },
+      { i: 'wdg-wowroster', x: 0, y: 15, w: 5, h: 9 },
+      { i: 'wdg-wownews', x: 5, y: 15, w: 4, h: 9 },
+      { i: 'wdg-wowah', x: 9, y: 15, w: 7, h: 9 },
+    ],
+    // For leading a guild: who is online, what is happening, and the auction house. The rest (raid
+    // group, attendance, loot, goals, Discord) are a click away in the widget library.
+    widgets: [
+      { id: 'wdg-wowroster', kind: 'guildroster' },
+      { id: 'wdg-wownews', kind: 'guildfeed' },
+      { id: 'wdg-wowah', kind: 'auctionhouse' },
     ],
     data: () => {
       const d = baseData();
@@ -176,12 +190,69 @@ export const PRESETS: Record<PresetId, PresetDef> = {
     },
   },
 
+  mcd2: {
+    id: 'mcd2',
+    name: 'Minecraft Dungeons II',
+    blurb: 'Live stats, party, missions',
+    titles: { slots: 'Party', run: 'Session', progress: 'Missions', hud: 'Stats' },
+    slots: { variant: 'list', name: 'Player', detail: 'Build', showDown: true, down: 'Down' },
+    hud: ['Emeralds', 'Level', 'Arrows', 'Gold', 'Souls', 'Health'],
+    detect: 'Dungeons.exe',
+    steamNames: ['Minecraft Dungeons II'],
+    layout: [
+      { i: 'game', x: 0, y: 0, w: 17, h: 17 },
+      { i: 'camera', x: 17, y: 0, w: 7, h: 7 },
+      { i: 'hud', x: 17, y: 7, w: 7, h: 8 },
+      { i: 'chat', x: 17, y: 15, w: 7, h: 9 },
+      { i: 'progress', x: 0, y: 17, w: 5, h: 7 },
+      { i: 'slots', x: 5, y: 17, w: 4, h: 7 },
+      { i: 'discord', x: 9, y: 17, w: 4, h: 7 },
+      { i: 'run', x: 13, y: 17, w: 4, h: 7 },
+    ],
+    data: () => {
+      const d = baseData();
+      d.background = 'grid';
+      d.run = { title: 'Minecraft Dungeons II', subtitle: 'Session', timer: timer() };
+      d.counters = [counter('Deaths'), counter('Bosses')];
+      d.milestones = { label: 'Missions', items: Array.from({ length: 8 }, () => milestone()) };
+      d.slots = Array.from({ length: 4 }, emptySlot);
+      return d;
+    },
+  },
+
+  steam: {
+    id: 'steam',
+    name: 'Steam Big Picture',
+    blurb: 'Any Steam game, live from Steam',
+    titles: { run: 'Session' },
+    slots: { variant: 'list', name: 'Name', detail: 'Note', showDown: false },
+    layout: [
+      { i: 'game', x: 0, y: 0, w: 17, h: 17 },
+      { i: 'camera', x: 17, y: 0, w: 7, h: 7 },
+      { i: 'steam', x: 17, y: 7, w: 7, h: 10 },
+      { i: 'chat', x: 17, y: 17, w: 7, h: 7 },
+      { i: 'run', x: 0, y: 17, w: 4, h: 7 },
+      { i: 'discord', x: 4, y: 17, w: 4, h: 7 },
+      { i: 'wdg-steamclock', x: 8, y: 17, w: 4, h: 7 },
+      { i: 'wdg-steamsystem', x: 12, y: 17, w: 5, h: 7 },
+    ],
+    widgets: [
+      { id: 'wdg-steamclock', kind: 'clock' },
+      { id: 'wdg-steamsystem', kind: 'system' },
+    ],
+    data: () => {
+      const d = baseData();
+      d.background = 'network';
+      d.run = { title: 'Steam', subtitle: 'Session', timer: timer() };
+      return d;
+    },
+  },
+
   terminal: {
     id: 'terminal',
     name: 'Terminal',
     blurb: 'PowerShell look, any game',
     titles: { slots: 'Loadout', run: 'Session', progress: 'Goals', notes: 'Todo' },
-    featured: ['game', 'camera', 'chat', 'discord', 'run', 'progress', 'notes', 'slots'],
     slots: { variant: 'list', name: 'Item', detail: 'Note', showDown: false },
     layout: [
       { i: 'game', x: 0, y: 0, w: 17, h: 17 },
@@ -201,11 +272,50 @@ export const PRESETS: Record<PresetId, PresetDef> = {
       return d;
     },
   },
-};
 
-export function panelTitle(def: PresetDef, id: PanelId): string {
-  return def.titles[id] ?? PANEL_INFO[id].title;
-}
+  // Work, browse and plan between games. There is no game panel (add one from the library if you
+  // want it), and the widgets come with the preset, like the Steam preset's clock and system.
+  desk: {
+    id: 'desk',
+    name: 'Desk',
+    blurb: 'Work, browse and plan between games',
+    titles: {},
+    slots: { variant: 'list', name: 'Name', detail: 'Note', showDown: false },
+    layout: [
+      { i: 'wdg-deskweb', x: 0, y: 0, w: 13, h: 16 },
+      // Drive spans the whole row under the browser for now.
+      { i: 'wdg-deskdrive', x: 0, y: 16, w: 8, h: 8 },
+      { i: 'wdg-deskcalendar', x: 8, y: 16, w: 5, h: 8 },
+      { i: 'wdg-deskclock', x: 13, y: 0, w: 6, h: 4 },
+      { i: 'wdg-deskweather', x: 13, y: 4, w: 6, h: 4 },
+      { i: 'wdg-desklauncher', x: 13, y: 8, w: 6, h: 7 },
+      { i: 'notes', x: 13, y: 15, w: 6, h: 9 },
+      { i: 'wdg-deskfocus', x: 19, y: 0, w: 5, h: 7 },
+      { i: 'wdg-deskmedia', x: 19, y: 7, w: 5, h: 4 },
+      { i: 'wdg-desknotifications', x: 19, y: 11, w: 5, h: 6 },
+      { i: 'wdg-deskgmail', x: 19, y: 17, w: 5, h: 7 },
+    ],
+    widgets: [
+      // Wikipedia allows being framed (Google does not), so the Web widget opens with a page.
+      { id: 'wdg-deskweb', kind: 'web', settings: { homeUrl: 'https://en.wikipedia.org/wiki/Main_Page' } },
+      { id: 'wdg-deskdrive', kind: 'drive' },
+      { id: 'wdg-deskcalendar', kind: 'calendar' },
+      { id: 'wdg-deskgmail', kind: 'gmail' },
+      { id: 'wdg-deskclock', kind: 'clock' },
+      { id: 'wdg-deskweather', kind: 'weather' },
+      { id: 'wdg-desklauncher', kind: 'launcher' },
+      { id: 'wdg-deskfocus', kind: 'focus' },
+      { id: 'wdg-deskmedia', kind: 'media' },
+      { id: 'wdg-desknotifications', kind: 'notifications' },
+    ],
+    data: () => {
+      const d = baseData();
+      d.run = { title: 'Desk', subtitle: '', timer: timer() };
+      d.notes = [note('Plan the evening'), note('Reply to messages')];
+      return d;
+    },
+  },
+};
 
 export const WOW_RACES = ['Human', 'Dwarf', 'Night Elf', 'Gnome', 'Orc', 'Undead', 'Tauren', 'Troll', 'Skyborne'];
 

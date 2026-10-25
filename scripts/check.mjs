@@ -19,5 +19,7 @@ const serverFiles = [
 ];
 for (const f of serverFiles.filter((f) => f.endsWith('.mjs'))) run(process.execPath, ['--check', f]);
 console.log('Server files: syntax OK');
+// The preset gallery's files: quick, and it catches a bad index or preset before it is merged.
+run(process.execPath, ['scripts/gallery.mjs']);
 npx('vitest', 'run');
 npx('vite', 'build');

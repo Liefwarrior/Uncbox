@@ -5,6 +5,7 @@ import '@fontsource-variable/outfit';
 import '@fontsource-variable/cinzel';
 import '@fontsource/marcellus';
 import '@fontsource-variable/cascadia-mono';
+import '@fontsource-variable/pixelify-sans';
 import { App } from './App';
 import './styles.css';
 

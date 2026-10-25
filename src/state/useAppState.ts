@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { listen, onConnection } from '../events';
 import { defaultState, hydrate } from './hydrate';
 import type { AppState, PresetData } from './model';
+import { activePreset } from './presets';
 
 const clientId = Math.random().toString(36).slice(2);
 const SAVE_DELAY_MS = 250;
@@ -97,7 +98,7 @@ export function useAppState() {
   }, []);
 
   const mutatePreset: MutatePreset = useCallback(
-    (recipe) => mutate((s) => recipe(s.presets[s.preset])),
+    (recipe) => mutate((s) => recipe(activePreset(s).data)),
     [mutate],
   );
 

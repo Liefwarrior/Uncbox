@@ -2,9 +2,14 @@
 // is in front, so on Windows a small helper watches the one key Uncbox asks for and reports each
 // press. It reads the key's state rather than registering a hotkey, so the key still reaches the
 // game and every other app (typing "=" in chat keeps working), and it never sees any other key.
+//
+// This helper deliberately has no idle shutdown. The key must work while a game has focus and no
+// Uncbox page is being looked at (the page may be minimized to the tray), so it runs for as long as
+// clips are switched on in the settings, and stops when they are turned off or the server stops.
 
 import { spawn } from 'node:child_process';
 import { createInterface } from 'node:readline';
+import { noHelpers } from './switches.mjs';
 
 /** KeyboardEvent.code → Windows virtual-key code, for the keys src/clips/keys.ts offers. */
 export function vkFor(code) {
@@ -83,7 +88,7 @@ public static class UncboxClipKey {
 export function createHotkey({ onPress, onStatus = () => {} }) {
   let child = null;
   let vk = 0;
-  let status = process.platform === 'win32' ? 'off' : 'unsupported';
+  let status = process.platform === 'win32' && !noHelpers() ? 'off' : 'unsupported';
   const set = (s) => {
     if (s === status) return;
     status = s;
@@ -124,7 +129,7 @@ export function createHotkey({ onPress, onStatus = () => {} }) {
     status: () => status,
     /** Watches this key (a KeyboardEvent.code), or nothing for an empty or unknown one. */
     watch(code) {
-      if (process.platform !== 'win32') return;
+      if (process.platform !== 'win32' || noHelpers()) return;
       const next = vkFor(code);
       if (next === vk && (child || !next)) return;
       vk = next;

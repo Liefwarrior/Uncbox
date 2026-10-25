@@ -8,6 +8,10 @@ namespace UncboxShell;
 /// answers at the address (npm start in a terminal, say) it's used as is. Otherwise the server is
 /// started from the Uncbox folder, after a build if dist/ is missing, and stopped with the app.
 /// The server sits in a job object, so it goes away even if the app crashes.
+///
+/// A packaged copy (npm run package) carries its own Node in node\ and the server and page in
+/// app\, next to Uncbox.exe. It never builds, and keeps the user's data in %LOCALAPPDATA% rather
+/// than in the folder it was unzipped to.
 /// </summary>
 internal sealed class ServerHost : IDisposable
 {
@@ -17,10 +21,30 @@ internal sealed class ServerHost : IDisposable
 
     public string? Error { get; private set; }
 
-    /// <summary>The folder with Uncbox's package.json: the given one, or the nearest above the app.</summary>
+    /// <summary>The Node that ships beside the app in a packaged copy, or null when running from the repo.</summary>
+    private static string? BundledNode
+    {
+        get
+        {
+            string node = Path.Combine(AppContext.BaseDirectory, "node", "node.exe");
+            return File.Exists(node) ? node : null;
+        }
+    }
+
+    /// <summary>Where a packaged copy keeps its settings, away from the folder it was unzipped to.</summary>
+    private static string PackagedDataDir =>
+        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Uncbox", "data");
+
+    /// <summary>
+    /// The folder with Uncbox's package.json: the given one, the app\ folder of a packaged copy, or
+    /// the nearest folder above the app (the repo, when run with npm run app).
+    /// </summary>
     public static string? FindRoot(string? given)
     {
         if (given is not null) return File.Exists(Path.Combine(given, "package.json")) ? Path.GetFullPath(given) : null;
+        // Looked at first, so a copy unzipped inside some other Node project still uses its own app\.
+        string packaged = Path.Combine(AppContext.BaseDirectory, "app");
+        if (File.Exists(Path.Combine(packaged, "package.json"))) return Path.GetFullPath(packaged);
         for (var dir = new DirectoryInfo(AppContext.BaseDirectory); dir is not null; dir = dir.Parent)
         {
             string pkg = Path.Combine(dir.FullName, "package.json");
@@ -51,8 +75,15 @@ internal sealed class ServerHost : IDisposable
             Error = $"Nothing is answering at {url.GetLeftPart(UriPartial.Authority)}, and the Uncbox folder wasn't found to start it. Run npm start, or pass --root=<Uncbox folder>.";
             return false;
         }
+        string? bundledNode = BundledNode;
         if (!File.Exists(Path.Combine(root, "dist", "index.html")))
         {
+            // A packaged copy has no npm or source to build from, so a missing page means a damaged download.
+            if (bundledNode is not null)
+            {
+                Error = "Uncbox's page files are missing (the app\\dist folder). Unzip the download again.";
+                return false;
+            }
             status.Report("Building Uncbox (first run only)…");
             var build = Start(root, "cmd.exe", "/d /c npm run build");
             if (build is null) return false;
@@ -64,9 +95,11 @@ internal sealed class ServerHost : IDisposable
             }
         }
         status.Report("Starting Uncbox…");
-        string args = $"server/index.mjs --port={url.Port}";
+        // --exit-with-stdin: the server stops cleanly (saves, helper processes) when its input closes.
+        string args = $"server/index.mjs --port={url.Port} --exit-with-stdin";
+        dataDir ??= bundledNode is not null ? PackagedDataDir : null;
         if (dataDir is not null) args += $" \"--data={Path.GetFullPath(dataDir)}\"";
-        _server = Start(root, "node", args);
+        _server = Start(root, bundledNode ?? "node", args);
         if (_server is null) return false;
         for (int i = 0; i < 60; i++)
         {
@@ -87,6 +120,7 @@ internal sealed class ServerHost : IDisposable
                 WorkingDirectory = root,
                 UseShellExecute = false,
                 CreateNoWindow = true,
+                RedirectStandardInput = true,
             })!;
             AssignProcessToJobObject(_job, p.Handle);
             return p;
@@ -100,6 +134,17 @@ internal sealed class ServerHost : IDisposable
 
     public void Dispose()
     {
+        // Ask the server to stop first (closing its input does that), so it can finish a save and
+        // stop its helper programs. It gets a couple of seconds; then the job ends whatever is left.
+        try
+        {
+            _server?.StandardInput.Close();
+            _server?.WaitForExit(2500);
+        }
+        catch (Exception)
+        {
+            // Already gone, or never had an input.
+        }
         // Closing the job ends the server and anything it started.
         if (_job != IntPtr.Zero) CloseHandle(_job);
         _server?.Dispose();

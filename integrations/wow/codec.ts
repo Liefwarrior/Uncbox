@@ -12,6 +12,10 @@ export const MAGIC = 0x55;
 export const KIND_CHARACTER = 1;
 export const KIND_QUESTS = 2;
 export const KIND_PARTY = 3;
+export const KIND_GUILD = 4;
+export const KIND_GUILD_EVENTS = 5;
+export const KIND_RAID = 6;
+export const KIND_RAID_EVENTS = 7;
 export const PAGE_BYTES = Math.floor(((COLS * ROWS - SYNC.length) * 3) / 8);
 export const PAYLOAD = PAGE_BYTES - 8;
 
@@ -126,13 +130,15 @@ const SIZES = [2, 1.5, 3, 4, 1];
 
 /**
  * Finds the sync pattern near the top-left corner. Window captures can include the title bar
- * and border, so it searches 0–100 px down and 0–60 px across.
+ * and border, so it searches 0–100 px down and, by default, 0–60 px across. A strip in the top-right
+ * corner is searched for across the whole image (pass the image of the right edge only).
  */
-export function locate(img: Rgba): StripSpot | null {
+export function locate(img: Rgba, maxX = 60): StripSpot | null {
   for (const block of SIZES) {
     // Starting just off the edge, so a strip flush with the frame's corner still lands mid-block.
     for (let y = -2; y <= 100; y++) {
-      for (let x = -2; x <= 60; x++) {
+      const lastX = Math.min(maxX, img.width - Math.floor(COLS * block) + 2);
+      for (let x = -2; x <= lastX; x++) {
         if (!syncAt(img, { x, y, block })) continue;
         // Several offsets match the same blocks; take the middle one so samples land mid-block.
         let x2 = x;
