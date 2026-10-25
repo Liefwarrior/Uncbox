@@ -151,3 +151,18 @@ tooltips and one-click posting.
 ### UBX-21 · Auction House widget — Shipped (14b0601)
 The Uncbox side of the AH tools: item search with price history charts, deals and flips,
 crafting profit, your auctions and sales, posting rules and shopping lists.
+
+## Demo prep: first live demo (2026-10-25)
+
+### DEMO-1 · A calmer sidebar — Shipped (a87a12e)
+Presets in one dropdown, Get More Widgets in its own window with a category list (and the board's
+own panel names), settings sections that fold away, Background as a list, a one-line setup list.
+
+### DEMO-2 · Dropdowns instead of button rows — Shipped (34b11fb)
+The Game panel's source, the SMITE 2 role, the Auction House tabs when narrow, and the guild news
+filters are dropdowns; live-show buttons (OBS scenes, start/stop, launcher tiles) stay buttons.
+
+### DEMO-3 · Nothing private on stream — Shipped (00e2b43)
+One "private" signal (stream mode, OBS live, or the On air switch) hides mail, calendar, file names,
+paths and addresses in every widget, toast, clip and the palette, so leaving stream mode mid-show
+is safe. Audit in [stream-privacy.md](stream-privacy.md); checklist in [going-live.md](going-live.md).
