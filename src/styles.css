@@ -691,6 +691,39 @@ input[type='color'] {
   font-size: 13px;
 }
 
+/* "On air": personal info hidden. A small pill under the Stream mode button. */
+.onair {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin: 8px 0 2px;
+  padding: 6px 11px;
+  border: 1px solid color-mix(in srgb, var(--muted) 40%, transparent);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.onair.is-on {
+  border-color: var(--bad);
+  background: color-mix(in srgb, var(--bad) 14%, transparent);
+  color: var(--text);
+}
+.onair.is-on svg {
+  color: var(--bad);
+}
+.onair[aria-disabled='true'] {
+  cursor: default;
+}
+.onair small {
+  flex-basis: 100%;
+  font-weight: 400;
+  color: var(--muted);
+}
+
 .toggles {
   margin: 0;
   padding: 0;

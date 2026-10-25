@@ -1,6 +1,7 @@
 import { type FormEvent, useEffect, useRef, useState } from 'react';
 import { useBoard } from '../../components/boardContext';
 import { openPage } from '../../discord';
+import { usePrivate } from '../../privacy';
 import {
   type Category,
   count,
@@ -33,6 +34,7 @@ export function TwitchBody() {
 // ---- setup ----
 
 function Connect() {
+  const hidden = usePrivate(); // The client ID is typed in plain sight, so it is dots while on air.
   const [id, setId] = useState('');
   const [problem, setProblem] = useState('');
   const submit = (e: FormEvent) => {
@@ -58,7 +60,7 @@ function Connect() {
         <li>Create it, click <b>Manage</b>, and paste its Client ID here.</li>
       </ol>
       <span className="row">
-        <input value={id} placeholder="Client ID" spellCheck={false} autoComplete="off" onChange={(e) => setId(e.target.value)} />
+        <input type={hidden ? 'password' : 'text'} value={id} placeholder="Client ID" spellCheck={false} autoComplete="off" onChange={(e) => setId(e.target.value)} />
         <button className="btn btn--small btn--accent" type="submit" disabled={!id.trim()}>
           Save
         </button>

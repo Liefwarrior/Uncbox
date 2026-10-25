@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Icon } from '../../components/Icon';
+import { usePrivate } from '../../privacy';
 import { showNotice } from '../../undo';
 import { csvDate, downloadCsv } from '../shared/csv';
 import { QUALITIES } from '../shared/quality';
@@ -29,7 +30,7 @@ export function LootBody({ settings: s, set, editing }: BodyProps<LootSettings>)
   const shown = useMemo(() => filterLoot(all, { member, raid, minQuality: s.minQuality, days: s.days }, now), [all, member, raid, s.minQuality, s.days, now]);
   const fair = useMemo(() => fairness(all, raids.data?.raids ?? [], { minQuality: s.minQuality, days: s.days, now }), [all, raids.data, s.minQuality, s.days, now]);
   const classOf = useMemo(() => new Map((guild.data?.members ?? []).map((m) => [m.name, m.class])), [guild.data]);
-  const showNames = editing || s.showNamesOnStream;
+  const showNames = !usePrivate() || s.showNamesOnStream;
   const hidden = useMemo(() => (showNames ? null : hiddenNames([...shown.map((l) => l.who), ...fair.map((f) => f.name)])), [showNames, shown, fair]);
 
   const notice = useSetupNotice(all.length > 0, loot.error);

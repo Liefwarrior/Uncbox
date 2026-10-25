@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Icon } from '../../components/Icon';
+import { usePrivate } from '../../privacy';
 import { CLASS_NAMES, classLabel } from '../shared/classColor';
 import { useNow } from '../shared/useNow';
 import { ClassDot, ClassName, WowNotice } from '../shared/WowBits';
@@ -10,14 +11,15 @@ import { filterRoster, headerText, isFiltering, notesShown, onlineDots, presence
 import type { RosterSettings } from './settings';
 
 // The Guild roster: who is online now, with their class, level, rank and zone; search, filters and
-// sorting while editing; click a member for their story. Officer notes only appear while editing and
-// only when the setting is on; on stream the controls are gone and notes follow "Show notes on stream".
+// sorting while editing; click a member for their story. Officer notes only appear when not on air and
+// only when the setting is on; on air the notes follow "Show notes on stream".
 
 /** Rows drawn at most; a bigger guild narrows the list with the search. */
 const MAX_ROWS = 300;
 
 export function RosterBody({ widget, settings: s, set, editing }: BodyProps<RosterSettings>) {
-  const notes = notesShown({ editing, showOfficerNotes: s.showOfficerNotes, showNotesOnStream: s.showNotesOnStream });
+  const priv = usePrivate();
+  const notes = notesShown({ isPrivate: priv, showOfficerNotes: s.showOfficerNotes, showNotesOnStream: s.showNotesOnStream });
   // Officer notes are only asked of the server while they may be shown.
   const officer = notes.officerNote;
   const { data, error } = useWowData<GuildAnswer>(`/api/wow/guild${officer ? '?officer=1' : ''}`, ['guild', 'events']);
@@ -153,7 +155,7 @@ export function RosterSettingsForm({ settings: s, set }: SettingsProps<RosterSet
         <input type="checkbox" checked={s.compact} onChange={(e) => set({ compact: e.target.checked })} /> Compact: just the online count and class dots
       </label>
       <label className="inline">
-        <input type="checkbox" checked={s.showOfficerNotes} onChange={(e) => set({ showOfficerNotes: e.target.checked })} /> Show officer notes (never on stream)
+        <input type="checkbox" checked={s.showOfficerNotes} onChange={(e) => set({ showOfficerNotes: e.target.checked })} /> Show officer notes (never on air)
       </label>
       <label className="inline">
         <input type="checkbox" checked={s.showNotesOnStream} onChange={(e) => set({ showNotesOnStream: e.target.checked })} /> Show notes on stream

@@ -1,5 +1,6 @@
 import { type FormEvent, useEffect, useState } from 'react';
 import { Icon, type IconName } from '../../components/Icon';
+import { usePrivate } from '../../privacy';
 import type { BodyProps } from '../types';
 import { offerUndo, showNotice } from '../../undo';
 import { faviconSources, findShortcuts, launchTile, saveTile, type Shortcut, TILE_KINDS, type Tile, type TileDraft, useTiles } from './launcher';
@@ -127,6 +128,8 @@ function TileForm({ draft, onCancel, onSaved }: { draft: TileDraft; onCancel: ()
   const [saving, setSaving] = useState(false);
   const [browsing, setBrowsing] = useState(false);
   const kind = TILE_KINDS.find((k) => k.type === v.type)!;
+  // A path or link is typed in plain sight; while on air it is dots, like a password.
+  const hidden = usePrivate();
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
@@ -171,7 +174,7 @@ function TileForm({ draft, onCancel, onSaved }: { draft: TileDraft; onCancel: ()
       <label>
         {v.type === 'url' || v.type === 'steam' ? 'Link' : 'Path'}
         <span className="row">
-          <input value={v.target} placeholder={kind.placeholder} onChange={(e) => setV({ ...v, target: e.target.value })} />
+          <input type={hidden ? 'password' : 'text'} autoComplete="off" value={v.target} placeholder={hidden ? '' : kind.placeholder} onChange={(e) => setV({ ...v, target: e.target.value })} />
           {v.type === 'app' && (
             <button className="btn btn--small" type="button" onClick={() => setBrowsing(true)}>
               Browse…

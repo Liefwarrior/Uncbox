@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Icon } from '../../components/Icon';
+import { usePrivate } from '../../privacy';
 import { csvDate, downloadCsv } from '../shared/csv';
 import { ClassDot, ClassName, WowNotice } from '../shared/WowBits';
 import { type AttendanceAnswer, type GuildAnswer, hiddenNames, longDate, nameLabel, type RaidSummary, shortDate, useSetupNotice, useWowData } from '../shared/wowGuild';
@@ -21,7 +22,7 @@ export function AttendanceBody({ settings: s, set, editing }: BodyProps<Attendan
   const matrix = useMemo(() => buildMatrix(raids.data?.raids ?? [], attendance.data?.members ?? [], s.raids), [raids.data, attendance.data, s.raids]);
   const rows = useMemo(() => shapeRows(matrix.rows, { rank: s.rank, guildOnly: s.guildOnly }, s.sort), [matrix, s.rank, s.guildOnly, s.sort]);
   const ranks = guild.data?.guild.ranks ?? [];
-  const showNames = editing || s.showNamesOnStream;
+  const showNames = !usePrivate() || s.showNamesOnStream;
   const hidden = useMemo(() => (showNames ? null : hiddenNames(rows.map((r) => r.name))), [showNames, rows]);
 
   const hasData = matrix.raids.length > 0;

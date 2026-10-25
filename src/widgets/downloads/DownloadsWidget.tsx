@@ -1,6 +1,7 @@
 import { type FormEvent, useState } from 'react';
 import { watchClip } from '../../clips/replay';
 import { Icon } from '../../components/Icon';
+import { scrubText, siteHost, usePrivate } from '../../privacy';
 import type { BodyProps } from '../types';
 import {
   cancelDownload,
@@ -32,6 +33,7 @@ const LABEL: Record<DownloadItem['state'], string> = {
 };
 
 export function DownloadsBody({ editing: controls }: BodyProps<object>) {
+  const hidden = usePrivate();
   const { loaded, tools, install, queue, history } = useDownloads();
   const [url, setUrl] = useState('');
   const [problem, setProblem] = useState('');
@@ -73,6 +75,7 @@ export function DownloadsBody({ editing: controls }: BodyProps<object>) {
           aria-label="Video address"
           spellCheck={false}
           autoComplete="off"
+          type={hidden ? 'password' : 'text'}
           onChange={(e) => {
             setUrl(e.target.value);
             setProblem('');
@@ -108,6 +111,9 @@ export function DownloadsBody({ editing: controls }: BodyProps<object>) {
 }
 
 function Row({ item, controls }: { item: DownloadItem; controls: boolean }) {
+  // What is being downloaded can be private (a video you are watching, a path); on air it is only the site.
+  const hidden = usePrivate();
+  const name = hidden ? `A video from ${siteHost(item.url) || 'the web'}` : downloadName(item);
   const active = item.state === 'downloading' || item.state === 'merging';
   const quality = qualityText(item);
   const meta =
@@ -118,11 +124,11 @@ function Row({ item, controls }: { item: DownloadItem; controls: boolean }) {
         : [quality, LABEL[item.state] === 'Done' ? '' : LABEL[item.state]].filter(Boolean);
   return (
     <li className={`dl__item dl__item--${item.state}`}>
-      <p className="dl__title" title={item.url}>
-        {downloadName(item)}
+      <p className="dl__title" title={hidden ? name : item.url}>
+        {name}
       </p>
       {item.state === 'error' ? (
-        <p className="error dl__meta">{item.error}</p>
+        <p className="error dl__meta">{hidden ? scrubText(item.error) : item.error}</p>
       ) : (
         <p className="muted dl__meta">{meta.join(' · ')}</p>
       )}
@@ -130,7 +136,7 @@ function Row({ item, controls }: { item: DownloadItem; controls: boolean }) {
         <div
           className="dl__bar"
           role="progressbar"
-          aria-label={downloadName(item)}
+          aria-label={name}
           aria-valuemin={0}
           aria-valuemax={100}
           aria-valuenow={Math.round(item.percent)}

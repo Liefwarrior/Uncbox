@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { usePrivate } from '../../privacy';
 import { useSteam } from '../../steam';
 import { Icon } from '../../components/Icon';
 import { Panel } from '../../components/Panel';
@@ -81,6 +82,8 @@ function useWindowedGames() {
 
 export function SteamPanel({ title }: PanelContext) {
   const steam = useSteam();
+  // On air, the account's name and picture stay off screen (the games are what is being shown).
+  const hidden = usePrivate();
   const windowed = useWindowedGames();
   const playing = steam?.playing ?? null;
   useTick(Boolean(playing));
@@ -153,9 +156,9 @@ export function SteamPanel({ title }: PanelContext) {
       ) : (
         <div className="steam-idle">
           <div className="steam-idle__me">
-            <Art className="steam-idle__avatar" src="/api/steam/avatar" />
+            {!hidden && <Art className="steam-idle__avatar" src="/api/steam/avatar" />}
             <span>
-              <strong>{steam.user?.name}</strong>
+              <strong>{hidden ? 'Steam' : steam.user?.name}</strong>
               <small>Recently played</small>
             </span>
           </div>

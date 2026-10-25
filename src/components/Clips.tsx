@@ -5,6 +5,7 @@ import { canSaveToDrive, saveToDrive, useDriveUploads } from '../clips/drive';
 import { CLIP_SECONDS, clipLabel, clipUrl, isVerticalClip, revealClip, saveClip, useClips, watchClip } from '../clips/replay';
 import { removeWebhook, sendToDiscord, setWebhook, useWebhook } from '../clips/share';
 import { placePanel } from '../layout';
+import { scrubText, usePrivate } from '../privacy';
 import { useCover } from '../native';
 import type { ClipSettings, PresetData } from '../state/model';
 import type { Mutate, MutatePreset } from '../state/useAppState';
@@ -30,6 +31,8 @@ const megabytes = (bytes: number) => `${Math.max(1, Math.round(bytes / 1e6))} MB
 /** The sidebar's Clips section: on/off, the clip key, save now, and the latest clips. */
 export function ClipsSection({ settings, mutate }: { settings: ClipSettings; mutate: Mutate }) {
   const clips = useClips();
+  // The clips folder is a path under your Windows user name; on air the tooltip doesn't say it.
+  const hidden = usePrivate();
   const [binding, setBinding] = useState(false);
   const key = keyLabel(settings.key);
 
@@ -51,7 +54,9 @@ export function ClipsSection({ settings, mutate }: { settings: ClipSettings; mut
   const status = !settings.enabled
     ? 'Off'
     : clips.error
-      ? clips.error
+      ? hidden
+        ? scrubText(clips.error)
+        : clips.error
       : clips.recording
         ? clips.seconds >= CLIP_SECONDS
           ? `Keeping the last ${CLIP_SECONDS} seconds`
@@ -140,7 +145,7 @@ export function ClipsSection({ settings, mutate }: { settings: ClipSettings; mut
             <li key={c.name}>
               <button className="side-link" title="Watch" onClick={() => watchClip(c.name)}>
                 <Icon name="play" size={13} />
-                <span>{c.download ? clipLabel(c.name) : when(c.at)}</span>
+                <span>{c.download ? (hidden ? 'Downloaded video' : clipLabel(c.name)) : when(c.at)}</span>
                 <small>
                   {c.download && 'Download · '}
                   {isVerticalClip(c.name) && 'Vertical · '}
@@ -152,7 +157,7 @@ export function ClipsSection({ settings, mutate }: { settings: ClipSettings; mut
         </ul>
       )}
       <DiscordWebhook />
-      <button className="side-link side-link--quiet" title={clips.dir} onClick={() => revealClip()}>
+      <button className="side-link side-link--quiet" title={hidden ? 'Opens in Explorer' : clips.dir} onClick={() => revealClip()}>
         <Icon name="folder" /> Open clips folder
       </button>
     </>
@@ -162,6 +167,7 @@ export function ClipsSection({ settings, mutate }: { settings: ClipSettings; mut
 /** Where "Send to Discord" sends clips. The server keeps the URL; this only ever shows its last characters. */
 function DiscordWebhook() {
   const { set, hint } = useWebhook();
+  const hidden = usePrivate();
   const [editing, setEditing] = useState(false);
   const [url, setUrl] = useState('');
   const [error, setError] = useState('');
@@ -184,7 +190,7 @@ function DiscordWebhook() {
     return (
       <div className="clips__discord">
         <p className="hint">
-          Discord webhook: {set ? `set (${hint})` : 'not set'}
+          Discord webhook: {set ? (hidden ? 'set' : `set (${hint})`) : 'not set'}
         </p>
         <div className="clips__actions">
           <button className="btn btn--small" onClick={() => setEditing(true)}>
@@ -238,6 +244,8 @@ function DiscordWebhook() {
  */
 export function ClipToast({ driveAuto }: { driveAuto: boolean }) {
   const { saved, saveError } = useClips();
+  const priv = usePrivate();
+  const clean = (text: string) => (priv ? scrubText(text) : text);
   const drive = useDriveUploads()[saved?.name ?? ''];
   const upload = driveAuto ? drive : undefined;
   const key = saved ? `saved:${saved.at}:${upload?.state ?? ''}` : saveError ? `error:${saveError}` : '';
@@ -259,14 +267,14 @@ export function ClipToast({ driveAuto }: { driveAuto: boolean }) {
             Clip saved
             {upload?.state === 'uploading' && ' · uploading to Drive…'}
             {upload?.state === 'done' && ' · on Drive'}
-            {upload?.state === 'error' && ` · not on Drive: ${upload.error}`}
+            {upload?.state === 'error' && ` · not on Drive: ${clean(upload.error)}`}
           </span>
           <button className="toast__undo" onClick={() => watchClip(saved.name)}>
             <Icon name="play" size={13} /> Watch
           </button>
         </>
       ) : (
-        <span className="error">{saveError}</span>
+        <span className="error">{clean(saveError)}</span>
       )}
     </div>
   );
@@ -323,8 +331,11 @@ function Player({ playing, startEditing, share, onSetUpDrive }: { playing: strin
   useDialog(box);
 
   const vertical = isVerticalClip(playing);
+  // A downloaded video is named after its title, which can be private.
+  const hidden = usePrivate();
+  const label = hidden && playing.startsWith('Downloads/') ? 'Downloaded video' : clipLabel(playing);
   return (
-    <div className="clip-player" role="dialog" aria-modal="true" aria-label={`Clip ${clipLabel(playing)}`} onClick={close}>
+    <div className="clip-player" role="dialog" aria-modal="true" aria-label={`Clip ${label}`} onClick={close}>
       <div ref={box} className={`clip-player__box ${editing ? 'is-editing' : ''}`} onClick={(e) => e.stopPropagation()}>
         {editing ? (
           <VerticalEditor name={playing} job={job} discord={discord} />
@@ -333,7 +344,7 @@ function Player({ playing, startEditing, share, onSetUpDrive }: { playing: strin
         )}
         <StatusLine job={job} />
         <div className="clip-player__bar">
-          <span>{clipLabel(playing)}</span>
+          <span>{label}</span>
           <span className="spacer" />
           {!vertical && (
             <button className={`btn btn--small ${editing ? 'btn--on' : ''}`} disabled={busy} onClick={() => setEditing((e) => !e)}>

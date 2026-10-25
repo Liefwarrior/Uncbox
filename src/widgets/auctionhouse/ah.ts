@@ -382,13 +382,13 @@ export function ageLabel(seconds: number | null | undefined): string {
   return plural(Math.round(seconds / 86400), 'day');
 }
 
-// ---- stream mode ----
+// ---- on air ----
 
 /** What stands in for a hidden amount. */
 export const MASK = '•••';
 
-/** Stream mode (the board is not being edited) hides gold unless the widget's setting says to show it. */
-export const hidesGold = (editing: boolean, settings: Pick<AuctionHouseSettings, 'showGoldOnStream'>): boolean => !editing && !settings.showGoldOnStream;
+/** While private (on air) gold is hidden unless the widget's setting says to show it. */
+export const hidesGold = (isPrivate: boolean, settings: Pick<AuctionHouseSettings, 'showGoldOnStream'>): boolean => isPrivate && !settings.showGoldOnStream;
 
 /** Money as text, or the mask while gold is hidden. */
 export const goldText = (copper: number | null | undefined, hide: boolean): string => {

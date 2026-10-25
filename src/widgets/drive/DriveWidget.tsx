@@ -1,6 +1,7 @@
 import { type ReactNode, useEffect, useState } from 'react';
 import { openPage } from '../../discord';
 import { Icon } from '../../components/Icon';
+import { usePrivate } from '../../privacy';
 import type { BodyProps } from '../types';
 import {
   DRIVE_VIEWS,
@@ -29,6 +30,7 @@ export function DriveBody({ settings: s, set, open, close }: BodyProps<DriveSett
   const { status, reachable } = useGoogle();
   const local = useLocalDrive();
   const [wantsGoogle, setWantsGoogle] = useState(false);
+  const hidden = usePrivate();
 
   // Signing out and replacing the client work outside edit mode too.
   if (open) return <DriveAccount onDone={close} />;
@@ -37,9 +39,10 @@ export function DriveBody({ settings: s, set, open, close }: BodyProps<DriveSett
 
   // Other widgets may have asked for more than Drive needs; only Drive's own permission counts here.
   if (hasGoogleScopes(status, DRIVE_FEATURE.scopes)) {
-    return <Files s={s} set={set} source="cloud" note={status.email} />;
+    return hidden ? <HiddenFiles /> : <Files s={s} set={set} source="cloud" note={status.email} />;
   }
   if (local.available && !wantsGoogle) {
+    if (hidden) return <HiddenFiles />;
     return (
       <Files
         s={s}
@@ -60,6 +63,17 @@ export function DriveBody({ settings: s, set, open, close }: BodyProps<DriveSett
 }
 
 // ---- the files ----
+
+/** File names, thumbnails and the account are public while on air, so none are asked for or drawn. */
+function HiddenFiles() {
+  return (
+    <div className="drive drive--setup no-drag">
+      <p className="muted">
+        <Icon name="eyeOff" size={14} /> Files hidden while you’re on air.
+      </p>
+    </div>
+  );
+}
 
 function Files({ s, set, source, note, footer }: { s: DriveSettings; set: SetSettings; source: DriveSource; note: string; footer?: ReactNode }) {
   const saved = driveView(s.driveView);
@@ -171,6 +185,7 @@ function FileRow({ file, source, thumb, onThumbError }: { file: DriveFile; sourc
 /** Sign out and replace the client live here. */
 function DriveAccount({ onDone }: { onDone: () => void }) {
   const { status } = useGoogle();
+  const hidden = usePrivate();
   const [replacing, setReplacing] = useState(false);
   const [error, setError] = useState('');
 
@@ -187,7 +202,7 @@ function DriveAccount({ onDone }: { onDone: () => void }) {
     <div className="widget-settings no-drag">
       {status && (
         <p className="muted">
-          {status.signedIn ? `Signed in as ${status.email || 'your Google account'}.` : status.configured ? 'A Google client is saved. Not signed in.' : 'No Google client yet.'}
+          {status.signedIn ? `Signed in as ${(!hidden && status.email) || 'your Google account'}.` : status.configured ? 'A Google client is saved. Not signed in.' : 'No Google client yet.'}
         </p>
       )}
       {replacing || (status && !status.configured) ? (

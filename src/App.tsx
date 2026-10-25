@@ -17,6 +17,7 @@ import type { BoardId } from './state/model';
 import { activePreset } from './state/presets';
 import { useAppState } from './state/useAppState';
 import { listen } from './events';
+import { PrivacyProvider } from './privacy';
 import { useWowAutoSetup } from './wow';
 import { dismissUndoOnSwitch, showNotice } from './undo';
 
@@ -117,31 +118,35 @@ export function App() {
   // default preset's theme first and crossfades to the real one, which is visible on stream.
   if (status === 'loading') return null;
 
+  // Everything below reads "private" (usePrivate) rather than the stream mode view: it is also on
+  // while OBS is live and when the On air switch is on, so leaving stream mode never shows mail.
   return (
-    <div className={`app theme-${base} ${streamMode ? 'is-stream' : 'is-editing'}`}>
-      <Sidebar
-        state={state}
-        mutate={mutate}
-        mutatePreset={mutatePreset}
-        status={status}
-        onStreamMode={enterStream}
-      />
-      <main className="stage">
-        <Backdrop id={data.background} preset={base} />
-        <Board
-          key={state.preset}
-          layout={data.layout}
-          widgets={data.widgets}
-          editing={!streamMode}
+    <PrivacyProvider streamMode={streamMode}>
+      <div className={`app theme-${base} ${streamMode ? 'is-stream' : 'is-editing'}`}>
+        <Sidebar
+          state={state}
+          mutate={mutate}
           mutatePreset={mutatePreset}
-          renderPanel={render}
+          status={status}
+          onStreamMode={enterStream}
         />
-        <UndoToast />
-        <ClipToast driveAuto={state.clips.driveAuto} />
-        <ClipPlayer settings={state.clips} data={data} mutatePreset={mutatePreset} />
-        <Gallery state={state} mutate={mutate} streaming={streamMode} />
-        <Palette state={state} mutate={mutate} mutatePreset={mutatePreset} streaming={streamMode} onToggleStream={toggleStream} />
-      </main>
-    </div>
+        <main className="stage">
+          <Backdrop id={data.background} preset={base} />
+          <Board
+            key={state.preset}
+            layout={data.layout}
+            widgets={data.widgets}
+            editing={!streamMode}
+            mutatePreset={mutatePreset}
+            renderPanel={render}
+          />
+          <UndoToast />
+          <ClipToast driveAuto={state.clips.driveAuto} />
+          <ClipPlayer settings={state.clips} data={data} mutatePreset={mutatePreset} />
+          <Gallery state={state} mutate={mutate} streaming={streamMode} />
+          <Palette state={state} mutate={mutate} mutatePreset={mutatePreset} streaming={streamMode} onToggleStream={toggleStream} />
+        </main>
+      </div>
+    </PrivacyProvider>
   );
 }

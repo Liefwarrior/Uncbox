@@ -1,17 +1,23 @@
 import type { MouseEvent } from 'react';
 import { useBoard } from '../../components/boardContext';
 import { Icon } from '../../components/Icon';
-import { type MediaNow, mediaArtUrl, sendMediaControl, useMedia, useMediaPosition } from './media';
+import { usePrivate } from '../../privacy';
+import { isBrowserSource, type MediaNow, mediaArtUrl, sendMediaControl, useMedia, useMediaPosition } from './media';
 import { formatClock, progressFraction, seekPosition } from './mediaProgress';
 
 export function MediaBody() {
   const m = useMedia();
   // In stream mode it only shows what's playing; the buttons and the seek bar are for the editor.
   const { editing } = useBoard();
+  // On air, what a browser tab is playing stays off screen; only that something is playing shows.
+  const hidden = usePrivate();
   if (!m) return null;
   if (!m.title) return <p className="muted">Nothing is playing.</p>;
-  return <MediaPlayer m={m} canControl={editing} />;
+  return <MediaPlayer m={hidden && isBrowserSource(m.app) ? hideDetails(m) : m} canControl={editing} />;
 }
+
+/** The same reading with the title, artist, album and cover taken out. */
+const hideDetails = (m: MediaNow): MediaNow => ({ ...m, title: 'Playing in a browser', artist: '', album: '', art: '' });
 
 function MediaPlayer({ m, canControl }: { m: MediaNow; canControl: boolean }) {
   const can = m.controls ?? { playPause: false, next: false, previous: false, seek: false };

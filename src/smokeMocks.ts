@@ -13,6 +13,27 @@ export interface Reply {
   body: unknown;
 }
 
+/** Personal-looking text planted in the fakes below. The "private" tests assert none of it is on screen. */
+export const SENTINELS = [
+  'SENTINEL_SUBJECT',
+  'SENTINEL_SENDER',
+  'SENTINEL_EVENT',
+  'SENTINEL_PLACE',
+  'SENTINEL_FILE',
+  'SENTINEL_OWNER',
+  'SENTINEL_ACCOUNT',
+  'SENTINEL_TITLE',
+  'SENTINEL_BODY',
+  'SENTINEL_PATH',
+  'SENTINEL_QUERY',
+  'SENTINEL_TRACK',
+  'SENTINEL_TOWN',
+  'SENTINEL_VIDEO',
+  'SENTINEL_URL',
+  'SENTINEL_STEAMER',
+  'C:\\Users\\SENTINEL',
+] as const;
+
 const NOW = Date.now();
 const iso = (offsetMs: number) => new Date(NOW + offsetMs).toISOString();
 const HOUR = 3_600_000;
@@ -81,7 +102,7 @@ const googleOut = { configured: false, signedIn: false, email: '', scopes: [], n
 const googleIn = {
   configured: true,
   signedIn: true,
-  email: 'eli@example.com',
+  email: 'SENTINEL_ACCOUNT@example.com',
   scopes: [
     'https://www.googleapis.com/auth/drive.readonly',
     'https://www.googleapis.com/auth/drive.file',
@@ -125,8 +146,8 @@ const steamBusy = {
 };
 
 const events = [
-  { id: 'e1', calendar: 'Eli', color: '#3b82f6', title: 'Standup', start: iso(-HOUR / 4), end: iso(HOUR / 4), allDay: false, location: '', meetUrl: 'https://meet.google.com/abc', htmlLink: 'https://calendar.google.com/e1' },
-  { id: 'e2', calendar: 'Eli', color: '#ef4444', title: 'Stream night', start: iso(HOUR * 5), end: iso(HOUR * 7), allDay: false, location: 'Home', meetUrl: '', htmlLink: '' },
+  { id: 'e1', calendar: 'Eli', color: '#3b82f6', title: 'Standup SENTINEL_EVENT', start: iso(-HOUR / 4), end: iso(HOUR / 4), allDay: false, location: 'Room SENTINEL_PLACE', meetUrl: 'https://meet.google.com/abc', htmlLink: 'https://calendar.google.com/e1' },
+  { id: 'e2', calendar: 'Eli', color: '#ef4444', title: 'Stream night SENTINEL_EVENT', start: iso(HOUR * 5), end: iso(HOUR * 7), allDay: false, location: 'Home', meetUrl: '', htmlLink: '' },
   { id: 'e3', calendar: 'Eli', color: '#22c55e', title: 'Holiday', start: new Date(NOW).toISOString().slice(0, 10), end: new Date(NOW + 86_400_000).toISOString().slice(0, 10), allDay: true, location: '', meetUrl: '', htmlLink: '' },
 ];
 
@@ -135,13 +156,13 @@ const mail = {
   unread: 3,
   threadsUnread: 2,
   messages: [
-    { id: 'm1', threadId: 't1', from: 'Sam', subject: 'Game tonight?', date: iso(-HOUR), unread: true, snippet: 'You in?', link: 'https://mail.google.com/m1' },
-    { id: 'm2', threadId: 't2', from: 'Twitch', subject: 'You have a new follower', date: iso(-HOUR * 30), unread: false, link: 'https://mail.google.com/m2' },
+    { id: 'm1', threadId: 't1', from: 'Sam SENTINEL_SENDER', subject: 'Game tonight? SENTINEL_SUBJECT', date: iso(-HOUR), unread: true, snippet: 'You in?', link: 'https://mail.google.com/m1' },
+    { id: 'm2', threadId: 't2', from: 'Twitch SENTINEL_SENDER', subject: 'You have a new follower SENTINEL_SUBJECT', date: iso(-HOUR * 30), unread: false, link: 'https://mail.google.com/m2' },
   ],
 };
 
 const files = [
-  { id: 'f1', name: 'Stream plan', mimeType: 'application/vnd.google-apps.document', modifiedTime: iso(-HOUR), webViewLink: 'https://docs.google.com/f1', hasThumb: false, owner: 'Eli' },
+  { id: 'f1', name: 'Stream plan SENTINEL_FILE', mimeType: 'application/vnd.google-apps.document', modifiedTime: iso(-HOUR), webViewLink: 'https://docs.google.com/f1', hasThumb: false, owner: 'Eli SENTINEL_OWNER' },
   { id: 'f2', name: 'Thumbnail.png', mimeType: 'image/png', modifiedTime: iso(-HOUR * 50), webViewLink: 'https://drive.google.com/f2', hasThumb: true, owner: 'Sam' },
 ];
 
@@ -167,13 +188,13 @@ export function route(scenario: Scenario, path: string, method: string): Reply {
   if (p === '/api/media') {
     return ok(
       data
-        ? { playing: true, app: 'Spotify', title: 'Song', artist: 'Band', album: 'Album', art: '1', position: 30, age: 0.5, duration: 200, controls: { playPause: true, next: true, previous: true, seek: true } }
+        ? { playing: true, app: 'Chrome', title: 'Song SENTINEL_TRACK', artist: 'Band', album: 'Album', art: '1', position: 30, age: 0.5, duration: 200, controls: { playPause: true, next: true, previous: true, seek: true } }
         : { playing: false },
     );
   }
   if (p === '/api/media/art') return { status: 404, body: { error: 'No art' } };
   if (p === '/api/notifications') {
-    return ok({ notifications: data ? [{ id: 1, app: 'Discord', title: 'Sam', body: 'gg', at: NOW }] : [] });
+    return ok({ notifications: data ? [{ id: 1, app: 'Discord', title: 'Sam SENTINEL_TITLE', body: 'gg SENTINEL_BODY', at: NOW }] : [] });
   }
   if (p === '/api/netstats') {
     return ok({ key: 'k', targets: { k: ping('1.1.1.1') }, router: data ? ping('192.168.1.1') : null, game: data ? { name: 'Game', fps: 144, fpsLow: 120, fpsHistory: [140, 144, 150], gpuMs: 4.2, ping: 30, pingHistory: [30, 31] } : null });
@@ -187,12 +208,12 @@ export function route(scenario: Scenario, path: string, method: string): Reply {
   if (p === '/api/steam/windowed') return ok({ on: data });
   if (p === '/api/smite') return ok(data ? { phase: 'match', mode: 'Conquest', startedAt: NOW, endedAt: 0, god: 'Zeus', allies: ['Ra'], enemies: ['Loki'], build: ['Boots'], consumables: {} } : { phase: 'lobby', mode: '', startedAt: 0, endedAt: 0, god: '', allies: [], enemies: [], build: [], consumables: {} });
   if (p === '/api/clips') {
-    return ok({ dir: 'C:\\Videos\\Uncbox', hotkey: 'unsupported', clips: data ? [{ name: 'clip-1.mp4', size: 1e6, at: NOW }] : [] });
+    return ok({ dir: 'C:\\Users\\SENTINEL\\Videos\\Uncbox', hotkey: 'unsupported', clips: data ? [{ name: 'clip-1.mp4', size: 1e6, at: NOW }, { name: 'Downloads/Show SENTINEL_VIDEO.mp4', size: 2e6, at: NOW, download: true }] : [] });
   }
   if (p === '/api/ytdlp') {
     const found = { found: true, path: 'C:\\Tools\\x.exe', version: '2026.07.04' };
     const gone = { found: false, path: '', version: '' };
-    const item = { id: 'dl1', url: 'https://example.com/v', title: 'A video', percent: 40, speed: 2e6, eta: 30, height: 1080, fps: 60, vcodec: 'vp09.00.40.08', state: 'downloading', file: '', name: '', error: '', audioOnly: false };
+    const item = { id: 'dl1', url: 'https://example.com/v?SENTINEL_URL', title: 'A video SENTINEL_VIDEO', percent: 40, speed: 2e6, eta: 30, height: 1080, fps: 60, vcodec: 'vp09.00.40.08', state: 'downloading', file: '', name: '', error: '', audioOnly: false };
     return ok({
       tools: { ytdlp: data ? found : gone, ffmpeg: data ? found : gone, winget: true, helpUrl: 'https://github.com/yt-dlp/yt-dlp/wiki/Installation' },
       install: { running: false, action: '', tool: '', lines: [], error: '' },
@@ -235,7 +256,7 @@ export function route(scenario: Scenario, path: string, method: string): Reply {
   if (p === '/api/twitch/watch') return ok({ snapshot: data ? stream(true) : stream(false) });
   if (p === '/api/twitch/unwatch') return ok({ ok: true });
   if (p === '/api/launcher/tiles') {
-    return ok({ tiles: data ? [{ id: 'l1', type: 'url', name: 'Wiki', target: 'https://example.com' }] : [] });
+    return ok({ tiles: data ? [{ id: 'l1', type: 'folder', name: 'Wiki', target: 'C:\\Users\\SENTINEL\\Docs' }] : [] });
   }
   if (p === '/api/launcher/start-menu') return ok({ items: [] });
   if (p === '/api/ocr') return ok({ text: '' });

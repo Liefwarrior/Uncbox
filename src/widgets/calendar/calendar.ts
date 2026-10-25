@@ -163,13 +163,12 @@ export function busyUntil(events: CalendarEvent[], now: number): number | null {
   return until;
 }
 
-// ---- stream mode ----
+// ---- on air ----
 
 /**
- * Stream mode shows what's on the screen to everyone watching, so the widget keeps its details
- * to itself unless "Show on stream" is on. In the editor (not stream mode) it always shows them.
+ * While private (on air: stream mode, OBS live, or the On air switch) everyone watching sees the screen, so the widget keeps its details to itself unless "Show on stream" is on.
  */
-export const shouldRedact = (streamMode: boolean, showOnStream: boolean) => streamMode && !showOnStream;
+export const shouldRedact = (isPrivate: boolean, showOnStream: boolean) => isPrivate && !showOnStream;
 
 /** All a stream sees of the calendar: "Busy until 3:00 PM", or "Free". */
 export function streamSummary(events: CalendarEvent[], now: number, hour12: boolean): string {

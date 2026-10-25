@@ -104,15 +104,15 @@ describe('the words', () => {
 describe('which notes may be shown', () => {
   const on = { showOfficerNotes: true, showNotesOnStream: true };
   it('shows public notes while editing, and on stream only when asked', () => {
-    expect(notesShown({ editing: true, showOfficerNotes: false, showNotesOnStream: false }).publicNote).toBe(true);
-    expect(notesShown({ editing: false, showOfficerNotes: false, showNotesOnStream: false }).publicNote).toBe(false);
-    expect(notesShown({ editing: false, showOfficerNotes: false, showNotesOnStream: true }).publicNote).toBe(true);
+    expect(notesShown({ isPrivate: false, showOfficerNotes: false, showNotesOnStream: false }).publicNote).toBe(true);
+    expect(notesShown({ isPrivate: true, showOfficerNotes: false, showNotesOnStream: false }).publicNote).toBe(false);
+    expect(notesShown({ isPrivate: true, showOfficerNotes: false, showNotesOnStream: true }).publicNote).toBe(true);
   });
 
   it('shows officer notes only while editing with the setting on, never on stream', () => {
-    expect(notesShown({ editing: true, showOfficerNotes: false, showNotesOnStream: true }).officerNote).toBe(false);
-    expect(notesShown({ editing: true, ...on }).officerNote).toBe(true);
-    expect(notesShown({ editing: false, ...on }).officerNote).toBe(false);
+    expect(notesShown({ isPrivate: false, showOfficerNotes: false, showNotesOnStream: true }).officerNote).toBe(false);
+    expect(notesShown({ isPrivate: false, ...on }).officerNote).toBe(true);
+    expect(notesShown({ isPrivate: true, ...on }).officerNote).toBe(false);
   });
 });
 

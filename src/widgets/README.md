@@ -205,3 +205,7 @@ its own keys out of the old struct, and a window becomes a `window` widget with 
 (the layout is updated to match). Preset files are written as version 2 and both versions are
 read. `src/state/legacy.test.ts` loads the four gallery files as they were in version 1 and checks
 they come out the same as the current ones.
+
+## Personal data and streaming
+
+Uncbox is on screen while you stream, so a widget that draws anything about the person (names, mail, file names, folders, addresses, accounts) asks `usePrivate()` (`src/privacy.tsx`) and leaves it out while it is true. That is on in the stream mode view, while OBS is live, and when the sidebar's **On air** switch is on. `docs/stream-privacy.md` lists what each widget hides.

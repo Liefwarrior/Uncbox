@@ -1,11 +1,14 @@
 import { useState } from 'react';
+import { usePrivate } from '../../privacy';
 import type { BodyProps, SettingsProps } from '../types';
 import type { WeatherSettings } from './settings';
 import { describeWeather, findPlace, useWeather } from './weather';
 
 export function WeatherBody({ settings: s }: BodyProps<WeatherSettings>) {
   const w = useWeather(s);
-  if (!w) return <p className="muted">Getting the weather for {s.place}…</p>;
+  // Your town is not for a stream: on air the weather shows without saying where.
+  const hidden = usePrivate();
+  if (!w) return <p className="muted">Getting the weather{hidden ? '' : ` for ${s.place}`}…</p>;
   const [label, symbol] = describeWeather(w.code, w.day);
   return (
     <div className="widget-weather">
@@ -17,7 +20,7 @@ export function WeatherBody({ settings: s }: BodyProps<WeatherSettings>) {
         <span>
           {label} · {w.high}° / {w.low}°
         </span>
-        <small>{s.place.split(',')[0]}</small>
+        <small>{hidden ? 'Local weather' : s.place.split(',')[0]}</small>
       </div>
     </div>
   );

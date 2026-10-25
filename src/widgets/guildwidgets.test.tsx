@@ -11,6 +11,7 @@ import { type ComponentType, useState } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { PRESETS } from '../presets';
 import { defaultPresetData } from '../state/hydrate';
+import { FixedPrivacy } from '../privacy';
 import { wowGuildRoute, EVENTS, WOW_NOW } from '../wowMocks';
 import { AttendanceBody } from './attendance/AttendanceWidget';
 import { defaultAttendanceSettings } from './attendance/settings';
@@ -107,7 +108,12 @@ function mount<S extends object>(Body: ComponentType<any>, initial: S, editing =
   function Harness() {
     const [settings, setSettings] = useState<S>(initial);
     latest.settings = settings;
-    return <Body widget={{ id, kind: 'test', title: '', settings }} settings={settings} set={(patch: Partial<S>) => setSettings((s) => ({ ...s, ...patch }))} editing={editing} open={false} close={() => {}} />;
+    // Not editing is the stream mode view, which is private.
+    return (
+      <FixedPrivacy on={!editing}>
+        <Body widget={{ id, kind: 'test', title: '', settings }} settings={settings} set={(patch: Partial<S>) => setSettings((s) => ({ ...s, ...patch }))} editing={editing} open={false} close={() => {}} />
+      </FixedPrivacy>
+    );
   }
   const view = render(<Harness />);
   return { ...view, latest };

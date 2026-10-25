@@ -94,11 +94,11 @@ export function onlineDots(members: readonly GuildMember[], max = 80): string[] 
 }
 
 /**
- * Which notes may be on screen. Officer notes only while editing and only when the setting is on,
- * never on stream; public notes on stream only when "Show notes on stream" is on.
+ * Which notes may be on screen. Officer notes only when not private (on air) and only when the
+ * setting is on; public notes while private only when "Show notes on stream" is on.
  */
-export function notesShown(o: { editing: boolean; showOfficerNotes: boolean; showNotesOnStream: boolean }): { publicNote: boolean; officerNote: boolean } {
-  return { publicNote: o.editing || o.showNotesOnStream, officerNote: o.editing && o.showOfficerNotes };
+export function notesShown(o: { isPrivate: boolean; showOfficerNotes: boolean; showNotesOnStream: boolean }): { publicNote: boolean; officerNote: boolean } {
+  return { publicNote: !o.isPrivate || o.showNotesOnStream, officerNote: !o.isPrivate && o.showOfficerNotes };
 }
 
 /** "Promoted to Officer", "Demoted to Initiate". */

@@ -6,6 +6,7 @@ import { clipUrl, watchClip } from '../clips/replay';
 import { makeVertical, sendToDiscord } from '../clips/share';
 import type { Edit, Progress, Report } from '../clips/share';
 import { wasCancelled } from '../clips/transcode';
+import { scrubText, usePrivate } from '../privacy';
 import { Icon } from './Icon';
 
 export type Status =
@@ -49,8 +50,9 @@ export function useJob(): Job {
 /** The line under the buttons: progress, the result, or what went wrong. */
 export function StatusLine({ job }: { job: Job }) {
   const { status } = job;
+  const hidden = usePrivate();
   if (status.kind === 'idle') return null;
-  if (status.kind === 'error') return <p className="clip-status error" role="alert" aria-live="assertive">{status.text}</p>;
+  if (status.kind === 'error') return <p className="clip-status error" role="alert" aria-live="assertive">{hidden ? scrubText(status.text) : status.text}</p>;
   if (status.kind === 'done') {
     return (
       <p className="clip-status clip-status--done" role="status">

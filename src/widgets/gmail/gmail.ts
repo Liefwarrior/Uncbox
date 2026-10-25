@@ -56,13 +56,13 @@ export function relativeTime(iso: string, now: number): string {
   return new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric', year: day.getFullYear() === today.getFullYear() ? undefined : 'numeric' }).format(t);
 }
 
-// ---- stream mode ----
+// ---- on air ----
 
 /**
- * Stream mode shows what's on the screen to everyone watching, so the widget keeps who wrote to
- * you and about what to itself unless "Show on stream" is on. In the editor it always shows them.
+ * While private (on air: stream mode, OBS live, or the On air switch) everyone watching sees the screen, so the widget keeps who wrote to
+ * you and about what to itself unless "Show on stream" is on.
  */
-export const shouldRedact = (streamMode: boolean, showOnStream: boolean) => streamMode && !showOnStream;
+export const shouldRedact = (isPrivate: boolean, showOnStream: boolean) => isPrivate && !showOnStream;
 
 /** What a stream gets to see: with `redact`, the count and nothing else. */
 export function streamView(summary: GmailSummary, redact: boolean): { unread: number; messages: GmailMessage[] } {

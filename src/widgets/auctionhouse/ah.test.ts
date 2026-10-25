@@ -254,11 +254,11 @@ describe('profit maths', () => {
 });
 
 describe('stream mode', () => {
-  it('hides gold while streaming, unless the widget is set to show it', () => {
-    expect(hidesGold(false, { showGoldOnStream: false })).toBe(true);
-    expect(hidesGold(false, { showGoldOnStream: true })).toBe(false);
-    // Editing is not streaming.
-    expect(hidesGold(true, { showGoldOnStream: false })).toBe(false);
+  it('hides gold while private (on air), unless the widget is set to show it', () => {
+    expect(hidesGold(true, { showGoldOnStream: false })).toBe(true);
+    expect(hidesGold(true, { showGoldOnStream: true })).toBe(false);
+    // Not on air is not private.
+    expect(hidesGold(false, { showGoldOnStream: false })).toBe(false);
   });
 
   it('replaces an amount with the mask, and leaves "no value" as a dash', () => {

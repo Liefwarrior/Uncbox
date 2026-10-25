@@ -82,6 +82,8 @@ export interface PaletteContext {
   /** The saved launcher tiles, once the server has answered. */
   tiles: Tile[] | null;
   drive: { signedIn: boolean; results: DriveFile[] };
+  /** On air: nothing personal (Drive file names) is listed. */
+  private?: boolean;
   obs: ObsSnapshot | null;
   /** The guild's member names, once known (only asked for on the WoW preset). */
   wow: { members: string[] } | null;
@@ -302,8 +304,8 @@ const downloadCommands: Provider = ({ query, actions }) => {
 export const DRIVE_MIN_QUERY = 3;
 export const DRIVE_SHOWN = 6;
 
-const driveCommands: Provider = ({ query, drive, actions }) => {
-  if (!drive.signedIn || query.trim().length < DRIVE_MIN_QUERY) return [];
+const driveCommands: Provider = ({ query, drive, actions, private: hidden }) => {
+  if (hidden || !drive.signedIn || query.trim().length < DRIVE_MIN_QUERY) return [];
   return drive.results.slice(0, DRIVE_SHOWN).map(
     (file, i): Command => ({
       id: `drive:${file.id}`,

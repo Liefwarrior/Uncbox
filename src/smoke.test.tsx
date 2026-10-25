@@ -6,10 +6,14 @@
 // smallest size. Nothing here checks how it looks; it catches the crash on first
 // run, the React warning and the panel that comes up blank. The fakes are in ./smokeMocks.ts.
 
-import { act, cleanup, render } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { App } from './App';
 import { Board } from './components/Board';
+import { openPalette } from './palette/Palette';
+import { FixedPrivacy, resetOnAirForTests } from './privacy';
+import { placePanel } from './layout';
+import { dismissUndo, showNotice } from './undo';
 import { PRESETS } from './presets';
 import { renderPanel } from './widgets/render';
 import { defaultState } from './state/hydrate';
@@ -17,7 +21,7 @@ import { type AppState, type BoardId, type GridItem, type PresetData, type Prese
 import { activePreset } from './state/presets';
 import { useAppState } from './state/useAppState';
 import { boardDef, newWidget, SINGLE_KINDS, MULTI_KINDS, WIDGETS } from './widgets/registry';
-import { route, type Scenario } from './smokeMocks';
+import { route, type Reply, SENTINELS, type Scenario } from './smokeMocks';
 
 // ---- the browser, as far as jsdom goes ----
 
@@ -158,12 +162,15 @@ function installBrowserFakes() {
 let scenario: Scenario = 'empty';
 let appState: AppState = defaultState();
 const unmocked: string[] = [];
+/** A test's own answer for a path, ahead of the shared fakes. */
+let override: ((path: string, method: string) => Reply | undefined) | null = null;
 
 function fakeFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
   const path = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
   const method = (init?.method ?? 'GET').toUpperCase();
   let reply: { status?: number; body: unknown };
   if (path.startsWith('/api/state')) reply = { body: method === 'GET' ? appState : { ok: true } };
+  else if (override?.(path, method)) reply = override(path, method)!;
   else {
     reply = route(scenario, path, method);
     if (reply.status === 404 && !path.includes('/art') && !path.includes('/thumb')) unmocked.push(`${method} ${path}`);
@@ -217,11 +224,14 @@ function dressWidget(w: Widget) {
   const s = w.settings;
   s.lat = 30.27;
   s.lon = -97.74;
-  s.place = 'Austin, Texas';
+  s.place = 'Austin SENTINEL_TOWN, Texas';
   s.target = Date.now() + 90 * 60_000;
   s.text = 'Hello chat';
   s.launcherTiles = ['l1'];
-  s.url = 'https://example.com';
+  s.url = 'https://example.com/SENTINEL_PATH?q=SENTINEL_QUERY';
+  s.showBody = true;
+  // Notes may be switched on, and still must not show while private.
+  s.showOfficerNotes = true;
   s.timeZone = 'Europe/London';
 }
 
@@ -246,16 +256,19 @@ function stateWithPanel(id: BoardId, size: 'min' | 'default', populated: boolean
 
 // ---- rendering ----
 
-function Stage({ streaming }: { streaming: boolean }) {
+/** `priv` is what the app's privacy signal says; the stream mode view is private, like in the app. */
+function Stage({ streaming, priv = streaming }: { streaming: boolean; priv?: boolean }) {
   const { state, mutate, mutatePreset, status } = useAppState();
   if (status === 'loading') return null;
   const { base, def, data } = activePreset(state);
   return (
-    <div className={`app theme-${base} ${streaming ? 'is-stream' : 'is-editing'}`}>
-      <main className="stage">
-        <Board layout={data.layout} widgets={data.widgets} editing={!streaming} mutatePreset={mutatePreset} renderPanel={(id) => renderPanel(id, { state, data, def, mutate, mutatePreset })} />
-      </main>
-    </div>
+    <FixedPrivacy on={priv}>
+      <div className={`app theme-${base} ${streaming ? 'is-stream' : 'is-editing'}`}>
+        <main className="stage">
+          <Board layout={data.layout} widgets={data.widgets} editing={!streaming} mutatePreset={mutatePreset} renderPanel={(id) => renderPanel(id, { state, data, def, mutate, mutatePreset })} />
+        </main>
+      </div>
+    </FixedPrivacy>
   );
 }
 
@@ -279,6 +292,10 @@ let errors: unknown[][] = [];
 
 beforeAll(installBrowserFakes);
 beforeEach(() => {
+  override = null;
+  dismissUndo();
+  window.localStorage.clear();
+  resetOnAirForTests();
   errors = [];
   unmocked.length = 0;
   vi.spyOn(console, 'error').mockImplementation((...args) => void errors.push(args));
@@ -314,10 +331,10 @@ const MODES = [
 /** Widgets are also drawn at the size they start at, since their layouts change with room. */
 const WIDGET_MODES = [...MODES, { name: 'default size, with data', streaming: false, scenario: 'data' as Scenario, populated: true, size: 'default' as const }];
 
-async function renderStage(state: AppState, streaming: boolean, sc: Scenario) {
+async function renderStage(state: AppState, streaming: boolean, sc: Scenario, priv?: boolean) {
   appState = state;
   scenario = sc;
-  render(<Stage streaming={streaming} />);
+  render(<Stage streaming={streaming} priv={priv} />);
   await settleAll();
 }
 
@@ -409,5 +426,222 @@ describe.each(WIDGETS.map((def) => def.kind))('%s in every preset theme', (kind)
     expectDrawn(widget?.id ?? kind);
     expect(document.querySelector('.app')?.classList.contains(`theme-${preset}`)).toBe(true);
     expectClean();
+  });
+});
+
+// ---- private (on air): nothing personal on screen ----
+
+/** Everything a viewer could read: text, every attribute, typed values. The page inside a web panel is its own. */
+function onScreen(): string {
+  const parts = [document.body.textContent ?? ''];
+  for (const el of document.body.querySelectorAll('*')) {
+    for (const a of Array.from(el.attributes)) if (!(el.tagName === 'IFRAME' && a.name === 'src')) parts.push(a.value);
+    if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement) parts.push(el.value);
+  }
+  return parts.join('\n');
+}
+
+const leaks = (text: string, found: readonly string[] = SENTINELS) => found.filter((s) => text.includes(s));
+
+/** Private on, with the mocks full of sentinels, in the editor and in the stream mode view: none is drawn. */
+describe.each(WIDGETS.map((def) => def.kind))('%s while private', (kind) => {
+  it.each([
+    { name: 'in the editor (left stream mode)', streaming: false },
+    { name: 'in the stream mode view', streaming: true },
+  ])('draws no personal text $name', async ({ streaming }) => {
+    const widget = MULTI_KINDS.includes(kind) ? newWidget(kind) : undefined;
+    await renderStage(stateWithPanel(widget?.id ?? kind, 'default', true, 'desk', widget), streaming, 'data', true);
+    expect(leaks(onScreen())).toEqual([]);
+    expectClean();
+  });
+});
+
+// The same fakes do reach each widget when it is not private, so the test above means something.
+const PERSONAL: Record<string, string[]> = {
+  gmail: ['SENTINEL_SUBJECT', 'SENTINEL_SENDER'],
+  calendar: ['SENTINEL_EVENT', 'SENTINEL_PLACE'],
+  drive: ['SENTINEL_FILE', 'SENTINEL_OWNER', 'SENTINEL_ACCOUNT'],
+  notifications: ['SENTINEL_TITLE', 'SENTINEL_BODY'],
+  media: ['SENTINEL_TRACK'],
+  web: ['SENTINEL_PATH', 'SENTINEL_QUERY'],
+  weather: ['SENTINEL_TOWN'],
+  downloads: ['SENTINEL_VIDEO', 'SENTINEL_URL'],
+  guildroster: ['Raid leader', 'Owes 200g to the bank'],
+};
+
+describe.each(Object.entries(PERSONAL))('%s when not private', (kind, texts) => {
+  it('shows what it was given', async () => {
+    const widget = newWidget(kind);
+    await renderStage(stateWithPanel(widget.id, 'default', true, 'desk', widget), false, 'data', false);
+    const text = onScreen();
+    for (const t of texts) expect(text, t).toContain(t);
+    expectClean();
+  });
+});
+
+describe('private keeps the counts and the status', () => {
+  it('Gmail still says how many are unread; Calendar still says busy or free', async () => {
+    const mail = newWidget('gmail');
+    await renderStage(stateWithPanel(mail.id, 'default', true, 'desk', mail), false, 'data', true);
+    expect(document.querySelector(`[data-panel="${mail.id}"]`)?.textContent).toContain('3');
+    cleanup();
+    const cal = newWidget('calendar');
+    await renderStage(stateWithPanel(cal.id, 'default', true, 'desk', cal), false, 'data', true);
+    expect(document.querySelector(`[data-panel="${cal.id}"]`)?.textContent).toMatch(/Busy until|Free/);
+  });
+
+  it('Notifications still say which app', async () => {
+    const w = newWidget('notifications');
+    await renderStage(stateWithPanel(w.id, 'default', true, 'desk', w), false, 'data', true);
+    expect(document.querySelector(`[data-panel="${w.id}"]`)?.textContent).toContain('Discord');
+  });
+
+  it('the Web widget shows only the site', async () => {
+    const w = newWidget('web');
+    await renderStage(stateWithPanel(w.id, 'default', true, 'desk', w), false, 'data', true);
+    const address = document.querySelector<HTMLInputElement>('.web-bar__address');
+    expect(address?.value).toBe('example.com');
+  });
+
+  it('a Show on stream opt-in still wins', async () => {
+    const w = newWidget('gmail');
+    const state = stateWithPanel(w.id, 'default', true, 'desk', w);
+    state.presets.desk.widgets[0].settings.showOnStream = true;
+    await renderStage(state, false, 'data', true);
+    expect(onScreen()).toContain('SENTINEL_SUBJECT');
+  });
+});
+
+describe('private, with other data', () => {
+  it('Now playing hides a browser tab but not a music app', async () => {
+    const w = newWidget('media');
+    const song = (app: string): Reply => ({ body: { playing: true, app, title: 'Song SENTINEL_TRACK', artist: 'Band', album: '', art: '', position: 1, age: 0, duration: 100, controls: { playPause: true, next: true, previous: true, seek: true } } });
+    override = (path) => (path.startsWith('/api/media') && !path.includes('/art') ? song('Chrome') : undefined);
+    await renderStage(stateWithPanel(w.id, 'default', true, 'desk', w), false, 'data', true);
+    expect(onScreen()).not.toContain('SENTINEL_TRACK');
+    cleanup();
+    override = (path) => (path.startsWith('/api/media') && !path.includes('/art') ? song('Spotify') : undefined);
+    await renderStage(stateWithPanel(w.id, 'default', true, 'desk', w), false, 'data', true);
+    expect(onScreen()).toContain('SENTINEL_TRACK');
+  });
+
+  it('Steam hides the account name when between games', async () => {
+    override = (path) => (path === '/api/steam' ? { body: { available: true, user: { name: 'Eli SENTINEL_STEAMER' }, playing: null, recent: [], commons: [] } } : undefined);
+    await renderStage(stateWithPanel('steam', 'default', true, 'desk'), false, 'data', true);
+    expect(onScreen()).not.toContain('SENTINEL_STEAMER');
+    cleanup();
+    await renderStage(stateWithPanel('steam', 'default', true, 'desk'), false, 'data', false);
+    expect(onScreen()).toContain('SENTINEL_STEAMER');
+  });
+
+  it('the Guild roster, loot, attendance and feed keep names and notes to themselves', async () => {
+    for (const [kind, name] of [['guildroster', 'Raid leader'], ['raidloot', 'Kaz'], ['attendance', 'Kaz'], ['guildfeed', 'Grim']] as const) {
+      const w = newWidget(kind);
+      await renderStage(stateWithPanel(w.id, 'default', true, 'desk', w), false, 'data', true);
+      expect(onScreen(), `${kind} while private`).not.toContain(name);
+      expect(onScreen(), `${kind} while private`).not.toContain('Owes 200g');
+      cleanup();
+      await renderStage(stateWithPanel(w.id, 'default', true, 'desk', w), false, 'data', false);
+      expect(onScreen(), `${kind} when not private`).toContain(name);
+      cleanup();
+    }
+  });
+});
+
+// ---- the whole app ----
+
+/** The desk with one of every widget on it. */
+function stateWithEverything(): AppState {
+  return stateFor('desk', (d) => {
+    fill(d);
+    d.widgets = MULTI_KINDS.map((kind) => newWidget(kind));
+    d.widgets.forEach(dressWidget);
+    d.layout = [];
+    for (const w of d.widgets) d.layout.push(placePanel(d.layout, w.id, d.widgets));
+  });
+}
+
+describe('the whole app', () => {
+  const offline = (): Reply | undefined => undefined;
+  const obsOffline = (path: string): Reply | undefined =>
+    path === '/api/obs' ? { body: { status: 'offline', connected: false, stream: { active: false, reconnecting: false, timecode: '', bitrate: null, congestion: 0, dropped: 0, total: 0 }, record: { active: false, paused: false, timecode: '' }, scene: '', scenes: [], stats: { cpu: 0, fps: 0, renderSkipped: 0, renderTotal: 0, outputSkipped: 0, outputTotal: 0 }, inputs: [], studioMode: false, virtualCam: false, replayBuffer: false, replaySavedAt: 0 } } : offline();
+
+  async function startApp(url = '/') {
+    appState = stateWithEverything();
+    scenario = 'data';
+    window.history.replaceState(null, '', url);
+    render(<App />);
+    await settleAll();
+  }
+  const pill = () => document.querySelector<HTMLElement>('.onair')!;
+
+  it('is public when the On air switch is on, and shows everything when it is off', async () => {
+    override = obsOffline;
+    await startApp();
+    // Off air: a person at the screen sees their own mail.
+    expect(pill().textContent).toBe('Off air');
+    expect(onScreen()).toContain('SENTINEL_SUBJECT');
+    fireEvent.click(pill());
+    await settle(1);
+    expect(pill().textContent).toBe('On air: personal info hidden');
+    expect(leaks(onScreen())).toEqual([]);
+    // It is remembered.
+    expect(window.localStorage.getItem('uncbox.onAir')).toBe('1');
+    fireEvent.click(pill());
+    await settle(1);
+    expect(pill().textContent).toBe('Off air');
+    expect(onScreen()).toContain('SENTINEL_SUBJECT');
+  });
+
+  it('stays private by itself while OBS is streaming, even outside the stream mode view', async () => {
+    // The default fake OBS is live.
+    await startApp();
+    expect(pill().textContent).toContain('On air');
+    expect(pill().getAttribute('aria-disabled')).toBe('true');
+    expect(leaks(onScreen())).toEqual([]);
+    fireEvent.click(pill());
+    await settle(1);
+    expect(leaks(onScreen())).toEqual([]);
+  });
+
+  it('is private in the stream mode view', async () => {
+    override = obsOffline;
+    await startApp('/?stream=1');
+    expect(leaks(onScreen())).toEqual([]);
+  });
+
+  it('shortens paths and addresses in a toast while private, but not otherwise', async () => {
+    override = obsOffline;
+    await startApp();
+    act(() => showNotice('Saved to C:\\Users\\SENTINEL\\clip.mp4 for SENTINEL_ACCOUNT@example.com'));
+    expect(onScreen()).toContain('C:\\Users\\SENTINEL\\clip.mp4');
+    fireEvent.click(pill());
+    await settle(1);
+    expect(leaks(onScreen())).toEqual([]);
+    expect(screen.getByRole('status').textContent).toContain('a folder on this PC');
+  });
+
+  it('keeps Drive results out of the palette while private', async () => {
+    override = obsOffline;
+    await startApp();
+    const search = async () => {
+      act(() => openPalette());
+      const box = await screen.findByRole('combobox', { name: 'Search commands' });
+      fireEvent.change(box, { target: { value: 'stream' } });
+      await act(async () => {
+        await new Promise((r) => setTimeout(r, 500));
+      });
+    };
+    await search();
+    expect(onScreen()).toContain('SENTINEL_FILE');
+    fireEvent.keyDown(window, { key: 'Escape' });
+    await settle(1);
+    fireEvent.click(pill());
+    await settle(1);
+    await search();
+    expect(onScreen()).not.toContain('SENTINEL_FILE');
+    fireEvent.keyDown(window, { key: 'Escape' });
+    expect(leaks(onScreen())).toEqual([]);
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Command palette' })).toBeNull());
   });
 });

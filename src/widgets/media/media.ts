@@ -25,6 +25,12 @@ export interface Media {
 /** A reading plus when this page got it, so the progress bar can carry on from there. */
 export type MediaNow = Media & { receivedAt: number };
 
+/**
+ * Whether what is playing comes from a web browser, where the title is a tab's title and can be a
+ * private page. A music app (Spotify) is something the streamer chose to play; a tab may not be.
+ */
+export const isBrowserSource = (app: string | undefined): boolean => /chrome|edge|firefox|brave|opera|vivaldi|arc|safari|browser/i.test(app ?? '');
+
 export const mediaArtUrl = (version: string) => `/api/media/art?v=${encodeURIComponent(version)}`;
 
 export function useMedia(): MediaNow | null {

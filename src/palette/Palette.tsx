@@ -6,6 +6,7 @@ import { Icon } from '../components/Icon';
 import { openGallery } from '../gallery';
 import { useCover } from '../native';
 import { obsAction, useObs } from '../obs';
+import { usePrivate } from '../privacy';
 import type { AppState } from '../state/model';
 import type { Mutate, MutatePreset } from '../state/useAppState';
 import { showNotice } from '../undo';
@@ -117,7 +118,9 @@ function Dialog({ state, mutate, mutatePreset, onToggleStream, onClose }: Props 
   const { status } = useGoogle();
   // Drive's own access, not every Google widget's: a Calendar not yet allowed shouldn't hide Drive.
   const signedIn = Boolean(status?.signedIn && hasGoogleScopes(status, DRIVE_FEATURE.scopes));
-  const results = useDriveResults(query, signedIn);
+  // On air, Drive isn't even searched: its file names would land on the screen.
+  const hidden = usePrivate();
+  const results = useDriveResults(query, signedIn && !hidden);
   // Reading OBS is what makes the server connect to it, so only where a widget already does.
   const usesObs = [...Object.values(state.presets), ...state.custom.map((c) => c.data)].some((d) => d.widgets.some((w) => w.kind === 'obs'));
   const obs = useObs(usesObs);
@@ -151,6 +154,7 @@ function Dialog({ state, mutate, mutatePreset, onToggleStream, onClose }: Props 
     clips,
     tiles,
     drive: { signedIn, results },
+    private: hidden,
     obs,
     wow,
     actions,

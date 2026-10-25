@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { MultiDropdown } from '../../components/Dropdown';
+import { usePrivate } from '../../privacy';
 import { qualityColor, QUALITIES } from '../shared/quality';
 import { useNow } from '../shared/useNow';
 import { WowNotice } from '../shared/WowBits';
@@ -16,6 +17,7 @@ import type { FeedSettings } from './settings';
 const SHOWN = 60;
 
 export function FeedBody({ settings: s, set, editing }: BodyProps<FeedSettings>) {
+  const priv = usePrivate();
   const events = useWowData<{ events: GuildEvent[] }>('/api/wow/guild/events?limit=120', ['events', 'guild']);
   const raids = useWowData<{ raids: RaidSummary[] }>(s.kinds.includes('boss') ? '/api/wow/raids?limit=10' : null, ['raids']);
   const loot = useWowData<{ loot: LootEntry[] }>(s.kinds.includes('loot') ? '/api/wow/loot?limit=60' : null, ['loot']);
@@ -28,9 +30,9 @@ export function FeedBody({ settings: s, set, editing }: BodyProps<FeedSettings>)
     () =>
       buildFeed(
         { events: events.data?.events ?? [], raids: raids.data?.raids ?? [], loot: loot.data?.loot ?? [] },
-        { kinds: s.kinds, lootMinQuality: s.lootMinQuality, hideDepartures: !editing && !s.showDeparturesOnStream, max: SHOWN },
+        { kinds: s.kinds, lootMinQuality: s.lootMinQuality, hideDepartures: priv && !s.showDeparturesOnStream, max: SHOWN },
       ),
-    [events.data, raids.data, loot.data, s.kinds, s.lootMinQuality, s.showDeparturesOnStream, editing],
+    [events.data, raids.data, loot.data, s.kinds, s.lootMinQuality, s.showDeparturesOnStream, priv],
   );
   // While paused the lines on screen are the ones from when it paused.
   if (!paused) frozen.current = null;

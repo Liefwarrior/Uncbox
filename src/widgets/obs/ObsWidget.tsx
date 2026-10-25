@@ -3,6 +3,7 @@ import { WidgetFrame } from '../frame';
 import type { WidgetProps } from '../types';
 import { useBoard } from '../../components/boardContext';
 import { Icon } from '../../components/Icon';
+import { usePrivate } from '../../privacy';
 import { bitrateText, dropLevel, droppedPercent, loadObsSettings, type ObsAction, obsAction, type ObsSnapshot, saveObsSettings, useObs } from '../../obs';
 
 // The OBS widget: stream health at the top, then the buttons that run OBS. In stream mode only the
@@ -179,6 +180,8 @@ function ObsLive({ obs, controls }: { obs: ObsSnapshot; controls: boolean }) {
 }
 
 function ObsSetup({ obs, onDone }: { obs: ObsSnapshot; onDone: () => void }) {
+  // The address OBS is reached at can be a PC on your network; it is dots while on air.
+  const hidden = usePrivate();
   const [host, setHost] = useState('127.0.0.1');
   const [port, setPort] = useState('4455');
   const [password, setPassword] = useState('');
@@ -229,7 +232,7 @@ function ObsSetup({ obs, onDone }: { obs: ObsSnapshot; onDone: () => void }) {
       <div className="row">
         <label>
           Host
-          <input data-setup="" value={host} onChange={(e) => setHost(e.target.value)} />
+          <input data-setup="" type={hidden ? 'password' : 'text'} autoComplete="off" value={host} onChange={(e) => setHost(e.target.value)} />
         </label>
         <label className="obs-setup__port">
           Port

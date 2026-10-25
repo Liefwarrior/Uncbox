@@ -16,6 +16,7 @@ import { WowSection } from './WowSection';
 import { Icon } from './Icon';
 import { PresetPicker } from './PresetPicker';
 import { Section, openSection } from './Section';
+import { OnAirToggle } from './OnAirToggle';
 import { SetupList } from './SetupList';
 import { StartWithWindows } from './StartWithWindows';
 import { UpdateNotice } from './UpdateNotice';
@@ -93,6 +94,7 @@ export function Sidebar({ state, mutate, mutatePreset, status, onStreamMode }: P
             <Icon name="cast" /> Stream mode
           </button>
           <p className="hint">Full screen, edit controls hidden. Esc to come back.</p>
+          <OnAirToggle />
 
           <SetupList state={state} mutatePreset={mutatePreset} />
 

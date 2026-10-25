@@ -7,6 +7,7 @@
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { useCallback, useState } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { FixedPrivacy } from '../../privacy';
 import type { Widget } from '../../state/model';
 import { formatMoney } from '../../money';
 import { MASK } from './ah';
@@ -57,7 +58,12 @@ function Harness({ initial = {}, editing = true }: { initial?: Partial<AuctionHo
   current = settings;
   const set = useCallback((patch: Partial<AuctionHouseSettings>) => setSettings((s) => ({ ...s, ...patch })), []);
   const widget: Widget<AuctionHouseSettings> = { id: 'wdg-test', kind: 'auctionhouse', title: '', settings };
-  return <AuctionHouseBody widget={widget} settings={settings} set={set} editing={editing} open={false} close={() => {}} />;
+  // Not editing is the stream mode view, which is private.
+  return (
+    <FixedPrivacy on={!editing}>
+      <AuctionHouseBody widget={widget} settings={settings} set={set} editing={editing} open={false} close={() => {}} />
+    </FixedPrivacy>
+  );
 }
 
 async function show(tab: AhTab, scenario: AhScenario = 'data', opts: { override?: Override; editing?: boolean; settings?: Partial<AuctionHouseSettings> } = {}) {

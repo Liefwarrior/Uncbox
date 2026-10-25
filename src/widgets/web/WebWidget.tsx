@@ -2,6 +2,7 @@ import { type FormEvent, useEffect, useState } from 'react';
 import { useBoard } from '../../components/boardContext';
 import { Icon } from '../../components/Icon';
 import { shell, useWebView, web } from '../../native';
+import { siteHost, usePrivate } from '../../privacy';
 import type { Widget } from '../../state/model';
 import {
   canGoBack,
@@ -144,6 +145,9 @@ function useBrowser(widget: Widget<WebSettings>, view: HTMLElement | null, set: 
 // ---- the bar ----
 
 function Toolbar({ browser, engine, home }: { browser: Browser; engine: string; home: string }) {
+  // On air the address box shows only the site, since the rest of the address can be a private page.
+  const hidden = usePrivate();
+  const shown = hidden ? siteHost(browser.url) : browser.url;
   // What's typed while the address box is in use; otherwise it shows where the page is.
   const [draft, setDraft] = useState<string | null>(null);
   const [problem, setProblem] = useState('');
@@ -172,14 +176,14 @@ function Toolbar({ browser, engine, home }: { browser: Browser; engine: string; 
       </button>
       <input
         className="web-bar__address"
-        value={draft ?? browser.url}
+        value={draft ?? shown}
         placeholder="Search or type a web address"
         aria-label="Address"
         spellCheck={false}
         autoComplete="off"
-        title={browser.title || browser.url}
+        title={hidden ? shown : browser.title || browser.url}
         onFocus={(e) => {
-          setDraft(browser.url);
+          setDraft(hidden ? '' : browser.url);
           e.currentTarget.select();
         }}
         onChange={(e) => {
@@ -211,6 +215,7 @@ function Toolbar({ browser, engine, home }: { browser: Browser; engine: string; 
 
 function Frame({ browser, zoom }: { browser: Browser; zoom: number }) {
   const { url, reloads } = browser;
+  const hidden = usePrivate();
   const frameable = useFrameable(url, true);
   if (!url) return null;
   if (frameable === 'checking') return <p className="web__note muted">Opening…</p>;
@@ -233,7 +238,7 @@ function Frame({ browser, zoom }: { browser: Browser; zoom: number }) {
     <iframe
       key={`${url} ${reloads}`}
       className="web__frame no-drag"
-      title={url}
+      title={hidden ? siteHost(url) : url}
       src={url}
       sandbox={sandboxFor(url, window.location.origin)}
       allow={FRAME_ALLOW}
@@ -247,6 +252,7 @@ function Frame({ browser, zoom }: { browser: Browser; zoom: number }) {
 // ---- settings, shown in the panel while editing ----
 
 function WebSettingsForm({ settings: s, set, onDone }: { settings: WebSettings; set: SetSettings; onDone: () => void }) {
+  const hidden = usePrivate();
   const [home, setHome] = useState(s.homeUrl);
   const [problem, setProblem] = useState('');
 
@@ -278,7 +284,7 @@ function WebSettingsForm({ settings: s, set, onDone }: { settings: WebSettings; 
     >
       <label>
         Home page
-        <input data-setup="" value={home} placeholder="youtube.com" spellCheck={false} onChange={(e) => setHome(e.target.value)} onBlur={saveHome} />
+        <input data-setup="" type={hidden ? 'password' : 'text'} value={home} placeholder="youtube.com" spellCheck={false} onChange={(e) => setHome(e.target.value)} onBlur={saveHome} />
       </label>
       {problem && <p className="error">{problem}</p>}
       <label>

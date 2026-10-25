@@ -1,5 +1,5 @@
-import { useBoard } from '../../components/boardContext';
 import { Icon } from '../../components/Icon';
+import { usePrivate } from '../../privacy';
 import type { BodyProps, SettingsProps } from '../types';
 import { GMAIL_FEATURE, openLink, useGoogleData } from '../shared/google';
 import { GoogleGate, GoogleProblem } from '../shared/GoogleSetup';
@@ -19,9 +19,8 @@ export function GmailBody({ settings: s }: BodyProps<GmailSettings>) {
 }
 
 function Inbox({ s }: { s: GmailSettings }) {
-  // Stream mode is the board when it isn't being edited; there, only the count shows unless allowed.
-  const { editing } = useBoard();
-  const redact = shouldRedact(!editing, s.showOnStream);
+  // While private (on air), only the count shows unless allowed.
+  const redact = shouldRedact(usePrivate(), s.showOnStream);
   const { data, error } = useGoogleData<GmailSummary>(summaryUrl(s.gmailLabel, s.gmailOnlyUnread));
   const now = useNow(60_000);
 
@@ -67,7 +66,7 @@ function Inbox({ s }: { s: GmailSettings }) {
   );
 }
 
-/** Only unread, which label to watch, and whether stream mode shows the details. */
+/** Only unread, which label to watch, and whether viewers see the details. */
 export function GmailSettingsForm({ settings: s, set }: SettingsProps<GmailSettings>) {
   const { data, error } = useGoogleData<{ labels: GmailLabel[] }>('/api/gmail/labels', 0);
   const labels = data?.labels ?? [];

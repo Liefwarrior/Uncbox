@@ -1,4 +1,5 @@
 import { useCallback, useId, useMemo, useState } from 'react';
+import { usePrivate } from '../../privacy';
 import type { BodyProps, SettingsProps } from '../types';
 import { type AhStatus, hidesGold } from './ah';
 import { AccountingTab } from './AccountingTab';
@@ -74,7 +75,8 @@ function Content({ settings, set, item, setItem }: { settings: AuctionHouseSetti
  * Tabs for an overview, searching items, deals and flips, crafting profit, what to sell,
  * accounting and the rules sent back to the game. It reads again whenever new data is ingested.
  */
-export function AuctionHouseBody({ settings, set, editing }: BodyProps<AuctionHouseSettings>) {
+export function AuctionHouseBody({ settings, set }: BodyProps<AuctionHouseSettings>) {
+  const priv = usePrivate();
   const tick = useWowahTick();
   const [item, setItem] = useState<string | null>(null);
   const goTab = useCallback((tab: AhTab) => set({ tab }), [set]);
@@ -85,7 +87,7 @@ export function AuctionHouseBody({ settings, set, editing }: BodyProps<AuctionHo
     },
     [set],
   );
-  const value = useMemo<AhContextValue>(() => ({ tick, where: null, hideGold: hidesGold(editing, settings), goTab, openItem }), [tick, editing, settings, goTab, openItem]);
+  const value = useMemo<AhContextValue>(() => ({ tick, where: null, hideGold: hidesGold(priv, settings), goTab, openItem }), [tick, priv, settings, goTab, openItem]);
   return (
     <AhContext.Provider value={value}>
       <div className="ah no-drag">
@@ -101,7 +103,7 @@ export function AuctionHouseSettingsForm({ settings, set }: SettingsProps<Auctio
       <label className="inline">
         <input type="checkbox" checked={settings.showGoldOnStream} onChange={(e) => set({ showGoldOnStream: e.target.checked })} /> Show gold on stream
       </label>
-      <p className="hint">Stream mode (F8) hides your gold, sales and purchases unless this is on. Item prices are never hidden.</p>
+      <p className="hint">While you’re on air (stream mode, OBS live, or the On air switch) your gold, sales and purchases are hidden unless this is on. Item prices are never hidden.</p>
     </>
   );
 }

@@ -248,6 +248,11 @@ describe('drive', () => {
     ok.find('drive:1')!.run();
     expect(ok.actions.openDriveFile).toHaveBeenCalledWith(results[0]);
   });
+
+  it('lists nothing from Drive while private (on air)', () => {
+    const on = setup({ query: 'bud', drive: { signedIn: true, results }, private: true });
+    expect(on.commands().some((c) => c.group === 'Drive' || c.id.startsWith('drive:'))).toBe(false);
+  });
 });
 
 describe('obs', () => {

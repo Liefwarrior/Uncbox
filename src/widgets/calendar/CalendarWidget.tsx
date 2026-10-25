@@ -1,4 +1,4 @@
-import { useBoard } from '../../components/boardContext';
+import { usePrivate } from '../../privacy';
 import type { BodyProps, SettingsProps } from '../types';
 import {
   type CalendarEvent,
@@ -30,9 +30,8 @@ export function CalendarBody({ settings: s }: BodyProps<CalendarSettings>) {
 }
 
 function Events({ s }: { s: CalendarSettings }) {
-  // Stream mode is the board when it isn't being edited; there, details stay hidden unless allowed.
-  const { editing } = useBoard();
-  const redact = shouldRedact(!editing, s.showOnStream);
+  // While private (on air), details stay hidden unless allowed.
+  const redact = shouldRedact(usePrivate(), s.showOnStream);
   const { data, error } = useGoogleData<{ events: CalendarEvent[] }>(`/api/calendar/events?days=${s.calendarDays}`);
   // The countdowns and the progress bar move once a minute.
   const now = useNow(60_000);
@@ -116,7 +115,7 @@ function Row({ event: e, now, hour12 }: { event: CalendarEvent; now: number; hou
   );
 }
 
-/** Days ahead, all-day events, and whether stream mode shows the details. */
+/** Days ahead, all-day events, and whether viewers see the details. */
 export function CalendarSettingsForm({ settings: s, set }: SettingsProps<CalendarSettings>) {
   return (
     <>
