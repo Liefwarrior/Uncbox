@@ -33,17 +33,22 @@ export function MatchPanel({ data, title, mutatePreset }: PanelContext) {
           onChange={(e) => set({ god: e.target.value })}
         />
         <div className="match__meta">
-          <div className="roles">
+          <select
+            className="match__role"
+            value={match.role}
+            aria-label="Role"
+            title="Role"
+            onChange={(e) => set({ role: e.target.value as MatchState['role'] })}
+          >
+            <option value="">Role</option>
             {SMITE_ROLES.map((r) => (
-              <button
-                key={r}
-                className={`role ${match.role === r ? 'on' : ''}`}
-                onClick={() => set({ role: match.role === r ? '' : r })}
-              >
+              <option key={r} value={r}>
                 {r}
-              </button>
+              </option>
             ))}
-          </div>
+          </select>
+          {/* On stream the picker is out of the way and the role is just text. */}
+          {match.role && <span className="role on match__role-text">{match.role}</span>}
           <input
             className="ghost-input match__mode"
             value={match.mode}

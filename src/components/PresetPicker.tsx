@@ -5,7 +5,7 @@ import { PRESETS } from '../presets';
 import { type AppState, PRESET_IDS } from '../state/model';
 import type { Mutate } from '../state/useAppState';
 import { CustomPresetCard } from './CustomPresetCard';
-import { Dropdown } from './Dropdown';
+import { Popover } from './Popover';
 import { Icon } from './Icon';
 
 /** The name and blurb of the preset on the board, and the built-in game whose look it wears. */
@@ -27,7 +27,7 @@ export function PresetPicker({ state, mutate }: { state: AppState; mutate: Mutat
 
   return (
     <>
-      <Dropdown
+      <Popover
         label="Game"
         current={now.name}
         className={`preset-pick preset-card--${now.base}`}
@@ -90,7 +90,7 @@ export function PresetPicker({ state, mutate }: { state: AppState; mutate: Mutat
             </div>
           </>
         )}
-      </Dropdown>
+      </Popover>
       <input
         ref={file}
         type="file"

@@ -286,14 +286,18 @@ describe('Guild news', () => {
     expect(document.body.textContent).not.toContain('Band of Accuria');
   });
 
-  it('turns kinds on and off with chips', async () => {
+  it('turns kinds on and off from one dropdown', async () => {
     const { latest } = mount(FeedBody, defaultFeedSettings());
     await screen.findByText('Mira reached level 42');
-    const online = screen.getByRole('button', { name: 'Online / offline' });
-    expect(online.getAttribute('aria-pressed')).toBe('false');
+    // Seven kinds are one button, not seven chips.
+    expect(screen.queryByRole('button', { name: 'Online / offline' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: /^Show: / }));
+    const online = screen.getByRole('menuitemcheckbox', { name: 'Online / offline' });
+    expect(online.getAttribute('aria-checked')).toBe('false');
     fireEvent.click(online);
     expect(await screen.findByText('Kaz came online')).toBeTruthy();
-    fireEvent.click(screen.getByRole('button', { name: 'Level-ups' }));
+    // It stays open for the next tick.
+    fireEvent.click(screen.getByRole('menuitemcheckbox', { name: 'Level-ups' }));
     expect(screen.queryByText('Mira reached level 42')).toBeNull();
     expect(latest.settings.kinds).toContain('online');
     expect(latest.settings.kinds).not.toContain('level');
@@ -302,7 +306,7 @@ describe('Guild news', () => {
   it('has no chips on stream, and leaves out who left or was demoted unless asked', async () => {
     const stream = mount(FeedBody, defaultFeedSettings(), false);
     expect(await screen.findByText('Mira reached level 42')).toBeTruthy();
-    expect(screen.queryByRole('group', { name: 'What to show' })).toBeNull();
+    expect(screen.queryByRole('button', { name: /^Show: / })).toBeNull();
     expect(screen.queryByText('Grim left the guild')).toBeNull();
     expect(screen.queryByText(/was demoted/)).toBeNull();
     stream.unmount();
@@ -313,7 +317,7 @@ describe('Guild news', () => {
   it('stands still while the mouse is over it, then catches up', async () => {
     const { container } = mount(FeedBody, defaultFeedSettings());
     await screen.findByText('Mira reached level 42');
-    const feed = container.querySelector('.wg-feed')!;
+    const feed = container.querySelector('.wg-feed__lines')!;
     fireEvent.mouseEnter(feed);
     expect(screen.getByText(/Paused while you read/)).toBeTruthy();
     extraEvents = [{ id: 7, at: WOW_NOW, type: 'join', name: 'Newcomer', a: '', b: '' }];

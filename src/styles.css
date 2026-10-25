@@ -3619,9 +3619,6 @@ p.chat-empty {
   cursor: pointer;
   transition: border-color 0.25s, background 0.25s, color 0.25s;
 }
-.is-stream .role:not(.on) {
-  display: none;
-}
 .role.on {
   border-color: var(--accent);
   background: color-mix(in srgb, var(--accent) 15%, transparent);
@@ -7417,7 +7414,7 @@ select option {
 }
 
 /* The game picker: one button with the preset's name in its own font and color, and its list. */
-.dropdown__trigger {
+.popover__trigger {
   display: flex;
   align-items: center;
   gap: 10px;
@@ -7430,21 +7427,21 @@ select option {
   cursor: pointer;
   transition: border-color 0.25s, background 0.25s;
 }
-.dropdown__trigger:hover,
-.dropdown__trigger.is-open {
+.popover__trigger:hover,
+.popover__trigger.is-open {
   border-color: color-mix(in srgb, var(--accent) 55%, var(--border));
 }
-.dropdown__label {
+.popover__label {
   flex: 1;
   min-width: 0;
 }
-.dropdown__chevron {
+.popover__chevron {
   display: grid;
   flex: none;
   color: var(--muted);
   transition: transform 0.2s var(--ease-out);
 }
-.dropdown__trigger.is-open .dropdown__chevron {
+.popover__trigger.is-open .popover__chevron {
   transform: rotate(180deg);
 }
 .preset-face {
@@ -7464,7 +7461,7 @@ select option {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.dropdown__panel {
+.popover__panel {
   position: fixed;
   z-index: 45; /* under a row's own menu (.menu, 50), over the board */
   display: flex;
@@ -7481,21 +7478,21 @@ select option {
   display: grid;
   gap: 2px;
 }
-.dropdown__panel .preset-card {
+.popover__panel .preset-card {
   width: 100%;
   padding: 8px 40px 8px 12px;
   border-color: transparent;
   background: transparent;
 }
-.dropdown__panel .preset-card:hover {
+.popover__panel .preset-card:hover {
   border-color: transparent;
   background: color-mix(in srgb, var(--accent) 12%, transparent);
 }
-.dropdown__panel .preset-card.on {
+.popover__panel .preset-card.on {
   border-color: transparent;
   background: color-mix(in srgb, var(--accent) 18%, transparent);
 }
-.dropdown__panel .preset-slot .preset-card {
+.popover__panel .preset-slot .preset-card {
   padding-right: 72px;
 }
 .preset-card .preset-card__check {
@@ -7617,4 +7614,66 @@ select option {
 }
 .is-stream .libdlg {
   display: none;
+}
+
+/* A button that shows its current choice and opens a list (components/Dropdown.tsx). */
+.dropdown__btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 220px;
+  padding: 5px 9px 5px 11px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--panel-2);
+  font-size: 14px;
+  cursor: pointer;
+  transition: border-color 0.2s;
+}
+.dropdown__btn:hover,
+.dropdown__btn.on {
+  border-color: color-mix(in srgb, var(--accent) 55%, var(--border));
+}
+.dropdown__btn svg {
+  flex: none;
+  color: var(--muted);
+}
+.dropdown__value {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.menu__tick {
+  color: var(--accent);
+}
+/* SMITE 2 Match: the role is a small select next to the mode; on stream it is just the role's name. */
+.match__role {
+  flex: none;
+  max-width: 130px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-size: 13px;
+  font-weight: 600;
+}
+.match__role-text {
+  display: none;
+}
+.is-stream .match__role {
+  display: none;
+}
+.is-stream .match__role-text {
+  display: inline-block;
+}
+/* The feed's kinds are one dropdown, shown only while editing. */
+.wg-chips {
+  flex-wrap: nowrap;
+}
+/* The Auction House tabs are a dropdown when the widget is too narrow for seven. */
+.ah-tabbar {
+  flex: none;
+  min-width: 0;
+}
+.ah-tabs-select {
+  width: 100%;
+  max-width: none;
 }

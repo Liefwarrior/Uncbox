@@ -12,6 +12,7 @@ import type { PanelContext } from '../types';
 import { useBoard } from '../../components/boardContext';
 import { CropEditor } from '../../components/CropEditor';
 import { CroppedVideo } from '../../components/CroppedVideo';
+import { Dropdown } from '../../components/Dropdown';
 import { Icon, type IconName } from '../../components/Icon';
 import { NativeGame, useNativeGame } from './NativeGame';
 
@@ -210,18 +211,17 @@ export function GamePanel({ state, data, def, mutatePreset }: PanelContext) {
           <span className="drag-handle game-toolbar__grip" title="Drag to move">
             <Icon name="grip" size={14} /> Game
           </span>
-          <div className="seg">
-            {[{ id: 'none' as const, label: 'None' }, ...SOURCES].map((s) => (
-              <button key={s.id} className={game.source === s.id && !steamView ? 'on' : ''} onClick={() => choose(s.id)}>
-                {s.label}
-              </button>
-            ))}
-            {steamViews.map((v) => (
-              <button key={v.id} className={steamView === v ? 'on' : ''} title={v.hint} onClick={() => openSteam(v)}>
-                {v.label}
-              </button>
-            ))}
-          </div>
+          <Dropdown
+            label="Source"
+            className="game-toolbar__source"
+            value={steamView ? steamView.id : game.source}
+            options={[{ id: 'none', label: 'None' }, ...SOURCES, ...steamViews.map((v) => ({ id: v.id, label: v.label, icon: v.icon }))]}
+            onChange={(id) => {
+              const view = steamViews.find((v) => v.id === id);
+              if (view) openSteam(view);
+              else choose(id as VideoSource);
+            }}
+          />
 
           {game.source === 'device' && (
             <select value={game.deviceId ?? ''} onChange={(e) => set({ deviceId: e.target.value || null })} title="Video input" aria-label="Video input">

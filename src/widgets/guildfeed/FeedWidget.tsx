@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { MultiDropdown } from '../../components/Dropdown';
 import { qualityColor, QUALITIES } from '../shared/quality';
 import { useNow } from '../shared/useNow';
 import { WowNotice } from '../shared/WowBits';
@@ -50,41 +51,40 @@ export function FeedBody({ settings: s, set, editing }: BodyProps<FeedSettings>)
   const toggle = (k: FeedKind) => set({ kinds: s.kinds.includes(k) ? s.kinds.filter((x) => x !== k) : FEED_KINDS.filter((x) => x === k || s.kinds.includes(x)) });
 
   return (
-    <div className="wg-feed" onMouseEnter={() => setPaused(true)} onMouseLeave={() => setPaused(false)} onFocus={() => setPaused(true)} onBlur={() => setPaused(false)}>
+    <div className="wg-feed">
+      {/* Outside the part that pauses, so ticking a kind shows its lines straight away. */}
       {editing && (
-        <div className="wg-chips no-drag" role="group" aria-label="What to show">
-          {FEED_KINDS.map((k) => (
-            <button key={k} type="button" className={`wg-chip ${s.kinds.includes(k) ? 'on' : ''}`} aria-pressed={s.kinds.includes(k)} onClick={() => toggle(k)}>
-              {KIND_LABELS[k]}
-            </button>
-          ))}
+        <div className="wg-chips no-drag">
+          <MultiDropdown label="Show" options={FEED_KINDS.map((k) => ({ id: k, label: KIND_LABELS[k] }))} values={s.kinds} onToggle={toggle} />
         </div>
       )}
-      {paused && (
-        <p className="wg-paused muted" role="status">
-          Paused while you read{waiting ? ` · ${waiting} new` : ''}
-        </p>
-      )}
-      {items.length === 0 ? (
-        notice ? (
-          <WowNotice notice={notice} quiet={!editing} icon="newspaper" />
+      <div className="wg-feed__lines" onMouseEnter={() => setPaused(true)} onMouseLeave={() => setPaused(false)} onFocus={() => setPaused(true)} onBlur={() => setPaused(false)}>
+        {paused && (
+          <p className="wg-paused muted" role="status">
+            Paused while you read{waiting ? ` · ${waiting} new` : ''}
+          </p>
+        )}
+        {items.length === 0 ? (
+          notice ? (
+            <WowNotice notice={notice} quiet={!editing} icon="newspaper" />
+          ) : (
+            <p className="muted">{s.kinds.length ? 'Nothing yet. News shows up here as it happens.' : 'Pick what to show above.'}</p>
+          )
         ) : (
-          <p className="muted">{s.kinds.length ? 'Nothing yet. News shows up here as it happens.' : 'Pick what to show above.'}</p>
-        )
-      ) : (
-        <ol className="wg-news" aria-live="off">
-          {items.map((i) => (
-            <li key={i.id} className={`wg-news__item wg-news__item--${i.kind} ${fresh.has(i.id) ? 'is-new' : ''}`}>
-              <time className="wg-news__time muted" dateTime={new Date(i.at).toISOString()}>
-                {lineTime(i, now)}
-              </time>
-              <span className="wg-news__text" style={i.quality !== undefined ? { color: qualityColor(i.quality) } : undefined}>
-                {i.text}
-              </span>
-            </li>
-          ))}
-        </ol>
-      )}
+          <ol className="wg-news" aria-live="off">
+            {items.map((i) => (
+              <li key={i.id} className={`wg-news__item wg-news__item--${i.kind} ${fresh.has(i.id) ? 'is-new' : ''}`}>
+                <time className="wg-news__time muted" dateTime={new Date(i.at).toISOString()}>
+                  {lineTime(i, now)}
+                </time>
+                <span className="wg-news__text" style={i.quality !== undefined ? { color: qualityColor(i.quality) } : undefined}>
+                  {i.text}
+                </span>
+              </li>
+            ))}
+          </ol>
+        )}
+      </div>
     </div>
   );
 }

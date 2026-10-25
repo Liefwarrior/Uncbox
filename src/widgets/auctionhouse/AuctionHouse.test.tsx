@@ -175,6 +175,46 @@ describe('the tabs', () => {
     expect(screen.getByRole('tabpanel').getAttribute('aria-labelledby')).toBe(screen.getByRole('tab', { name: 'Deals' }).id);
   });
 
+  it('become one dropdown when the widget is too narrow for seven', async () => {
+    // jsdom has no layout: a ResizeObserver that reports a width we choose.
+    let width = 900;
+    const watching: Array<() => void> = [];
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        constructor(private cb: (e: unknown[]) => void) {}
+        observe() {
+          const report = () => this.cb([{ contentRect: { width } }]);
+          watching.push(report);
+          report();
+        }
+        unobserve() {}
+        disconnect() {}
+      },
+    );
+    await show('overview');
+    expect(screen.getByRole('tablist', { name: 'Auction house sections' })).toBeTruthy();
+    expect(screen.queryByRole('combobox', { name: 'Auction house section' })).toBeNull();
+
+    // Shrunk: the strip of tabs is a select that shows (and changes) the same tab.
+    width = 320;
+    act(() => watching.forEach((r) => r()));
+    expect(screen.queryByRole('tablist')).toBeNull();
+    const select = screen.getByRole('combobox', { name: 'Auction house section' }) as HTMLSelectElement;
+    expect(select.value).toBe('overview');
+    expect([...select.options].map((o) => o.textContent)).toEqual(AH_TABS.map((t) => t.label));
+    fireEvent.change(select, { target: { value: 'deals' } });
+    expect(current.tab).toBe('deals');
+    const after = screen.getByRole('combobox', { name: 'Auction house section' }) as HTMLSelectElement;
+    expect(after.value).toBe('deals');
+    expect(screen.getByRole('tabpanel').getAttribute('aria-labelledby')).toBe(after.id);
+
+    // Widened again: full tabs, the open one selected.
+    width = 900;
+    act(() => watching.forEach((r) => r()));
+    expect(screen.getByRole('tab', { name: 'Deals', selected: true })).toBeTruthy();
+  });
+
   it('links from the overview to the tab with the rest', async () => {
     await show('overview');
     fireEvent.click(await within(panel()).findByRole('button', { name: 'All deals' }));
@@ -502,8 +542,8 @@ describe('stream mode', () => {
 describe('rules', () => {
   const rules = async (part?: string, override?: Override) => {
     await show('rules', 'data', { override });
-    await within(panel()).findByRole('group', { name: 'Rules section' });
-    if (part) fireEvent.click(within(panel()).getByRole('button', { name: part }));
+    const section = (await within(panel()).findByRole('combobox', { name: 'Rules section' })) as HTMLSelectElement;
+    if (part) fireEvent.change(section, { target: { value: within(section).getByRole('option', { name: part }).getAttribute('value') } });
   };
 
   it('previews a formula against a chosen item, and shows its error right there', async () => {

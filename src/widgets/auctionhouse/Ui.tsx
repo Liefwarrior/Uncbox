@@ -1,6 +1,7 @@
 import { type KeyboardEvent, type ReactNode, useId, useMemo, useRef, useState } from 'react';
 import { formatMoney } from '../../money';
 import { Icon } from '../../components/Icon';
+import { useWidth } from '../shared/useWidth';
 import {
   type Chart,
   type ChartSeries,
@@ -81,8 +82,19 @@ export function SortHeader({ label, column, sort, onSort, wide }: { label: strin
   );
 }
 
-/** A choice of one among a few, drawn as buttons. */
+/** A choice of one among a few, drawn as buttons; four or more become a dropdown. */
 export function Choice<T extends string | number>({ label, value, options, onChange }: { label: string; value: T; options: readonly { id: T; label: string }[]; onChange: (id: T) => void }) {
+  if (options.length >= 4) {
+    return (
+      <select aria-label={label} value={String(value)} onChange={(e) => onChange(options.find((o) => String(o.id) === e.target.value)!.id)}>
+        {options.map((o) => (
+          <option key={o.id} value={String(o.id)}>
+            {o.label}
+          </option>
+        ))}
+      </select>
+    );
+  }
   return (
     <div className="ah-choice" role="group" aria-label={label}>
       {options.map((o) => (
@@ -94,9 +106,14 @@ export function Choice<T extends string | number>({ label, value, options, onCha
   );
 }
 
-/** The widget's tabs. Arrow keys, Home and End move between them. */
+/** Narrower than this, seven tabs don't fit and the tabs become a dropdown. */
+export const TABS_NEED = 520;
+
+/** The widget's tabs. Arrow keys, Home and End move between them. In a narrow widget: a dropdown. */
 export function Tabs({ tab, onTab, panelId }: { tab: AhTab; onTab: (tab: AhTab) => void; panelId: string }) {
-  const list = useRef<HTMLDivElement>(null);
+  const bar = useRef<HTMLDivElement>(null);
+  const width = useWidth(bar);
+  const narrow = width > 0 && width < TABS_NEED;
   const idFor = (id: string) => `${panelId}-tab-${id}`;
   const onKey = (e: KeyboardEvent) => {
     const at = AH_TABS.findIndex((t) => t.id === tab);
@@ -111,12 +128,24 @@ export function Tabs({ tab, onTab, panelId }: { tab: AhTab; onTab: (tab: AhTab) 
     document.getElementById(idFor(AH_TABS[next].id))?.focus();
   };
   return (
-    <div ref={list} className="ah-tabs" role="tablist" aria-label="Auction house sections" onKeyDown={onKey}>
-      {AH_TABS.map((t) => (
-        <button key={t.id} id={idFor(t.id)} type="button" role="tab" aria-selected={tab === t.id} aria-controls={panelId} tabIndex={tab === t.id ? 0 : -1} className={`ah-tab ${tab === t.id ? 'is-on' : ''}`} onClick={() => onTab(t.id)}>
-          {t.label}
-        </button>
-      ))}
+    <div ref={bar} className="ah-tabbar">
+      {narrow ? (
+        <select id={idFor(tab)} className="ah-tabs-select" aria-label="Auction house section" aria-controls={panelId} value={tab} onChange={(e) => onTab(e.target.value as AhTab)}>
+          {AH_TABS.map((t) => (
+            <option key={t.id} value={t.id}>
+              {t.label}
+            </option>
+          ))}
+        </select>
+      ) : (
+        <div className="ah-tabs" role="tablist" aria-label="Auction house sections" onKeyDown={onKey}>
+          {AH_TABS.map((t) => (
+            <button key={t.id} id={idFor(t.id)} type="button" role="tab" aria-selected={tab === t.id} aria-controls={panelId} tabIndex={tab === t.id ? 0 : -1} className={`ah-tab ${tab === t.id ? 'is-on' : ''}`} onClick={() => onTab(t.id)}>
+              {t.label}
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
