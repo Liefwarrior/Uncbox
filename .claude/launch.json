@@ -37,6 +37,22 @@
         "UNCBOX_OFFLINE": "1"
       },
       "port": 5173
+    },
+    {
+      "name": "uncbox-demo",
+      "runtimeExecutable": "node",
+      "runtimeArgs": [
+        "C:/repositories/Uncbox/server/index.mjs",
+        "--dev",
+        "--port=5174",
+        "--data=C:/repositories/Uncbox/data/demo",
+        "--clips=C:/repositories/Uncbox/data/demo/clips"
+      ],
+      "env": {
+        "UNCBOX_NO_HELPERS": "1",
+        "UNCBOX_OFFLINE": "1"
+      },
+      "port": 5174
     }
   ]
 }
