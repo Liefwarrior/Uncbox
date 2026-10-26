@@ -6,6 +6,9 @@ import { Icon } from '../components/Icon';
 import { openGallery } from '../gallery';
 import { useCover } from '../native';
 import { obsAction, useObs } from '../obs';
+import { controller, endStream, goLive, useStreamController } from '../stream/live';
+import { toolsLine } from '../stream/format';
+import { isStreaming, useStream, useToolsChecked } from '../stream/status';
 import { usePrivate } from '../privacy';
 import type { AppState } from '../state/model';
 import type { Mutate, MutatePreset } from '../state/useAppState';
@@ -125,6 +128,13 @@ function Dialog({ state, mutate, mutatePreset, onToggleStream, onClose }: Props 
   const usesObs = [...Object.values(state.presets), ...state.custom.map((c) => c.data)].some((d) => d.widgets.some((w) => w.kind === 'obs'));
   const obs = useObs(usesObs);
   const wow = useWowMembers(activePreset(state).base === 'wow');
+  const streamStatus = useStream();
+  const streamCtl = useStreamController();
+  const toolsChecked = useToolsChecked();
+  const stream = {
+    active: streamCtl.phase !== 'idle' || isStreaming(streamStatus) || streamStatus.state === 'stopping',
+    ready: streamStatus.key.set && toolsLine(streamStatus.tools, toolsChecked).state === 'ready',
+  };
 
   const actions: PaletteActions = useMemo(
     () => ({
@@ -138,12 +148,19 @@ function Dialog({ state, mutate, mutatePreset, onToggleStream, onClose }: Props 
       primeAudio,
       callOut,
       toggleStream: onToggleStream,
+      goLive: (test) =>
+        void goLive(state.stream, test).then(() => {
+          // From the palette there is no button to show why it didn't start.
+          const { error } = controller.getState();
+          if (error) showNotice(error, true);
+        }),
+      endStream: () => void endStream(),
       browsePresets: openGallery,
       addAutomation: openAutomationEditor,
       downloadVideo: (url) => void downloadFromHere(url),
       showMember: requestMember,
     }),
-    [onToggleStream],
+    [onToggleStream, state.stream],
   );
 
   const ctx: PaletteContext = {
@@ -156,6 +173,7 @@ function Dialog({ state, mutate, mutatePreset, onToggleStream, onClose }: Props 
     drive: { signedIn, results },
     private: hidden,
     obs,
+    stream,
     wow,
     actions,
     now: Date.now(),

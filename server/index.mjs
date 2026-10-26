@@ -32,6 +32,7 @@ import { createObs } from './obs.mjs';
 import { createOcr } from './ocr.mjs';
 import { createSmite } from './smite.mjs';
 import { createSteam } from './steam.mjs';
+import { createStream } from './stream.mjs';
 import { createLauncher } from './launcher.mjs';
 import { createWeb } from './web.mjs';
 import { createYtdlp } from './ytdlp.mjs';
@@ -214,6 +215,7 @@ clips.onSaved((name, options) => void driveUpload.queue(name, options));
 const calendar = createCalendar({ google, isLocal, sendJson, readJson });
 const gmail = createGmail({ google, isLocal, sendJson, readJson });
 const twitch = createTwitch({ broadcastEvent, sendJson, isLocal, readJson, dataDir, fetchImpl });
+const stream = createStream({ broadcastEvent, sendJson, isLocal, readJson, dataDir, twitch });
 const ocr = createOcr({ isLocal, sendJson, readBody });
 const smite = createSmite({ broadcastEvent, sendJson });
 const gameSettings = createGameSettings({ isLocal, sendJson, readJson });
@@ -248,6 +250,7 @@ async function handleApi(req, res, url) {
   if (url.pathname.startsWith('/api/calendar/')) return calendar(req, res, url);
   if (url.pathname.startsWith('/api/gmail/')) return gmail(req, res, url);
   if (url.pathname.startsWith('/api/twitch/')) return twitch.handle(req, res, url);
+  if (url.pathname === '/api/stream' || url.pathname.startsWith('/api/stream/')) return stream(req, res, url);
   if (url.pathname === '/api/ytdlp' || url.pathname.startsWith('/api/ytdlp/')) return ytdlp.handle(req, res, url);
   if (url.pathname === '/api/ocr') return ocr(req, res);
   if (url.pathname === '/api/smite') return smite(req, res);
@@ -438,7 +441,7 @@ function closeServer(srv) {
 
 // Added first so they stop last: the helpers and pollers.
 shutdown.add('helpers', () => {
-  for (const part of [widgets, ocr, netstats, steam, obs, smite, twitch, discord, clips, ytdlp, wowAh, wow]) {
+  for (const part of [widgets, ocr, netstats, steam, obs, stream, smite, twitch, discord, clips, ytdlp, wowAh, wow]) {
     try {
       (part.close ?? part.stop)?.call(part);
     } catch (err) {

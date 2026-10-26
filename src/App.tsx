@@ -18,6 +18,7 @@ import { activePreset } from './state/presets';
 import { useAppState } from './state/useAppState';
 import { listen } from './events';
 import { PrivacyProvider } from './privacy';
+import { StreamRunner } from './stream/live';
 import { useWowAutoSetup } from './wow';
 import { dismissUndoOnSwitch, showNotice } from './undo';
 
@@ -122,6 +123,7 @@ export function App() {
   // while OBS is live and when the On air switch is on, so leaving stream mode never shows mail.
   return (
     <PrivacyProvider streamMode={streamMode}>
+      <StreamRunner settings={state.stream} />
       <div className={`app theme-${base} ${streamMode ? 'is-stream' : 'is-editing'}`}>
         <Sidebar
           state={state}

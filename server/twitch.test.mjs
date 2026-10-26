@@ -186,7 +186,7 @@ describe('device code sign-in', () => {
     expect(out).toEqual({ userCode: 'ABCDEFGH', verificationUri: device.verification_uri, expiresIn: 1800 });
     const ask = fetchImpl.calls[0];
     expect(ask.params.get('client_id')).toBe(CLIENT);
-    expect(ask.params.get('scopes')).toBe('channel:manage:broadcast moderator:read:followers channel:read:subscriptions bits:read');
+    expect(ask.params.get('scopes')).toBe('channel:manage:broadcast moderator:read:followers channel:read:subscriptions bits:read channel:read:stream_key');
     expect(ask.params.has('client_secret')).toBe(false);
     twitch.close();
   });
@@ -575,6 +575,38 @@ describe('changing the stream', () => {
   it('needs a sign-in', async () => {
     const { twitch } = make({ fetchImpl: fakeTwitch({}), store: memoryStore({ clientId: CLIENT }) });
     await expect(twitch.updateChannel({ title: 'Hi' })).rejects.toMatchObject({ status: 401 });
+  });
+});
+
+describe('the stream key', () => {
+  const store = () => signedInStore({ expiresAt: Date.now() + 86_400_000 });
+
+  it('reads the key for the signed-in channel', async () => {
+    const fetchImpl = fakeTwitch({ 'GET api.twitch.tv/helix/streams/key': [200, { data: [{ stream_key: 'live_99_abcdefghij' }] }] });
+    const { twitch } = make({ fetchImpl, store: store() });
+    expect(await twitch.streamKey()).toBe('live_99_abcdefghij');
+    expect(fetchImpl.calls[0].query.get('broadcaster_id')).toBe('99');
+  });
+
+  it('says to sign in again when the sign-in predates the scope', async () => {
+    const fetchImpl = fakeTwitch({
+      'GET api.twitch.tv/helix/streams/key': [401, { message: 'Missing scope: channel:read:stream_key' }],
+      'POST id.twitch.tv/oauth2/token': [200, { access_token: 'a2', refresh_token: 'r2', expires_in: 3600 }],
+    });
+    const { twitch } = make({ fetchImpl, store: store() });
+    await expect(twitch.streamKey()).rejects.toMatchObject({ code: 'needs-signin', status: 409 });
+    const forbidden = fakeTwitch({ 'GET api.twitch.tv/helix/streams/key': [403, {}] });
+    await expect(make({ fetchImpl: forbidden, store: store() }).twitch.streamKey()).rejects.toMatchObject({ code: 'needs-signin' });
+  });
+
+  it('needs a sign-in at all', async () => {
+    const { twitch } = make({ fetchImpl: fakeTwitch({}) });
+    await expect(twitch.streamKey()).rejects.toMatchObject({ code: 'not-signed-in', status: 401 });
+  });
+
+  it('does not pass on an empty answer', async () => {
+    const fetchImpl = fakeTwitch({ 'GET api.twitch.tv/helix/streams/key': [200, { data: [] }] });
+    await expect(make({ fetchImpl, store: store() }).twitch.streamKey()).rejects.toMatchObject({ status: 502 });
   });
 });
 

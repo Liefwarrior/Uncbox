@@ -1,7 +1,8 @@
 # Going live with Uncbox
 
 A short checklist for streaming with Uncbox on screen. What is hidden while you are live, and why,
-is in [stream-privacy.md](stream-privacy.md).
+is in [stream-privacy.md](stream-privacy.md). Streaming without OBS, straight from Uncbox, is in
+[streaming-with-uncbox.md](streaming-with-uncbox.md).
 
 ## The day before
 

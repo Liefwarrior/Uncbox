@@ -12,6 +12,8 @@ import { App } from './App';
 import { Board } from './components/Board';
 import { openPalette } from './palette/Palette';
 import { FixedPrivacy, resetOnAirForTests } from './privacy';
+import { controller } from './stream/live';
+import { IDLE, resetStreamStatusForTests } from './stream/status';
 import { placePanel } from './layout';
 import { dismissUndo, showNotice } from './undo';
 import { PRESETS } from './presets';
@@ -21,7 +23,7 @@ import { type AppState, type BoardId, type GridItem, type PresetData, type Prese
 import { activePreset } from './state/presets';
 import { useAppState } from './state/useAppState';
 import { boardDef, newWidget, SINGLE_KINDS, MULTI_KINDS, WIDGETS } from './widgets/registry';
-import { route, type Reply, SENTINELS, type Scenario } from './smokeMocks';
+import { route, type Reply, SENTINELS, type Scenario, streamStatus } from './smokeMocks';
 
 // ---- the browser, as far as jsdom goes ----
 
@@ -94,6 +96,10 @@ class FakeEventSource {
   }
   removeEventListener(name: string, fn: (e: MessageEvent) => void) {
     this.listeners.get(name)?.delete(fn);
+  }
+  /** The server pushing a named event. */
+  push(name: string, data: unknown) {
+    this.listeners.get(name)?.forEach((fn) => fn({ data: JSON.stringify(data) } as MessageEvent));
   }
   close() {}
 }
@@ -296,6 +302,7 @@ beforeEach(() => {
   dismissUndo();
   window.localStorage.clear();
   resetOnAirForTests();
+  resetStreamStatusForTests();
   errors = [];
   unmocked.length = 0;
   vi.spyOn(console, 'error').mockImplementation((...args) => void errors.push(args));
@@ -561,11 +568,11 @@ function stateWithEverything(): AppState {
   });
 }
 
-describe('the whole app', () => {
-  const offline = (): Reply | undefined => undefined;
-  const obsOffline = (path: string): Reply | undefined =>
-    path === '/api/obs' ? { body: { status: 'offline', connected: false, stream: { active: false, reconnecting: false, timecode: '', bitrate: null, congestion: 0, dropped: 0, total: 0 }, record: { active: false, paused: false, timecode: '' }, scene: '', scenes: [], stats: { cpu: 0, fps: 0, renderSkipped: 0, renderTotal: 0, outputSkipped: 0, outputTotal: 0 }, inputs: [], studioMode: false, virtualCam: false, replayBuffer: false, replaySavedAt: 0 } } : offline();
+const offline = (): Reply | undefined => undefined;
+const obsOffline = (path: string): Reply | undefined =>
+  path === '/api/obs' ? { body: { status: 'offline', connected: false, stream: { active: false, reconnecting: false, timecode: '', bitrate: null, congestion: 0, dropped: 0, total: 0 }, record: { active: false, paused: false, timecode: '' }, scene: '', scenes: [], stats: { cpu: 0, fps: 0, renderSkipped: 0, renderTotal: 0, outputSkipped: 0, outputTotal: 0 }, inputs: [], studioMode: false, virtualCam: false, replayBuffer: false, replaySavedAt: 0 } } : offline();
 
+describe('the whole app', () => {
   async function startApp(url = '/') {
     appState = stateWithEverything();
     scenario = 'data';
@@ -643,5 +650,122 @@ describe('the whole app', () => {
     fireEvent.keyDown(window, { key: 'Escape' });
     expect(leaks(onScreen())).toEqual([]);
     await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Command palette' })).toBeNull());
+  });
+});
+
+// ---- streaming from Uncbox ----
+
+describe('streaming from Uncbox', () => {
+  async function startApp(sc: Scenario, picked: 'obs' | 'uncbox' = 'uncbox') {
+    appState = defaultState();
+    appState.stream.with = picked;
+    scenario = sc;
+    // The Streaming section starts shut; people open it once and it stays open.
+    window.localStorage.setItem('uncbox.sidebar.streaming', '1');
+    render(<App />);
+    await settleAll();
+  }
+  const pill = () => document.querySelector<HTMLElement>('.onair')!;
+  const status = (over: object): Reply => ({ body: { ...streamStatus(true), ...over } });
+  const live = (test = false): Reply => status({ state: 'live', test, startedAt: Date.now() - 62 * 60_000 - 33_000, stats: { fps: 59.9, kbps: 5900, dropped: 0, frames: 1000, speed: 1 } });
+
+  afterEach(async () => {
+    // The controller outlives the app: a stream it took over must not leak into the next test.
+    override = (path) => (path.startsWith('/api/stream') ? status({ state: 'off' }) : undefined);
+    await act(async () => {
+      await controller.end();
+    });
+  });
+
+  it('offers only the choice while OBS is the one that streams', async () => {
+    override = obsOffline;
+    await startApp('data', 'obs');
+    expect(screen.getByLabelText('Stream with')).toHaveProperty('value', 'obs');
+    expect(onScreen()).toContain('OBS does the streaming, as before.');
+    expect(screen.queryByRole('button', { name: /Go live/ })).toBeNull();
+    expect(onScreen()).not.toContain('Paste stream key');
+    expectClean();
+  });
+
+  it('sets up the stream: key, screen, quality, sound, and says it is ready', async () => {
+    override = obsOffline;
+    await startApp('data');
+    const text = onScreen();
+    expect(text).toContain('Stream key set ····q9z7');
+    expect(screen.getByLabelText('Screen')).toHaveProperty('value', '0');
+    expect(screen.getByLabelText('Quality')).toHaveProperty('value', '1080p60');
+    expect(text).toContain('Ready: NVENC on your graphics card');
+    // A browser has no app to make the sound.
+    expect(text).toContain('Sound needs the Uncbox app.');
+    expect(screen.getByRole('button', { name: 'Replace key' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Get it from Twitch' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Forget' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Test stream (not public)' })).toHaveProperty('disabled', false);
+    expectClean();
+  });
+
+  it('asks twice before going live', async () => {
+    override = obsOffline;
+    await startApp('data');
+    const go = screen.getByRole('button', { name: 'Go live' });
+    expect(go).toHaveProperty('disabled', false);
+    fireEvent.click(go);
+    expect(screen.getByRole('button', { name: 'Go live?' })).toBeTruthy();
+  });
+
+  it('says what is missing when nothing is set up', async () => {
+    override = obsOffline;
+    await startApp('empty');
+    const text = onScreen();
+    expect(text).toContain('No stream key yet');
+    expect(text).toContain('FFmpeg isn’t installed: install it from the Downloads widget.');
+    expect(screen.getByRole('button', { name: 'Paste stream key' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Install FFmpeg' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Go live' })).toHaveProperty('disabled', true);
+    expect(text).toContain('Add your stream key under Streaming below first.');
+    expectClean();
+  });
+
+  it('keeps the key’s last characters off the screen while private', async () => {
+    override = obsOffline;
+    await startApp('data');
+    expect(onScreen()).toContain('····q9z7');
+    fireEvent.click(pill());
+    await settle(1);
+    expect(onScreen()).not.toContain('q9z7');
+    expect(onScreen()).toContain('Stream key set');
+  });
+
+  it('shows the live line, forces private, and ends only after a second click', async () => {
+    override = (path) => (path === '/api/stream' ? live() : obsOffline(path));
+    await startApp('data');
+    expect(onScreen()).toMatch(/● Live 1:02:3\d · 5\.9 Mbps · 0 dropped/);
+    expect(screen.getByLabelText('Stream with')).toHaveProperty('disabled', true);
+    expect(pill().textContent).toContain('Streaming from Uncbox, so it stays on');
+    expect(pill().getAttribute('aria-disabled')).toBe('true');
+    expect(leaks(onScreen())).toEqual([]);
+    expect(onScreen()).not.toContain('q9z7');
+    expect(screen.queryByRole('button', { name: 'Go live' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'End stream' }));
+    expect(screen.getByRole('button', { name: 'End stream?' })).toBeTruthy();
+    expectClean();
+  });
+
+  it('labels a test stream as a test', async () => {
+    override = (path) => (path === '/api/stream' ? live(true) : obsOffline(path));
+    await startApp('data');
+    expect(onScreen()).toMatch(/● Test 1:02:3\d/);
+  });
+
+  it('goes back to public once the stream has ended', async () => {
+    override = (path) => (path === '/api/stream' ? live() : obsOffline(path));
+    await startApp('data');
+    expect(pill().textContent).toContain('Streaming from Uncbox');
+    override = obsOffline;
+    await act(async () => {
+      FakeEventSource.last?.push('stream', { ...IDLE, state: 'off' });
+    });
+    await settle(1);
+    expect(pill().textContent).toBe('Off air');
   });
 });

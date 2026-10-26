@@ -30,7 +30,14 @@ namespace UncboxShell;
 ///               { type: "web" | "webrect" | "webnav" | "webzoom" | "webclose", id, ... }
 ///                    the web widgets' pages, each a WebView2 over its panel (see WebViews.cs)
 ///               { type: "autostart" } | { type: "autostart", enabled }   ask / change start-with-Windows
-///   app → page  { type: "windows", windows: [{ id, title, process }] }
+///               { type: "audiodevices" }                  list the mics
+///               { type: "streamaudio", on, desktop, mic, desktopVolume, micVolume } | { type: "streamaudio", on: false }
+///                    capture desktop sound and a mic into a named pipe for FFmpeg (see StreamAudio.cs)
+///               { type: "streamaudiovolume", desktopVolume, micVolume }   gains from 0 to 2, while on
+///   app → page  { type: "audiodevices", mics: [{ id, name, isDefault }] }
+///               { type: "streamaudio", state: "ready", pipe, rate, channels, format } | { state: "off" } | { state: "error", error }
+///               { type: "audiolevels", desktop, mic }     peak 0..1 of each source, about 10 times a second
+///               { type: "windows", windows: [{ id, title, process }] }
 ///               { type: "attached", id, title, process, followed } | { type: "detached" }
 ///                    followed: the app took it by itself (see follow), so it isn't the saved game
 ///               { type: "autostartstate", enabled }       whether Uncbox starts with Windows (see Autostart.cs)
@@ -68,6 +75,8 @@ internal sealed class ShellForm : Form
     private readonly ServerHost _server = new();
     /// <summary>The web widgets' pages; made once the dashboard's own WebView2 is up.</summary>
     private WebViews? _webViews;
+    /// <summary>The stream's sound (desktop and mic into a pipe for FFmpeg), while the page has it on.</summary>
+    private StreamAudio? _streamAudio;
     private RegisteredWaitHandle? _wakeWait;
     private Screen _screen;
     private bool _windowedFull;
@@ -321,6 +330,7 @@ internal sealed class ShellForm : Form
         _hooks.Clear();
         _game?.Restore();
         _webViews?.Dispose();
+        _streamAudio?.Dispose();
         _tray.Visible = false;
         _tray.Dispose();
         _server.Dispose();
@@ -380,6 +390,45 @@ internal sealed class ShellForm : Form
             case "autostart":
                 Send(new { type = "autostartstate", enabled = Autostart.Handle(msg) });
                 break;
+            case "audiodevices":
+                Send(StreamAudio.ListMics());
+                break;
+            case "streamaudio" when msg is not null:
+                StreamAudioMessage(msg);
+                break;
+            case "streamaudiovolume" when msg is not null:
+                _streamAudio?.SetVolumes((double?)msg["desktopVolume"] ?? 1, (double?)msg["micVolume"] ?? 1);
+                break;
+        }
+    }
+
+    /// <summary>
+    /// Starts or stops the stream's sound (see StreamAudio.cs). Only one session at a time: starting
+    /// again replaces the old one, which says nothing; stopping always answers "off".
+    /// </summary>
+    private void StreamAudioMessage(JsonNode msg)
+    {
+        _streamAudio?.Dispose();
+        _streamAudio = null;
+        if ((bool?)msg["on"] != true)
+        {
+            Send(new { type = "streamaudio", state = "off" });
+            return;
+        }
+        _streamAudio = new StreamAudio(PostFromAnyThread);
+        _streamAudio.Start((bool?)msg["desktop"] ?? false, (string?)msg["mic"], (double?)msg["desktopVolume"] ?? 1, (double?)msg["micVolume"] ?? 1);
+    }
+
+    /// <summary>The stream's sound reports from its own threads; the page is only spoken to from this one.</summary>
+    private void PostFromAnyThread(object message)
+    {
+        try
+        {
+            if (!IsDisposed && IsHandleCreated) BeginInvoke(() => Send(message));
+        }
+        catch (InvalidOperationException)
+        {
+            // The window closed in between.
         }
     }
 

@@ -74,6 +74,7 @@ export function defaultState(): AppState {
     preset: 'pokemon',
     twitch: { channel: '', hideBots: true },
     clips: { enabled: true, key: DEFAULT_CLIP_KEY, driveAuto: false, driveShare: false },
+    stream: { with: 'obs', screen: 0, fps: 60, height: 1080, kbps: 6000, desktop: true, mic: 'default', desktopVolume: 1, micVolume: 1 },
     discord: { pinned: [] },
     camera: { enabled: false, deviceId: null, mirrored: true },
     presets: eachPreset(defaultPresetData),
@@ -289,6 +290,25 @@ function migrateV1(v1: Obj): AppState {
   return state;
 }
 
+/** The streaming settings, with anything out of range or the wrong type put back to what Uncbox offers. */
+function hydrateStream(base: AppState['stream'], saved: unknown): AppState['stream'] {
+  const s = overlay(base, saved);
+  const gain = (n: number) => Math.min(2, Math.max(0, Math.round(n * 100) / 100));
+  const savedMic = isObj(saved) ? saved.mic : undefined;
+  return {
+    with: s.with === 'uncbox' ? 'uncbox' : 'obs',
+    screen: Math.min(7, Math.max(0, Math.round(s.screen))),
+    fps: s.fps === 30 ? 30 : 60,
+    height: s.height === 0 || s.height === 720 ? s.height : 1080,
+    kbps: Math.min(8000, Math.max(2500, Math.round(s.kbps))),
+    desktop: s.desktop,
+    // No mic is a saved null, which overlay() would read as "not saved".
+    mic: savedMic === null ? null : typeof savedMic === 'string' && savedMic.length <= 300 ? savedMic : base.mic,
+    desktopVolume: gain(s.desktopVolume),
+    micVolume: gain(s.micVolume),
+  };
+}
+
 export function hydrate(saved: unknown): AppState {
   if (!isObj(saved)) return defaultState();
   if (saved.version !== 2) return migrateV1(saved);
@@ -297,6 +317,7 @@ export function hydrate(saved: unknown): AppState {
   const camera = isObj(saved.camera) ? saved.camera : {};
   const clips = overlay(base.clips, saved.clips);
   if (!isClipKey(clips.key)) clips.key = DEFAULT_CLIP_KEY;
+  const stream = hydrateStream(base.stream, saved.stream);
   const custom = hydrateCustom(saved.custom);
   // A preset that no longer exists (deleted, or dropped above) leaves the first built-in showing.
   const shown = saved.preset;
@@ -307,6 +328,7 @@ export function hydrate(saved: unknown): AppState {
     preset,
     twitch: overlay(base.twitch, saved.twitch),
     clips,
+    stream,
     discord: {
       pinned: (isObj(saved.discord) && Array.isArray(saved.discord.pinned) ? objects(saved.discord.pinned) : [])
         .map((c) => overlay({ id: '', name: '', guildId: '', guildName: '' }, c))
