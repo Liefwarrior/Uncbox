@@ -158,7 +158,7 @@ sends no frames), so a clip saved just after coming back spanned the whole pause
 overnight. If the capture's clock ever went backwards, nothing was trimmed again and recording
 stopped. Now a clip never reaches back past the pause, and a clock restart starts the buffer over.
 
-### UBX-25 · Clips with sound: game, Discord and mic on separate tracks — Building
+### UBX-25 · Clips with sound: game, Discord and mic on separate tracks — Review
 Instant replay clips were video only. In the Uncbox app, clips now carry four AAC tracks: Mix (game,
 Discord and mic summed, the one players, phones and Discord's embeds use), then Game, Discord and Mic
 each on its own so an editor like DaVinci Resolve can mix them. The app listens to the game's own
