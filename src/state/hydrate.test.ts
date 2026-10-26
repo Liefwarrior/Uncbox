@@ -118,17 +118,25 @@ describe('hydrate', () => {
       clips: { enabled: false, key: 'F9' },
       presets: { wow: { game: { source: 'native', nativeGame: { process: 'WowClassic', title: 'World of Warcraft' } } } },
     });
-    expect(good.clips).toEqual({ enabled: false, key: 'F9', driveAuto: false, driveShare: false });
+    expect(good.clips).toEqual({ enabled: false, key: 'F9', driveAuto: false, driveShare: false, sound: true, mic: 'default' });
     expect(good.presets.wow.game.nativeGame).toEqual({ process: 'WowClassic', title: 'World of Warcraft' });
     const bad = hydrate({
       version: 2,
       clips: { key: 'KeyW' },
       presets: { wow: { game: { nativeGame: { title: 'no process' } } }, smite2: { game: { nativeGame: 'x' } } },
     });
-    expect(bad.clips).toEqual({ enabled: true, key: 'Equal', driveAuto: false, driveShare: false });
+    expect(bad.clips).toEqual({ enabled: true, key: 'Equal', driveAuto: false, driveShare: false, sound: true, mic: 'default' });
     expect(hydrate({ version: 2, clips: { driveAuto: true, driveShare: 'yes' } }).clips).toMatchObject({ driveAuto: true, driveShare: false });
     expect(bad.presets.wow.game.nativeGame).toBeNull();
     expect(bad.presets.smite2.game.nativeGame).toBeNull();
+  });
+
+  it('keeps the clip sound settings, "no mic" included, for a state saved before they existed too', () => {
+    expect(hydrate({ version: 2, clips: { sound: false, mic: 'device-1' } }).clips).toMatchObject({ sound: false, mic: 'device-1' });
+    expect(hydrate({ version: 2, clips: { mic: null } }).clips.mic).toBeNull();
+    expect(hydrate({ version: 2, clips: { mic: '' } }).clips.mic).toBe('default');
+    expect(hydrate({ version: 2, clips: { mic: 5, sound: 'yes' } }).clips).toMatchObject({ sound: true, mic: 'default' });
+    expect(hydrate({ version: 2, clips: { key: 'F9' } }).clips).toMatchObject({ sound: true, mic: 'default' });
   });
 
   describe('presets of your own', () => {

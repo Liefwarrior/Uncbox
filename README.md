@@ -254,7 +254,11 @@ show under **Clips** in the sidebar, where clicking one plays it right in Uncbox
 - The key is read, not taken over: `=` still types in chat and other apps, and Shift+= (`+`)
   doesn't clip. Change it from **Key** in the sidebar, or switch instant replay off there.
 - Clips have the same crop as the game window, so the WoW addon's strip and menu bars stay out.
-- Video only, like the rest of Uncbox. Keeping the last minute takes about 225 MB of memory.
+- In the Uncbox app, clips have sound: four audio tracks in the MP4. **Mix** (game, Discord and your
+  mic together, what players, phones and Discord's embeds play), then **Game**, **Discord** and
+  **Mic** each on its own, so an editor like DaVinci Resolve can mix them. Choose the mic, and watch
+  the levels, under **Record sound** in the Clips section. In a browser clips are video only. Keeping
+  the last minute takes about 225 MB of memory, plus about 40 MB for the sound.
 - `--clips=<folder>` saves them somewhere else.
 
 **Vertical shorts.** Open a clip and press **Make vertical** to get a 9:16 frame over the video.
@@ -346,7 +350,7 @@ server/gallery.mjs         the preset gallery: reads gallery/ from GitHub (or a 
 server/ocr.mjs             Windows text recognition for the Stats panel
 src/hud/                   the Stats panel's screen reader
 src/smite/                 SMITE 2 screens: parsers, image recipes, the reader, its store
-src/clips/                 instant replay: the encoder worker, its store, the clip keys
+src/clips/                 instant replay: the encoder worker, its store, the clip keys, the sound tracks
 src/events.ts              the page's one live connection to /api/events
 native/UncboxShell/        the Windows app, where the game can be played in its panel
                            (see native/README.md); src/native.ts is the page's side

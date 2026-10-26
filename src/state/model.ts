@@ -275,6 +275,10 @@ export interface ClipSettings {
   driveAuto: boolean;
   /** Clips put on Drive can be viewed by anyone with the link. */
   driveShare: boolean;
+  /** Keep the game's, Discord's and the mic's sound for clips, each on its own track (needs the Uncbox app). */
+  sound: boolean;
+  /** The mic for clips: a device id, 'default' for Windows' own pick, or null for none. */
+  mic: string | null;
 }
 
 /**
