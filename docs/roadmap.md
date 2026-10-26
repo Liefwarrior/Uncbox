@@ -175,13 +175,18 @@ GPU, and sends it to Twitch over `rtmps://`. The app records desktop sound and t
 capture what Windows plays) and hands FFmpeg one mixed stream through a named pipe. A sidebar
 setting picks "Stream with: OBS / Uncbox"; OBS stays the default and nothing about it changes.
 
-### UBX-22 · Go live from Uncbox: server, sidebar, Twitch key — Building
+### UBX-22 · Go live from Uncbox: server, sidebar, Twitch key — Review (e4dd5c3)
 `server/stream.mjs` runs FFmpeg and reports bitrate, dropped frames and uptime; the stream key lives
 in `data/stream.json` (pasted, or fetched from the Twitch sign-in) and never reaches the page. A
 "Test (not public)" mode uses Twitch's bandwidth test, so it can be tried without going live. Going
 live through Uncbox turns the private signal on, like OBS going live.
 
-### UBX-23 · Desktop sound and mic for the stream: native shell — Building
+### UBX-23 · Desktop sound and mic for the stream: native shell — Review (1ea70b4)
 The shell records the default speakers (WASAPI loopback) and a chosen mic, mixes them to 48 kHz
 stereo, fills silence so the timing holds, and writes it to a named pipe FFmpeg reads. It lists
 mics and reports sound levels for the sidebar meters.
+
+Measured on the RTX 5090 laptop (2560×1440 screen, idle desktop): the screen's own size streams
+at a full 60 fps with every frame on the graphics card. Scaling to 1080p costs a copy to the CPU,
+because FFmpeg 8.1's `scale_d3d11` can't take ddagrab's frames ("Could not create the texture"),
+and lands at about 55 fps. Worth revisiting when FFmpeg fixes it.

@@ -37,7 +37,7 @@ namespace UncboxShell;
 ///   app → page  { type: "audiodevices", mics: [{ id, name, isDefault }] }
 ///               { type: "streamaudio", state: "ready", pipe, rate, channels, format } | { state: "off" } | { state: "error", error }
 ///               { type: "audiolevels", desktop, mic }     peak 0..1 of each source, about 10 times a second
-///   app → page { type: "windows", windows: [{ id, title, process }] }
+///               { type: "windows", windows: [{ id, title, process }] }
 ///               { type: "attached", id, title, process, followed } | { type: "detached" }
 ///                    followed: the app took it by itself (see follow), so it isn't the saved game
 ///               { type: "autostartstate", enabled }       whether Uncbox starts with Windows (see Autostart.cs)
