@@ -500,6 +500,7 @@ describe('raids, boss fights, loot and attendance', () => {
     expect(w.json('#UncboxDB.raids[1].snapshots')).toBe(2);
   });
 
+  // Runs the addon in Lua through two whole raids; about 6 s on a busy PC, over the 5 s default.
   it('ends the raid when you leave, and carries on the same record if you come back', () => {
     const w = raidWorld(10);
     w.login();
@@ -523,7 +524,7 @@ describe('raids, boss fights, loot and attendance', () => {
     w.fire('ZONE_CHANGED_NEW_AREA');
     w.advance(1);
     expect(w.json('#UncboxDB.raids')).toBe(2);
-  });
+  }, 30_000);
 
   it('carries on the raid after a /reload', () => {
     const w = raidWorld(10);

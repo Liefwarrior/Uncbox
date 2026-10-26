@@ -9,6 +9,7 @@
 
 import { BufferTarget, EncodedPacket, EncodedVideoPacketSource, Mp4OutputFormat, Output } from 'mediabunny';
 import type { Crop } from '../state/model';
+import { goesBack, keepFrom } from './buffer';
 
 const WIDTH = 1920;
 const HEIGHT = 1080;
@@ -60,14 +61,9 @@ let packets: EncodedPacket[] = [];
 let decoderConfig: VideoDecoderConfig | null = null;
 let error = '';
 
-/** Drops everything before the newest keyframe that is still at least SECONDS old. */
+/** Drops what no clip needs any more (see keepFrom). */
 function prune() {
-  const newest = packets[packets.length - 1].timestamp;
-  let cut = 0;
-  for (let i = 0; i < packets.length; i++) {
-    if (newest - packets[i].timestamp < SECONDS) break;
-    if (packets[i].type === 'key') cut = i;
-  }
+  const cut = keepFrom(packets, SECONDS);
   if (cut > 0) packets = packets.slice(cut);
 }
 
@@ -78,9 +74,12 @@ async function run(frames: ReadableStream<VideoFrame>) {
   const encoder = new VideoEncoder({
     output: (chunk, meta) => {
       if (meta?.decoderConfig) decoderConfig = meta.decoderConfig;
+      const packet = EncodedPacket.fromEncodedChunk(chunk);
+      // After the capture's clock restarted, start again from its first keyframe.
+      if (packets.length && goesBack(packets[packets.length - 1].timestamp, packet.timestamp)) packets = [];
       // Until the first keyframe there's nothing a clip could start from.
-      if (!packets.length && chunk.type !== 'key') return;
-      packets.push(EncodedPacket.fromEncodedChunk(chunk));
+      if (!packets.length && packet.type !== 'key') return;
+      packets.push(packet);
       prune();
     },
     error: (e) => {
@@ -99,6 +98,11 @@ async function run(frames: ReadableStream<VideoFrame>) {
   for (;;) {
     const { value: frame, done } = await reader.read();
     if (done) break;
+    // The capture restarted its clock: start the timing over, with a keyframe first.
+    if (goesBack(lastAt, frame.timestamp)) {
+      lastAt = -Infinity;
+      lastKeyAt = -Infinity;
+    }
     // Captures can run faster than 60 fps or stall the encoder; skip frames rather than fall behind.
     const due = frame.timestamp - lastAt >= 1e6 / FPS - 2000;
     if (!due || encoder.state !== 'configured' || encoder.encodeQueueSize > MAX_QUEUE) {
