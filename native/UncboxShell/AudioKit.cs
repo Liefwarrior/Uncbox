@@ -6,8 +6,8 @@ namespace UncboxShell;
 /// <summary>
 /// The pieces every Uncbox audio capture shares: the 48 kHz stereo timeline (10 ms blocks), turning
 /// a device's bytes into that format, the small per-source queue, the clock and the drift rule, and
-/// finding the microphones. Copied from the stream's StreamAudio.cs with the same names and
-/// behavior, so the stream's sound can switch to this once both land.
+/// finding the microphones. The stream's sound (StreamAudio.cs) and the clips' (ClipAudio.cs) both
+/// build on it.
 /// </summary>
 internal static class AudioKit
 {
