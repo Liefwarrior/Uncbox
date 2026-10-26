@@ -152,6 +152,12 @@ tooltips and one-click posting.
 The Uncbox side of the AH tools: item search with price history charts, deals and flips,
 crafting profit, your auctions and sales, posting rules and shopping lists.
 
+### UBX-24 · Replay buffer stays a minute long — Review
+The replay buffer kept the last keyframe from before a pause in the game capture (a minimized game
+sends no frames), so a clip saved just after coming back spanned the whole pause, hours if left
+overnight. If the capture's clock ever went backwards, nothing was trimmed again and recording
+stopped. Now a clip never reaches back past the pause, and a clock restart starts the buffer over.
+
 ## Demo prep: first live demo (2026-10-25)
 
 ### DEMO-1 Â· A calmer sidebar â€” Shipped (a87a12e)
