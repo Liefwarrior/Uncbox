@@ -7710,3 +7710,77 @@ select option {
   width: 100%;
   max-width: none;
 }
+
+/* Streaming from Uncbox: Go live under the Stream mode button, and the Streaming section. */
+.golive {
+  display: grid;
+  gap: 4px;
+  margin: 8px 0 2px;
+}
+.golive__go {
+  justify-content: center;
+  width: 100%;
+  padding: 9px 13px;
+}
+.golive__go.is-armed {
+  border-color: var(--bad);
+  background: var(--bad);
+  color: var(--on-status);
+}
+.golive .side-link:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.golive .hint,
+.golive .error {
+  margin: 2px 6px;
+}
+.golive__status {
+  margin: 2px 6px;
+  color: var(--muted);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+.golive__status.is-live {
+  color: var(--text);
+}
+.stream__tools {
+  margin: 8px 6px 2px;
+  color: var(--muted);
+  font-size: 13px;
+}
+.stream__tools.is-ready {
+  color: var(--good);
+}
+.stream__volumes {
+  display: grid;
+  gap: 8px;
+  margin: 8px 0 0;
+}
+.stream__volume label {
+  display: grid;
+  gap: 2px;
+  color: var(--muted);
+  font-size: 13px;
+}
+.stream__volume input[type='range'] {
+  width: 100%;
+}
+.stream__meter {
+  height: 4px;
+  margin-top: 4px;
+  overflow: hidden;
+  border-radius: 2px;
+  background: var(--border);
+}
+.stream__meter span {
+  display: block;
+  height: 100%;
+  background: var(--good);
+  transition: width 0.1s linear;
+}
+@media (prefers-reduced-motion: reduce) {
+  .stream__meter span {
+    transition: none;
+  }
+}

@@ -10,6 +10,7 @@ When you stream or record, everything Uncbox draws is public. Uncbox keeps perso
 | --- | --- |
 | Stream mode view | The sidebar's **Stream mode** button, or F8. |
 | OBS is live | OBS is streaming (or reconnecting) or recording. Uncbox reads this from OBS by itself; it needs the OBS WebSocket connection (see the OBS widget). |
+| Streaming from Uncbox | Uncbox is starting a stream, live, or trying to get a dropped one back (a test stream too: it captures the same screen). The pill says **Streaming from Uncbox, so it stays on**. See [streaming-with-uncbox.md](streaming-with-uncbox.md). |
 | **On air** switch | The pill under the Stream mode button: **On air: personal info hidden** or **Off air**. It is remembered in this browser. While OBS is live or stream mode is on, it shows it is forced on and the click does nothing. |
 
 Use the **On air** switch when you go live without OBS reporting it (a screen share, a call, a window capture) or when you want to be safe before you press Start in OBS.
@@ -36,6 +37,7 @@ In code, every widget asks one thing: `usePrivate()` from `src/privacy.tsx`. Cou
 | Guild roster | Officer notes always. Public notes. | Widget settings: **Show notes on stream** (public notes only) |
 | Guild feed | Who left or was demoted. | Widget settings: **Show who left or was demoted on stream** |
 | Raid loot, Attendance | Player names become "Member 1", "Member 2". | Widget settings: **Show names on stream** |
+| Streaming (sidebar) | The last characters of the stream key ("Stream key set ····abcd" becomes "Stream key set"). | None |
 | Clips (sidebar) | The clips folder path (tooltip), the last characters of the Discord webhook, the title of a downloaded video. Errors drop folders and addresses. | None |
 | Clip player and clip toast | A downloaded video's title. Error and "not on Drive" messages drop folders and addresses. | None |
 | Toasts (Undo, notices) | Any email address becomes "an email address"; any folder path becomes "a folder on this PC". | None |

@@ -1,24 +1,29 @@
 import { createContext, type ReactNode, useCallback, useContext, useMemo, useSyncExternalStore } from 'react';
 import { type ObsSnapshot, useObs } from './obs';
+import { isStreaming, useStream } from './stream/status';
 
 // While Eli is on air, everything Uncbox draws is public. "Private" is the one signal every widget
 // asks before it shows something personal (a subject line, a file name, a path, an address). It is
 // separate from the stream mode view (full screen, edit controls hidden), which is only a layout.
-// Private is on when ANY of these is true: the stream mode view, OBS streaming or recording, or the
-// "On air" switch in the sidebar.
+// Private is on when ANY of these is true: the stream mode view, OBS streaming or recording,
+// Uncbox streaming (a test stream included: it captures the same screen), or the "On air" switch in
+// the sidebar.
 
 export interface PrivacyInputs {
   streamMode: boolean;
   obsLive: boolean;
+  /** Streaming from Uncbox itself: starting, live or trying to come back (src/stream). */
+  uncboxLive: boolean;
   onAir: boolean;
 }
 
 /** Why private is on, in the order the sidebar explains it; null when it is off. */
-export type PrivateReason = 'obs' | 'stream' | 'manual' | null;
+export type PrivateReason = 'obs' | 'live' | 'stream' | 'manual' | null;
 
-export const privateReason = ({ streamMode, obsLive, onAir }: PrivacyInputs): PrivateReason => (obsLive ? 'obs' : streamMode ? 'stream' : onAir ? 'manual' : null);
+export const privateReason = ({ streamMode, obsLive, uncboxLive, onAir }: PrivacyInputs): PrivateReason =>
+  obsLive ? 'obs' : uncboxLive ? 'live' : streamMode ? 'stream' : onAir ? 'manual' : null;
 
-/** Whether personal data is hidden: any one of the three signals turns it on. */
+/** Whether personal data is hidden: any one of the signals turns it on. */
 export const isPrivate = (inputs: PrivacyInputs): boolean => privateReason(inputs) !== null;
 
 /** Whether OBS is streaming or recording right now (a missing or disconnected OBS is not live). */
@@ -86,12 +91,15 @@ const PrivacyContext = createContext<Privacy>(OFF);
 export const usePrivate = (): boolean => useContext(PrivacyContext).private;
 export const usePrivacy = (): Privacy => useContext(PrivacyContext);
 
-/** Provides the privacy signal to the whole page. `obs` is for tests that need OBS fixed. */
-export function PrivacyProvider({ streamMode, children, obs }: { streamMode: boolean; children: ReactNode; obs?: ObsSnapshot | null }) {
+/** Provides the privacy signal to the whole page. `obs` and `uncbox` are for tests that need OBS or the Uncbox stream fixed (setting either leaves the Uncbox stream unwatched unless `uncbox` says). */
+export function PrivacyProvider({ streamMode, children, obs, uncbox }: { streamMode: boolean; children: ReactNode; obs?: ObsSnapshot | null; uncbox?: boolean }) {
   const live = useObs(obs === undefined);
+  const fixed = obs !== undefined || uncbox !== undefined;
+  const stream = useStream(!fixed);
   const onAir = useOnAir();
   const obsLive = obsIsLive(obs === undefined ? live : obs);
-  const reason = privateReason({ streamMode, obsLive, onAir });
+  const uncboxLive = uncbox ?? (!fixed && isStreaming(stream));
+  const reason = privateReason({ streamMode, obsLive, uncboxLive, onAir });
   const set = useCallback((on: boolean) => setOnAir(on), []);
   const value = useMemo<Privacy>(() => ({ private: reason !== null, reason, onAir, setOnAir: set }), [reason, onAir, set]);
   return <PrivacyContext.Provider value={value}>{children}</PrivacyContext.Provider>;

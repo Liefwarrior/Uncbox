@@ -131,6 +131,46 @@ describe('hydrate', () => {
     expect(bad.presets.smite2.game.nativeGame).toBeNull();
   });
 
+  describe('the streaming settings', () => {
+    const stream = (over: unknown) => hydrate({ version: 2, stream: over }).stream;
+
+    it('start with OBS doing the streaming, so nothing changes until Uncbox is picked', () => {
+      expect(defaultState().stream).toEqual({ with: 'obs', screen: 0, fps: 60, height: 1080, kbps: 6000, desktop: true, mic: 'default', desktopVolume: 1, micVolume: 1 });
+    });
+
+    it('are filled in for a settings file from before they existed', () => {
+      expect(hydrate({ version: 2 }).stream).toEqual(defaultState().stream);
+      expect(stream('nonsense')).toEqual(defaultState().stream);
+    });
+
+    it('keep what was saved', () => {
+      const saved = { with: 'uncbox', screen: 2, fps: 30, height: 720, kbps: 4500, desktop: false, mic: 'mic-1', desktopVolume: 0.5, micVolume: 1.5 };
+      expect(stream(saved)).toEqual(saved);
+      expect(stream({ height: 0 }).height).toBe(0);
+    });
+
+    it('keep "no mic" as no mic, not as the default one', () => {
+      expect(stream({ mic: null }).mic).toBeNull();
+      expect(stream({}).mic).toBe('default');
+      expect(stream({ mic: 7 }).mic).toBe('default');
+    });
+
+    it('put anything out of range back to what Uncbox offers', () => {
+      expect(stream({ with: 'twitch', screen: 99, fps: 144, height: 900, kbps: 99_999, desktopVolume: 9, micVolume: -1 })).toEqual({
+        with: 'obs',
+        screen: 7,
+        fps: 60,
+        height: 1080,
+        kbps: 8000,
+        desktop: true,
+        mic: 'default',
+        desktopVolume: 2,
+        micVolume: 0,
+      });
+      expect(stream({ kbps: 5, screen: -4 })).toMatchObject({ kbps: 2500, screen: 0 });
+    });
+  });
+
   describe('presets of your own', () => {
     const mine = (over: Record<string, unknown> = {}) => ({ id: 'custom-a', name: 'Mine', base: 'wow', data: {}, ...over });
 

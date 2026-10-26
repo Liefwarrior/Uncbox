@@ -19,6 +19,8 @@ const fakeActions = (): PaletteActions => ({
   primeAudio: vi.fn(),
   callOut: vi.fn(),
   toggleStream: vi.fn(),
+  goLive: vi.fn(),
+  endStream: vi.fn(),
   browsePresets: vi.fn(),
   addAutomation: vi.fn(),
   downloadVideo: vi.fn(),
@@ -37,6 +39,7 @@ function setup(over: Partial<PaletteContext> = {}) {
     tiles: null,
     drive: { signedIn: false, results: [] },
     obs: null,
+    stream: { active: false, ready: true },
     wow: null,
     now: 1_000_000,
     ...over,
@@ -277,6 +280,42 @@ describe('obs', () => {
     expect(find('obs:record')!.title).toBe('Stop recording');
     find('obs:record')!.run();
     expect(actions.obs).toHaveBeenCalledWith({ type: 'StopRecord' });
+  });
+});
+
+describe('streaming from Uncbox', () => {
+  const uncbox = () => {
+    const state = defaultState();
+    state.stream.with = 'uncbox';
+    return state;
+  };
+
+  it('is left out while OBS is the one that streams', () => {
+    const ids = setup().commands().map((c) => c.id);
+    expect(ids).not.toContain('stream:golive');
+    expect(ids).not.toContain('stream:end');
+  });
+
+  it('offers Go live and a test stream, which start when picked', () => {
+    const { find, actions } = setup({ state: uncbox() });
+    expect(find('stream:golive')!.title).toBe('Go live');
+    expect(find('stream:test')!.title).toBe('Test stream (not public)');
+    find('stream:golive')!.run();
+    expect(actions.goLive).toHaveBeenLastCalledWith(false);
+    find('stream:test')!.run();
+    expect(actions.goLive).toHaveBeenLastCalledWith(true);
+  });
+
+  it('leaves starting out until there is a key and the tools are ready', () => {
+    const { commands } = setup({ state: uncbox(), stream: { active: false, ready: false } });
+    expect(commands().some((c) => c.id.startsWith('stream:golive') || c.id === 'stream:test')).toBe(false);
+  });
+
+  it('offers End stream instead while it is going', () => {
+    const { commands, find, actions } = setup({ state: uncbox(), stream: { active: true, ready: true } });
+    expect(commands().some((c) => c.id === 'stream:golive')).toBe(false);
+    find('stream:end')!.run();
+    expect(actions.endStream).toHaveBeenCalled();
   });
 });
 

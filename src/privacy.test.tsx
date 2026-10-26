@@ -1,8 +1,9 @@
 // @vitest-environment jsdom
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { OnAirToggle } from './components/OnAirToggle';
 import type { ObsSnapshot } from './obs';
+import { IDLE, resetStreamStatusForTests, setStreamStatus } from './stream/status';
 import { isBrowserSource } from './widgets/media/media';
 import { isPrivate, obsIsLive, PrivacyProvider, privateReason, resetOnAirForTests, scrubText, setOnAir, siteHost, usePrivate } from './privacy';
 
@@ -14,22 +15,24 @@ const live = (over: { stream?: boolean; record?: boolean; connected?: boolean; r
   }) as Pick<ObsSnapshot, 'connected' | 'stream' | 'record'>;
 
 describe('the private signal', () => {
-  const off = { streamMode: false, obsLive: false, onAir: false };
+  const off = { streamMode: false, obsLive: false, uncboxLive: false, onAir: false };
 
   it('is off when nothing is on', () => {
     expect(isPrivate(off)).toBe(false);
     expect(privateReason(off)).toBeNull();
   });
 
-  it('each of the three turns it on alone', () => {
+  it('each of the four turns it on alone', () => {
     expect(isPrivate({ ...off, streamMode: true })).toBe(true);
     expect(isPrivate({ ...off, obsLive: true })).toBe(true);
+    expect(isPrivate({ ...off, uncboxLive: true })).toBe(true);
     expect(isPrivate({ ...off, onAir: true })).toBe(true);
   });
 
-  it('says which one, with OBS first', () => {
-    expect(privateReason({ streamMode: true, obsLive: true, onAir: true })).toBe('obs');
-    expect(privateReason({ streamMode: true, obsLive: false, onAir: true })).toBe('stream');
+  it('says which one, with OBS first, then streaming from Uncbox', () => {
+    expect(privateReason({ streamMode: true, obsLive: true, uncboxLive: true, onAir: true })).toBe('obs');
+    expect(privateReason({ streamMode: true, obsLive: false, uncboxLive: true, onAir: true })).toBe('live');
+    expect(privateReason({ streamMode: true, obsLive: false, uncboxLive: false, onAir: true })).toBe('stream');
     expect(privateReason({ ...off, onAir: true })).toBe('manual');
   });
 
@@ -51,6 +54,7 @@ describe('the provider', () => {
   beforeEach(() => {
     window.localStorage.clear();
     resetOnAirForTests();
+    resetStreamStatusForTests();
   });
   afterEach(cleanup);
 
@@ -82,6 +86,39 @@ describe('the provider', () => {
       </PrivacyProvider>,
     );
     expect(status()).toBe('private');
+  });
+
+  it('is private while Uncbox is streaming alone', () => {
+    render(
+      <PrivacyProvider streamMode={false} obs={null} uncbox>
+        <Probe />
+      </PrivacyProvider>,
+    );
+    expect(status()).toBe('private');
+  });
+
+  it('is public when Uncbox is not streaming', () => {
+    render(
+      <PrivacyProvider streamMode={false} obs={null} uncbox={false}>
+        <Probe />
+      </PrivacyProvider>,
+    );
+    expect(status()).toBe('public');
+  });
+
+  it('follows the stream status from the server when not told', () => {
+    vi.stubGlobal('EventSource', class { addEventListener() {} });
+    vi.stubGlobal('fetch', vi.fn(async () => new Response('{}', { status: 404 })));
+    act(() => setStreamStatus({ ...IDLE, state: 'live' }));
+    render(
+      <PrivacyProvider streamMode={false}>
+        <Probe />
+      </PrivacyProvider>,
+    );
+    expect(status()).toBe('private');
+    act(() => setStreamStatus({ ...IDLE, state: 'off' }));
+    expect(status()).toBe('public');
+    vi.unstubAllGlobals();
   });
 
   it('is private with the manual switch alone, and follows it', () => {
@@ -136,6 +173,18 @@ describe('the On air pill', () => {
     expect(pill().getAttribute('aria-pressed')).toBe('true');
     fireEvent.click(pill());
     expect(pill().textContent).toBe('Off air');
+  });
+
+  it('shows it is forced on while streaming from Uncbox, and the click does nothing', () => {
+    render(
+      <PrivacyProvider streamMode={false} obs={null} uncbox>
+        <OnAirToggle />
+      </PrivacyProvider>,
+    );
+    expect(pill().textContent).toContain('On air: personal info hidden');
+    expect(pill().textContent).toContain('Streaming from Uncbox, so it stays on');
+    fireEvent.click(pill());
+    expect(window.localStorage.getItem('uncbox.onAir')).toBeNull();
   });
 
   it('shows it is forced on while OBS is live, and the click does nothing', () => {

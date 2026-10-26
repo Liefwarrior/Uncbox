@@ -26,7 +26,7 @@ import { writeJsonAtomic } from './datafile.mjs';
 const ID_URL = 'https://id.twitch.tv/oauth2';
 const HELIX = 'https://api.twitch.tv/helix';
 
-export const SCOPES = 'channel:manage:broadcast moderator:read:followers channel:read:subscriptions bits:read';
+export const SCOPES = 'channel:manage:broadcast moderator:read:followers channel:read:subscriptions bits:read channel:read:stream_key';
 export const POLL_MS = 30_000;
 /** A widget that hasn't checked in for this long is taken to be gone (closed window, crash). */
 export const LEASE_MS = 90_000;
@@ -499,6 +499,29 @@ export function createTwitch({
     return (found.data ?? []).map((g) => ({ id: String(g.id), name: String(g.name), boxArt: boxArt(g.box_art_url) }));
   }
 
+  // ---- the stream key (for streaming from Uncbox, server/stream.mjs) ----
+
+  /**
+   * The channel's stream key. Sign-ins made before the scope existed can't read it: Twitch answers
+   * with a missing scope, which is reported as code 'needs-signin'. The key itself is only ever
+   * returned to the caller, never kept here.
+   */
+  async function streamKey() {
+    await load();
+    if (!signedIn()) throw Object.assign(fail(401, 'Sign in to Twitch first.'), { code: 'not-signed-in' });
+    let res;
+    try {
+      res = await helix(`/streams/key?broadcaster_id=${encodeURIComponent(data.userId)}`);
+    } catch (err) {
+      throw err.status ? err : fail(502, 'Couldn’t reach Twitch. Check your internet connection.');
+    }
+    if (res.status === 401 || res.status === 403) throw Object.assign(fail(409, 'Sign in to Twitch again so Uncbox can read your stream key.'), { code: 'needs-signin' });
+    if (!res.ok) throw fail(502, problem(res.status, (await res.json().catch(() => ({}))).message));
+    const key = (await res.json().catch(() => ({}))).data?.[0]?.stream_key;
+    if (typeof key !== 'string' || !key) throw fail(502, 'Twitch didn’t give a stream key.');
+    return key;
+  }
+
   // ---- signing out and the client ID ----
 
   async function signOut() {
@@ -565,5 +588,5 @@ export function createTwitch({
     }
   }
 
-  return { handle, status, startSignIn, signOut, setClientId, watch, unwatch, updateChannel, categories, close };
+  return { handle, status, startSignIn, signOut, setClientId, watch, unwatch, updateChannel, categories, streamKey, close };
 }

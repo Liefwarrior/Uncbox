@@ -62,6 +62,9 @@ export interface PaletteActions {
   /** Points at a panel that was just added. */
   callOut: (id: Widget['id']) => void;
   toggleStream: () => void;
+  /** Starts streaming from Uncbox (or, with true, a test stream that isn't public). */
+  goLive: (test: boolean) => void;
+  endStream: () => void;
   /** Opens the preset gallery. */
   browsePresets: () => void;
   /** Opens the sidebar's editor for a new automation. */
@@ -85,6 +88,8 @@ export interface PaletteContext {
   /** On air: nothing personal (Drive file names) is listed. */
   private?: boolean;
   obs: ObsSnapshot | null;
+  /** Streaming from Uncbox: whether it is going or starting, and whether it could start now (a key, FFmpeg and NVENC). */
+  stream: { active: boolean; ready: boolean };
   /** The guild's member names, once known (only asked for on the WoW preset). */
   wow: { members: string[] } | null;
   actions: PaletteActions;
@@ -205,6 +210,16 @@ const streamCommands: Provider = ({ actions }) => [
     run: actions.toggleStream,
   },
 ];
+
+/** Streaming from Uncbox itself (not OBS): start, test and end. Starting is left out until a key and the tools are there. */
+const goLiveCommands: Provider = ({ state, stream, actions }) => {
+  if (state.stream.with !== 'uncbox') return [];
+  if (stream.active) return [{ id: 'stream:end', title: 'End stream', group: 'Stream', icon: 'radio', detail: 'Stop streaming from Uncbox', keywords: 'stop live twitch broadcast', run: actions.endStream }];
+  return [
+    { id: 'stream:golive', title: 'Go live', group: 'Stream', icon: 'radio', detail: 'Stream your screen to Twitch', keywords: 'start twitch broadcast', enabled: stream.ready, run: () => actions.goLive(false) },
+    { id: 'stream:test', title: 'Test stream (not public)', group: 'Stream', icon: 'radio', detail: 'Twitch takes it but shows it to no one', keywords: 'try go live twitch bandwidth', enabled: stream.ready, run: () => actions.goLive(true) },
+  ];
+};
 
 // ---- launcher ----
 
@@ -493,6 +508,7 @@ export const providers: Provider[] = [
   widgetCommands,
   clipCommands,
   streamCommands,
+  goLiveCommands,
   launcherCommands,
   webCommands,
   downloadCommands,

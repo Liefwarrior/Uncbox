@@ -19,6 +19,7 @@ import { Section, openSection } from './Section';
 import { OnAirToggle } from './OnAirToggle';
 import { SetupList } from './SetupList';
 import { StartWithWindows } from './StartWithWindows';
+import { GoLive, StreamSection } from './StreamSection';
 import { UpdateNotice } from './UpdateNotice';
 import { OnScreen, WidgetLibraryDialog } from './WidgetLibrary';
 
@@ -94,6 +95,7 @@ export function Sidebar({ state, mutate, mutatePreset, status, onStreamMode }: P
             <Icon name="cast" /> Stream mode
           </button>
           <p className="hint">Full screen, edit controls hidden. Esc to come back.</p>
+          <GoLive settings={state.stream} />
           <OnAirToggle />
 
           <SetupList state={state} mutatePreset={mutatePreset} />
@@ -108,6 +110,10 @@ export function Sidebar({ state, mutate, mutatePreset, status, onStreamMode }: P
           <div className="folds">
             <Section id="clips" title="Clips">
               <ClipsSection settings={state.clips} mutate={mutate} />
+            </Section>
+
+            <Section id="streaming" title="Streaming">
+              <StreamSection settings={state.stream} mutate={mutate} />
             </Section>
 
             <Section id="automations" title="Automations">

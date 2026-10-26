@@ -36,7 +36,24 @@ export type ShellMessage =
   /** A web widget's page moved on (see useWebView). */
   | ({ type: 'webstate' } & WebState)
   /** Whether Uncbox starts with Windows (sent when asked and after every change). */
-  | { type: 'autostartstate'; enabled: boolean };
+  | { type: 'autostartstate'; enabled: boolean }
+  /** The microphones, when asked (`audiodevices`). */
+  | { type: 'audiodevices'; mics: AudioDevice[] }
+  /**
+   * The stream's sound pipe (see src/stream): `ready` once the pipe is waiting for FFmpeg, `off`
+   * when capture stopped (asked to, or FFmpeg closed the pipe), `error` with plain words.
+   */
+  | { type: 'streamaudio'; state: 'ready'; pipe: string; rate: number; channels: number; format: string }
+  | { type: 'streamaudio'; state: 'off' }
+  | { type: 'streamaudio'; state: 'error'; error: string }
+  /** Peak level 0..1 of each source (after its gain), about ten times a second while the sound is on. */
+  | { type: 'audiolevels'; desktop: number; mic: number };
+
+export interface AudioDevice {
+  id: string;
+  name: string;
+  isDefault: boolean;
+}
 
 export function send(message: { type: string; [key: string]: unknown }) {
   shell?.postMessage(message);

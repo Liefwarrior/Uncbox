@@ -277,6 +277,26 @@ export interface ClipSettings {
   driveShare: boolean;
 }
 
+/** Streaming from Uncbox itself instead of OBS (src/stream). Not secret: the stream key stays on the server. */
+export interface StreamSettings {
+  /** Which program streams: OBS as always, or Uncbox's own capture. */
+  with: 'obs' | 'uncbox';
+  /** The screen to capture, counting from 0. */
+  screen: number;
+  fps: 30 | 60;
+  /** The picture's height in pixels; 0 is the screen's own. */
+  height: 0 | 720 | 1080;
+  /** Video bitrate in kilobits per second. */
+  kbps: number;
+  /** Stream the sound Windows plays. */
+  desktop: boolean;
+  /** A microphone's device id, 'default' for the Windows default, or null for none. */
+  mic: string | null;
+  /** Gains from 0 to 2; 1 is as it comes. */
+  desktopVolume: number;
+  micVolume: number;
+}
+
 /**
  * "When this, do that" (src/automations). A game is a built-in preset's game ("smite2"), or 'any'
  * for whatever Steam is running.
@@ -315,6 +335,7 @@ export interface AppState {
   preset: PresetId | CustomId;
   twitch: { channel: string; hideBots: boolean };
   clips: ClipSettings;
+  stream: StreamSettings;
   /** Voice channels pinned to the Discord panel for one-click joining. Shared by every preset. */
   discord: { pinned: PinnedChannel[] };
   camera: CameraSettings;

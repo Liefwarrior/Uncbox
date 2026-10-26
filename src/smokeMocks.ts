@@ -34,6 +34,17 @@ export const SENTINELS = [
   'C:\\Users\\SENTINEL',
 ] as const;
 
+/** Streaming from Uncbox (server/stream.mjs): nothing set up, or a key saved and FFmpeg ready. */
+export const streamStatus = (data: boolean) => ({
+  state: 'off',
+  test: false,
+  startedAt: null,
+  stats: null,
+  error: '',
+  key: data ? { set: true, hint: 'q9z7', source: 'pasted' } : { set: false, hint: '', source: null },
+  tools: data ? { ffmpeg: true, version: '8.1.2-full_build', nvenc: true, ddagrab: true } : { ffmpeg: false, version: '', nvenc: null, ddagrab: null },
+});
+
 const NOW = Date.now();
 const iso = (offsetMs: number) => new Date(NOW + offsetMs).toISOString();
 const HOUR = 3_600_000;
@@ -200,6 +211,8 @@ export function route(scenario: Scenario, path: string, method: string): Reply {
     return ok({ key: 'k', targets: { k: ping('1.1.1.1') }, router: data ? ping('192.168.1.1') : null, game: data ? { name: 'Game', fps: 144, fpsLow: 120, fpsHistory: [140, 144, 150], gpuMs: 4.2, ping: 30, pingHistory: [30, 31] } : null });
   }
   if (p === '/api/obs') return ok(data ? obsUp : obsDown);
+  // Every streaming route answers with the status, as the real ones do.
+  if (p === '/api/stream' || p.startsWith('/api/stream/')) return ok(streamStatus(data));
   if (p === '/api/obs/settings') return ok({ host: 'localhost', port: 4455, passwordSet: data });
   if (p === '/api/discord') return ok(data ? discordReady : discordIdle);
   if (p === '/api/discord/guilds') return ok(data ? [{ id: '2', name: 'Friends', icon: '' }] : []);

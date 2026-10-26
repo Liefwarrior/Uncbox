@@ -212,6 +212,7 @@ const ROUTES = [
   ['/api/gmail/labels', NOT_SIGNED_IN],
   ['/api/twitch/status', JSON_OK, (r) => expect(r.json).toMatchObject({ configured: false, signedIn: false })],
   ['/api/twitch/categories?q=smite', [401, 409]],
+  ['/api/stream', JSON_OK, (r) => expect(r.json).toMatchObject({ state: 'off', key: { set: false } })],
   ['/api/smite', JSON_OK, (r) => expect(r.json.phase).toBe('lobby')],
   ['/api/ytdlp', JSON_OK, (r) => expect(r.json).toMatchObject({ tools: { ytdlp: { found: false }, ffmpeg: { found: false }, winget: false }, queue: [], history: [] })],
   ['/api/gallery', JSON_OK, (r) => expect(r.json.presets.length).toBeGreaterThan(0)],

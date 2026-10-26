@@ -4,13 +4,13 @@ import { Icon } from './Icon';
 /**
  * The "On air" switch, under the Stream mode button. On, personal info (mail, calendar, file
  * names, paths, addresses) is hidden even outside the stream mode view. It is also forced on while
- * OBS is streaming or recording, and the pill says so.
+ * OBS is streaming or recording or Uncbox is streaming, and the pill says so.
  */
 export function OnAirToggle() {
   const { onAir, reason, setOnAir } = usePrivacy();
-  const forced = reason === 'obs' || reason === 'stream';
+  const forced = reason === 'obs' || reason === 'live' || reason === 'stream';
   const on = reason !== null;
-  const why = reason === 'obs' ? 'OBS is live, so it stays on' : reason === 'stream' ? 'Stream mode is on' : '';
+  const why = reason === 'obs' ? 'OBS is live, so it stays on' : reason === 'live' ? 'Streaming from Uncbox, so it stays on' : reason === 'stream' ? 'Stream mode is on' : '';
   return (
     <button
       type="button"
