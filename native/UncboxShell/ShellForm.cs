@@ -30,6 +30,11 @@ namespace UncboxShell;
 ///               { type: "web" | "webrect" | "webnav" | "webzoom" | "webclose", id, ... }
 ///                    the web widgets' pages, each a WebView2 over its panel (see WebViews.cs)
 ///               { type: "autostart" } | { type: "autostart", enabled }   ask / change start-with-Windows
+///               { type: "audiodevices" }                  list the microphones
+///               { type: "clipaudio", on: true, title, mic } | { type: "clipaudio", on: false }
+///                    keep the last minute of the game's, Discord's and the mic's sound for clips (see
+///                    ClipAudio.cs); title is the captured window's label, mic a device id, "default" or null
+///               { type: "clipaudioget", id, fromMs, toMs }   the sound of a clip's stretch of time
 ///   app → page  { type: "windows", windows: [{ id, title, process }] }
 ///               { type: "attached", id, title, process, followed } | { type: "detached" }
 ///                    followed: the app took it by itself (see follow), so it isn't the saved game
@@ -38,6 +43,12 @@ namespace UncboxShell;
 ///                    live picture; launchOption, if known, is what makes it resizable
 ///               { type: "webstate", id, url, title, canGoBack, canGoForward, loading }
 ///                    where a web widget's page is (see WebViews.cs)
+///               { type: "audiodevices", mics: [{ id, name, isDefault }] }
+///               { type: "clipaudio", state: "on", game, gameName, discord, mic, micError } | { state: "off" } | { state: "error", error }
+///               { type: "cliplevels", game, discord, mic }   peak levels 0..1, about five times a second
+///               and, for clipaudioget, a WebView2 shared buffer (game, then Discord, then mic: each
+///               frames x 2 interleaved s16le samples) with { type: "clipaudio", id, frames, rate } or, as
+///               JSON, { type: "clipaudio", id, error }
 /// </summary>
 internal sealed class ShellForm : Form
 {
@@ -66,6 +77,9 @@ internal sealed class ShellForm : Form
     private readonly ToolStripMenuItem _screenMenu = new("Monitor");
     private readonly System.Windows.Forms.Timer _keepPlaced = new() { Interval = 250 };
     private readonly ServerHost _server = new();
+    private CoreWebView2Environment? _env;
+    /// <summary>The sound for clips, while the page's replay buffer runs.</summary>
+    private ClipAudio? _clipAudio;
     /// <summary>The web widgets' pages; made once the dashboard's own WebView2 is up.</summary>
     private WebViews? _webViews;
     private RegisteredWaitHandle? _wakeWait;
@@ -195,9 +209,15 @@ internal sealed class ShellForm : Form
             return;
         }
         var core = _web.CoreWebView2;
+        _env = env;
         _webViews = new WebViews(this, _web, env, Send);
-        // The dashboard reloaded: its web widgets start over and ask for their pages again.
-        core.ContentLoading += (_, _) => _webViews.CloseAll();
+        // The dashboard reloaded: its web widgets start over and ask for their pages again, and the
+        // clip sound (the mic included) stops until the new page asks for it.
+        core.ContentLoading += (_, _) =>
+        {
+            _webViews.CloseAll();
+            StopClipAudio();
+        };
         core.Settings.IsStatusBarEnabled = false;
         core.Settings.IsZoomControlEnabled = false;
         core.WebMessageReceived += (_, args) => OnMessage(args.WebMessageAsJson);
@@ -321,6 +341,7 @@ internal sealed class ShellForm : Form
         _hooks.Clear();
         _game?.Restore();
         _webViews?.Dispose();
+        StopClipAudio();
         _tray.Visible = false;
         _tray.Dispose();
         _server.Dispose();
@@ -328,6 +349,20 @@ internal sealed class ShellForm : Form
     }
 
     private void Send(object message) => _web.CoreWebView2?.PostWebMessageAsJson(JsonSerializer.Serialize(message));
+
+    /// <summary>Send for other threads (the audio code's).</summary>
+    private void Post(object message)
+    {
+        if (IsDisposed || !IsHandleCreated) return;
+        try
+        {
+            BeginInvoke(() => Send(message));
+        }
+        catch (InvalidOperationException)
+        {
+            // The window is closing.
+        }
+    }
 
     private void OnMessage(string json)
     {
@@ -380,6 +415,99 @@ internal sealed class ShellForm : Form
             case "autostart":
                 Send(new { type = "autostartstate", enabled = Autostart.Handle(msg) });
                 break;
+            case "audiodevices":
+                Task.Run(() => Post(AudioKit.ListMics()));
+                break;
+            case "clipaudio" when msg is not null:
+                if ((bool?)msg["on"] == true) StartClipAudio((string?)msg["title"] ?? "", (string?)msg["mic"]);
+                else StopClipAudio();
+                break;
+            case "clipaudioget" when msg is not null:
+                SendClipAudio((int?)msg["id"] ?? 0, (int?)msg["fromMs"] ?? 0, (int?)msg["toMs"] ?? 0);
+                break;
+        }
+    }
+
+    /// <summary>(Re)starts the sound kept for clips. title is the label of the page's capture of the game.</summary>
+    private void StartClipAudio(string title, string? mic)
+    {
+        _clipAudio?.Dispose();
+        var self = Handle;
+        _clipAudio = new ClipAudio(Post, label => WindowOfCapture(self, label));
+        _clipAudio.Start(title, mic);
+    }
+
+    /// <summary>Stops the clip sound (and the mic) and tells the page, if it was running.</summary>
+    private void StopClipAudio()
+    {
+        var audio = _clipAudio;
+        _clipAudio = null;
+        if (audio is null) return;
+        audio.Dispose();
+        Post(new { type = "clipaudio", state = "off" });
+    }
+
+    /// <summary>
+    /// The program that owns a window the page is capturing. Chrome and Edge label a window capture
+    /// "window:HANDLE:0", so the handle is used when the label has one; any other label is taken to
+    /// be the window's title.
+    /// </summary>
+    private static (int Pid, string Name)? WindowOfCapture(IntPtr self, string label)
+    {
+        var handle = System.Text.RegularExpressions.Regex.Match(label, @"^window:(\d+):");
+        if (handle.Success && long.TryParse(handle.Groups[1].Value, out long h))
+        {
+            var hwnd = new IntPtr(h);
+            if (!Native.IsWindow(hwnd)) return null;
+            Native.GetWindowThreadProcessId(hwnd, out uint owner);
+            return ((int)owner, Native.TitleOf(hwnd));
+        }
+        var windows = Native.AppWindows(self);
+        var hit = windows.FirstOrDefault(w => w.Title == label);
+        if (hit.Hwnd == IntPtr.Zero) hit = windows.FirstOrDefault(w => w.Title.Equals(label, StringComparison.OrdinalIgnoreCase));
+        if (hit.Hwnd == IntPtr.Zero) return null;
+        Native.GetWindowThreadProcessId(hit.Hwnd, out uint pid);
+        return ((int)pid, hit.Title);
+    }
+
+    /// <summary>
+    /// Answers clipaudioget: the three sources' sound for the stretch that started fromMs ago and
+    /// ended toMs ago, in a WebView2 shared buffer (60 s of three tracks is 35 MB, too much for JSON).
+    /// </summary>
+    private unsafe void SendClipAudio(int id, int fromMs, int toMs)
+    {
+        void Fail(string error) => Send(new { type = "clipaudio", id, error });
+        var audio = _clipAudio;
+        if (audio is not { Running: true } || _env is null || _web.CoreWebView2 is null)
+        {
+            Fail("Sound isn't being recorded.");
+            return;
+        }
+        if (toMs < 0 || fromMs <= toMs || fromMs - toMs > ClipAudio.MaxSpanMs)
+        {
+            Fail("That stretch of sound is too long to keep.");
+            return;
+        }
+        int frames = ClipAudio.Frames(fromMs, toMs);
+        int samples = frames * AudioKit.Channels;
+        CoreWebView2SharedBuffer? buffer = null;
+        try
+        {
+            buffer = _env.CreateSharedBuffer((ulong)samples * 3 * sizeof(short));
+            var all = new Span<short>((void*)buffer.Buffer, samples * 3);
+            audio.Read(fromMs, toMs, all[..samples], all[samples..(2 * samples)], all[(2 * samples)..]);
+            _web.CoreWebView2.PostSharedBufferToScript(
+                buffer, CoreWebView2SharedBufferAccess.ReadOnly,
+                JsonSerializer.Serialize(new { type = "clipaudio", id, frames, rate = AudioKit.Rate }));
+        }
+        catch (Exception)
+        {
+            Fail("Couldn't get the sound for that clip.");
+        }
+        finally
+        {
+            // The page has its own mapping of it by now.
+            buffer?.Dispose();
         }
     }
 
