@@ -166,3 +166,22 @@ filters are dropdowns; live-show buttons (OBS scenes, start/stop, launcher tiles
 One "private" signal (stream mode, OBS live, or the On air switch) hides mail, calendar, file names,
 paths and addresses in every widget, toast, clip and the palette, so leaving stream mode mid-show
 is safe. Audit in [stream-privacy.md](stream-privacy.md); checklist in [going-live.md](going-live.md).
+
+## Stream with Uncbox (2026-10-26)
+
+Go live on Twitch from Uncbox itself, without OBS: FFmpeg captures the screen with `ddagrab`
+(Desktop Duplication) and encodes on the graphics card with `h264_nvenc`, frames never leaving the
+GPU, and sends it to Twitch over `rtmps://`. The app records desktop sound and the mic (FFmpeg can't
+capture what Windows plays) and hands FFmpeg one mixed stream through a named pipe. A sidebar
+setting picks "Stream with: OBS / Uncbox"; OBS stays the default and nothing about it changes.
+
+### UBX-22 · Go live from Uncbox: server, sidebar, Twitch key — Building
+`server/stream.mjs` runs FFmpeg and reports bitrate, dropped frames and uptime; the stream key lives
+in `data/stream.json` (pasted, or fetched from the Twitch sign-in) and never reaches the page. A
+"Test (not public)" mode uses Twitch's bandwidth test, so it can be tried without going live. Going
+live through Uncbox turns the private signal on, like OBS going live.
+
+### UBX-23 · Desktop sound and mic for the stream: native shell — Building
+The shell records the default speakers (WASAPI loopback) and a chosen mic, mixes them to 48 kHz
+stereo, fills silence so the timing holds, and writes it to a named pipe FFmpeg reads. It lists
+mics and reports sound levels for the sidebar meters.
