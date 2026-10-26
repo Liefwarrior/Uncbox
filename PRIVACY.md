@@ -13,6 +13,10 @@ it is ever sent to us. There's no account to make, no analytics, no tracking and
   are never sent to the Uncbox page in full, never shared, and never leave your PC except to the
   service they belong to.
 - Clips and downloads: your Videos folder (`Videos\Uncbox`).
+- Sound for clips: while clips are on in the Uncbox app, the last minute of your game's sound,
+  Discord's sound and your mic is kept in memory, the same way the video is, and only written to
+  disk (inside the clip) when you press the clip key. Windows shows the mic as in use while that
+  runs; choosing "No mic" in the Clips section, or turning sound off there, stops that.
 
 Delete the `data` folder and it's all gone.
 

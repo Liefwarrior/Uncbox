@@ -1,12 +1,16 @@
 import { useEffect, useSyncExternalStore } from 'react';
 import { listen, onConnection } from '../events';
+import { requestClipAudio, shell } from '../native';
+import type { ClipPcm } from '../native';
 import type { ClipSettings, Crop } from '../state/model';
+import { soundPlan, startClipSound, stopClipSound } from './audio';
+import { clipWindow, wallNow } from './pcm';
 import type { FromWorker, ToWorker } from './replay.worker';
 
 // Page side of instant replay. The game panel hands its capture to replay.worker.ts, which keeps
 // the last minute encoded; the clip key (watched by server/hotkey.mjs, so it works while the game
 // has focus) arrives as a "clip" event on /api/events and saves it. Everything the sidebar and
-// toast show lives in one small store here.
+// toast show lives in one small store here. Sound for clips comes from the Uncbox app (audio.ts).
 
 export const CLIP_SECONDS = 60;
 
@@ -34,8 +38,8 @@ export interface ClipsSnapshot {
   seconds: number;
   error: string;
   saving: boolean;
-  /** The last clip saved from this window, for the toast. */
-  saved: { name: string; at: number } | null;
+  /** The last clip saved from this window, for the toast. soundError: why it has no sound, if it was meant to. */
+  saved: { name: string; at: number; soundError: string } | null;
   saveError: string;
   hotkey: HotkeyStatus;
   dir: string;
@@ -101,8 +105,12 @@ function supported(): boolean {
   return typeof MediaStreamTrackProcessor === 'function' && typeof VideoEncoder === 'function';
 }
 
-/** Keeps the last minute of the stream, cropped like the game panel, while enabled. */
-export function useReplayBuffer(stream: MediaStream | null, crop: Crop, enabled: boolean) {
+/**
+ * Keeps the last minute of the stream, cropped like the game panel, while enabled. Inside the app,
+ * with sound on, the app keeps the sound alongside (the game's own, Discord and the mic).
+ */
+export function useReplayBuffer(stream: MediaStream | null, crop: Crop, settings: Pick<ClipSettings, 'enabled' | 'sound' | 'mic'>) {
+  const { enabled, sound, mic } = settings;
   useEffect(connect, []);
   const track = stream?.getVideoTracks()[0] ?? null;
 
@@ -134,6 +142,14 @@ export function useReplayBuffer(stream: MediaStream | null, crop: Crop, enabled:
     };
   }, [enabled, track]);
 
+  // The app finds the game's program from the label of its capture (see ShellForm.WindowOfCapture).
+  const label = track?.label ?? '';
+  useEffect(() => {
+    if (!shell || !enabled || !sound || !track || !supported()) return;
+    startClipSound(label, mic);
+    return stopClipSound;
+  }, [enabled, sound, track, label, mic]);
+
   const key = `${crop.top},${crop.right},${crop.bottom},${crop.left}`;
   cropRef = crop;
   useEffect(() => {
@@ -141,22 +157,54 @@ export function useReplayBuffer(stream: MediaStream | null, crop: Crop, enabled:
   }, [key]);
 }
 
-/** Saves the last minute as a clip. Does nothing while a save is already running. */
+/** Sends one message to the worker and waits for its answer (or for the worker to go). */
+function ask(w: Worker, id: number, message: ToWorker, transfer: Transferable[] = []) {
+  return new Promise<FromWorker>((resolve) => {
+    waiting.set(id, resolve);
+    w.postMessage(message, transfer);
+  });
+}
+
+/**
+ * Saves the last minute as a clip. Does nothing while a save is already running. In two steps: the
+ * worker freezes the clip and says when it began and ended, the app is asked for the sound of just
+ * that stretch, and the worker writes both into the file. Any trouble with the sound saves the
+ * video alone, and the toast says why.
+ */
 export async function saveClip() {
   if (snap.saving) return;
-  if (!worker) {
+  const w = worker;
+  if (!w) {
     set({ saveError: 'Show your game as a Window or Capture card to clip it.', saved: null });
     return;
   }
   const id = nextId++;
   set({ saving: true, saveError: '' });
-  const result = await new Promise<FromWorker>((resolve) => {
-    waiting.set(id, resolve);
-    worker!.postMessage({ type: 'save', id } satisfies ToWorker);
-  });
-  waiting.delete(id);
-  if (result.type === 'saved') set({ saving: false, saved: { name: result.name, at: Date.now() } });
-  else if (result.type === 'failed') set({ saving: false, saveError: result.error, saved: null });
+  try {
+    const prepared = await ask(w, id, { type: 'prepare', id });
+    if (prepared.type === 'failed') return set({ saving: false, saveError: prepared.error, saved: null });
+    if (prepared.type !== 'prepared') return;
+
+    let sound: ClipPcm | null = null;
+    let soundError = '';
+    const plan = soundPlan();
+    if (plan.ask) {
+      try {
+        const { fromMs, toMs } = clipWindow(prepared.startMs, prepared.endMs, wallNow());
+        sound = await requestClipAudio(fromMs, toMs);
+      } catch (err) {
+        soundError = err instanceof Error ? err.message : String(err);
+      }
+    } else soundError = plan.reason;
+
+    const transfer = sound ? [sound.game.buffer, sound.discord.buffer, sound.mic.buffer] : [];
+    const result = await ask(w, id, { type: 'save', id, sound }, transfer);
+    if (result.type === 'saved') set({ saving: false, saved: { name: result.name, at: Date.now(), soundError: soundError || result.soundError || '' } });
+    else if (result.type === 'failed') set({ saving: false, saveError: result.error, saved: null });
+  } finally {
+    waiting.delete(id);
+    if (snap.saving) set({ saving: false });
+  }
 }
 
 /** Opens a clip in the player (null closes it). `edit` opens it with Make vertical already showing. */
