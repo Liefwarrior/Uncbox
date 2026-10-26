@@ -1,12 +1,14 @@
 import { useEffect, useRef, useState } from 'react';
+import type { CSSProperties } from 'react';
 import { keyLabel, isClipKey } from '../clips/keys';
 import { callOut } from '../callout';
+import { describeSound, useClipLevels, useClipSound } from '../clips/audio';
 import { canSaveToDrive, saveToDrive, useDriveUploads } from '../clips/drive';
 import { CLIP_SECONDS, clipLabel, clipUrl, isVerticalClip, revealClip, saveClip, useClips, watchClip } from '../clips/replay';
 import { removeWebhook, sendToDiscord, setWebhook, useWebhook } from '../clips/share';
 import { placePanel } from '../layout';
 import { scrubText, usePrivate } from '../privacy';
-import { useCover } from '../native';
+import { shell, useAudioDevices, useCover } from '../native';
 import type { ClipSettings, PresetData } from '../state/model';
 import type { Mutate, MutatePreset } from '../state/useAppState';
 import { useDialog } from '../useDialog';
@@ -134,6 +136,7 @@ export function ClipsSection({ settings, mutate }: { settings: ClipSettings; mut
             </button>
           </div>
           {binding && <p className="hint">F keys, symbols like = - [ ], the number pad, or Insert to Page Down. Esc cancels.</p>}
+          <ClipSound settings={settings} mutate={mutate} recording={clips.recording} />
           {clips.hotkey === 'unsupported' && (
             <p className="hint">The key only works while Uncbox is in front. Use Save clip, or run Uncbox on Windows.</p>
           )}
@@ -161,6 +164,92 @@ export function ClipsSection({ settings, mutate }: { settings: ClipSettings; mut
         <Icon name="folder" /> Open clips folder
       </button>
     </>
+  );
+}
+
+/** "No mic" in the picker (a saved mic of null). */
+const NO_MIC = '';
+
+/**
+ * Sound in clips: on/off, which mic, how loud each of the three sources is right now, and one quiet
+ * line saying what is being recorded. The sound itself is kept by the Uncbox app.
+ */
+export function ClipSound({ settings, mutate, recording }: { settings: ClipSettings; mutate: Mutate; recording: boolean }) {
+  const hidden = usePrivate();
+  const sound = useClipSound();
+  const mics = useAudioDevices(settings.sound);
+  if (!shell) return <p className="hint">Sound in clips needs the Uncbox app.</p>;
+
+  const picked = settings.mic ?? NO_MIC;
+  const known = picked === NO_MIC || picked === 'default' || (mics ?? []).some((m) => m.id === picked);
+  const defaultMic = mics?.find((m) => m.isDefault);
+  const line =
+    sound.state === 'on'
+      ? describeSound(hidden ? { ...sound, gameName: '' } : sound, settings.mic !== null)
+      : sound.state === 'starting'
+        ? 'Starting sound…'
+        : '';
+
+  return (
+    <>
+      <ul className="toggles">
+        <li>
+          <label>
+            <input type="checkbox" checked={settings.sound} onChange={(e) => mutate((s) => void (s.clips.sound = e.target.checked))} />
+            <span className="toggle" />
+            <span className="toggles__text">Record sound (game, Discord and mic on separate tracks)</span>
+          </label>
+        </li>
+      </ul>
+      {settings.sound && (
+        <>
+          <label className="side-field">
+            Mic
+            <select value={picked} onChange={(e) => mutate((s) => void (s.clips.mic = e.target.value === NO_MIC ? null : e.target.value))}>
+              <option value="default">Windows’ default mic{defaultMic && !hidden ? ` (${defaultMic.name})` : ''}</option>
+              {(mics ?? []).map((m) => (
+                <option key={m.id} value={m.id}>
+                  {hidden ? 'Microphone' : m.name}
+                </option>
+              ))}
+              {!known && <option value={picked}>A mic that isn’t connected</option>}
+              <option value={NO_MIC}>No mic</option>
+            </select>
+          </label>
+          {sound.state === 'error' ? (
+            <p className="error">{sound.error}</p>
+          ) : !recording ? (
+            <p className="hint">Sound starts when your game is showing.</p>
+          ) : (
+            <>
+              <Levels active={sound.state === 'on'} mic={sound.mic} />
+              {line && <p className="hint">{line}</p>}
+            </>
+          )}
+        </>
+      )}
+    </>
+  );
+}
+
+/** Three small level meters (game, Discord, mic), redrawn about five times a second. */
+function Levels({ active, mic }: { active: boolean; mic: boolean }) {
+  const levels = useClipLevels();
+  const rows = [
+    ['Game', levels.game],
+    ['Discord', levels.discord],
+    ['Mic', mic ? levels.mic : 0],
+  ] as const;
+  return (
+    <div className="clips__levels" aria-hidden="true">
+      {rows.map(([name, level]) => (
+        // A square root, so quiet sound still moves the bar the way it sounds.
+        <div key={name} className="clips__level" style={{ '--v': `${active ? Math.round(Math.sqrt(level) * 100) : 0}%` } as CSSProperties}>
+          <span>{name}</span>
+          <span />
+        </div>
+      ))}
+    </div>
   );
 }
 
@@ -264,7 +353,7 @@ export function ClipToast({ driveAuto }: { driveAuto: boolean }) {
       {saved ? (
         <>
           <span>
-            Clip saved
+            {saved.soundError ? `Saved without sound: ${clean(saved.soundError)}` : 'Clip saved'}
             {upload?.state === 'uploading' && ' · uploading to Drive…'}
             {upload?.state === 'done' && ' · on Drive'}
             {upload?.state === 'error' && ` · not on Drive: ${clean(upload.error)}`}

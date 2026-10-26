@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   DISCORD_MAX_BYTES,
   clampTrim,
+  DISCORD_AUDIO_BITRATE,
   discordBitrate,
   discordSize,
   frameShare,
@@ -63,6 +64,15 @@ describe('discordBitrate', () => {
 
   it('aims below what Discord allows', () => {
     expect(size(60)).toBeLessThan(DISCORD_MAX_BYTES);
+  });
+
+  it('leaves room for the sound when the copy has some', () => {
+    expect(discordBitrate(30, DISCORD_AUDIO_BITRATE)).toBe(discordBitrate(30) - DISCORD_AUDIO_BITRATE);
+    const bytes = ((discordBitrate(60, DISCORD_AUDIO_BITRATE) + DISCORD_AUDIO_BITRATE) * 60) / 8;
+    expect(bytes).toBeLessThan(DISCORD_MAX_BYTES);
+    // Short clips are held at the ceiling either way.
+    expect(discordBitrate(1, DISCORD_AUDIO_BITRATE)).toBe(8_000_000);
+    expect(discordBitrate(10_000, DISCORD_AUDIO_BITRATE)).toBe(250_000);
   });
 });
 
