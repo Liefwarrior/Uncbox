@@ -1,9 +1,14 @@
-// Streaming from Uncbox: FFmpeg captures a screen with ddagrab, encodes it on the graphics card
-// (NVIDIA NVENC, AMD AMF or Intel Quick Sync, whichever this PC has) and sends it to Twitch. The
-// sound comes from the Uncbox app (desktop sound and mic mixed into a named pipe, see
+// Streaming from Uncbox: a screen is captured, encoded on the graphics card (NVIDIA NVENC, AMD AMF
+// or Intel Quick Sync, whichever this PC has) and sent to Twitch. Two programs can do that behind
+// the one feature, and the page never needs to know which: FFmpeg (capturing with ddagrab), or
+// Uncbox's own engine (engine/, written in Rust: uncbox-stream.exe), which uses a fraction of the
+// processor. FFmpeg is the default. The engine is used when it is asked for (the app's second
+// launch, `npm run app:native`, or UNCBOX_STREAM_ENGINE=native) and is built and has an encoder
+// that works here; otherwise FFmpeg streams, with one line in the console saying why. The sound
+// comes from the Uncbox app (desktop sound and mic mixed into a named pipe, see
 // docs/streaming-with-uncbox.md); in a plain browser the stream gets silent audio instead. The
 // page decides when to start and stop and restarts a stream that dropped (src/stream); this file
-// only runs FFmpeg and reports on it.
+// only runs the program and reports on it.
 //
 // Nothing here needs setting up: the check picks the encoder and the quickest way to scale the
 // picture that it has seen work on this PC, and a Twitch sign-in that can read the stream key
@@ -17,12 +22,14 @@
 //   POST /api/stream/stop        ends the stream; this PC only
 //
 // The stream key lives only in data/stream.json. The page is told whether one is set and its last
-// four characters, nothing more, and every line FFmpeg prints is run through redact() before it is
-// kept or sent, because FFmpeg repeats the address (which holds the key) in some errors.
+// four characters, nothing more, and every line either program prints is run through redact()
+// before it is kept or sent, because FFmpeg repeats the address (which holds the key) in some errors.
 
 import { spawn as nodeSpawn } from 'node:child_process';
+import * as fsp from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { readJsonSafe, writeJsonAtomic } from './datafile.mjs';
 import { noHelpers } from './switches.mjs';
 import { findTool } from './ytdlp.mjs';
@@ -54,9 +61,20 @@ export function clampSettings(raw) {
   };
 }
 
-/** Where the video goes. A test stream is taken by Twitch but not shown to anyone. */
-export function ingestUrl(key, test = false) {
-  return `rtmps://live.twitch.tv:443/app/${key}${test ? '?bandwidthtest=true' : ''}`;
+/** Where the video goes unless UNCBOX_STREAM_INGEST says otherwise. */
+export const TWITCH_INGEST = 'rtmps://live.twitch.tv:443/app';
+
+/**
+ * Where the video goes. A test stream is taken by Twitch but not shown to anyone.
+ *
+ * UNCBOX_STREAM_INGEST replaces rtmps://live.twitch.tv:443/app with another rtmp:// or rtmps://
+ * address, so a stream can be tried against a listener on this PC without going to Twitch. It is
+ * for testing only and is not set in normal use; anything that isn't an rtmp(s) address is ignored.
+ */
+export function ingestUrl(key, test = false, env = process.env) {
+  const given = String(env?.UNCBOX_STREAM_INGEST ?? '').trim().replace(/\/+$/, '');
+  const base = /^rtmps?:\/\/[^\s?#]+$/i.test(given) ? given : TWITCH_INGEST;
+  return `${base}/${key}${test ? '?bandwidthtest=true' : ''}`;
 }
 
 /** The text with the stream key (and anything shaped like one) blanked out. */
@@ -169,7 +187,7 @@ export function videoChain({ encoder = 'nvenc', scaler = 'cpu', height, scale })
  * `screenHeight` is the screen's own height when known, so a screen already at the chosen height
  * isn't scaled at all.
  */
-export function buildFfmpegArgs({ settings, key, test = false, audioPipe = '', encoder = 'nvenc', tuning = 'quality', scaler = 'cpu', screenHeight = 0 }) {
+export function buildFfmpegArgs({ settings, key, test = false, audioPipe = '', encoder = 'nvenc', tuning = 'quality', scaler = 'cpu', screenHeight = 0, env = process.env }) {
   const { screen, fps, height, kbps } = clampSettings(settings);
   const scale = height > 0 && height !== screenHeight;
   const chain = videoChain({ encoder, scaler, height, scale });
@@ -191,9 +209,73 @@ export function buildFfmpegArgs({ settings, key, test = false, audioPipe = '', e
     ...encoderArgs(encoder, kbps, fps, tuning),
     ...['-af', 'aresample=async=1000', '-c:a', 'aac', '-b:a', '160k', '-ar', '48000'],
     ...['-map', '0:v', '-map', '1:a'],
-    ...['-flvflags', 'no_duration_filesize', '-f', 'flv', ingestUrl(key, test)],
+    ...['-flvflags', 'no_duration_filesize', '-f', 'flv', ingestUrl(key, test, env)],
   ];
 }
+
+// ---- Uncbox's own engine ----
+
+/**
+ * What the engine is told on stdin, as one line of JSON. The address (with the key in it) goes
+ * here rather than in the arguments, which other programs on this PC can read. The engine reads
+ * the same settings FFmpeg does, and picks the encoder itself ('auto').
+ */
+export function buildEngineConfig({ settings, key, test = false, audioPipe = '', env = process.env }) {
+  const { screen, fps, height, kbps } = clampSettings(settings);
+  return { url: ingestUrl(key, test, env), screen, fps, height, kbps, ...(audioPipe ? { audioPipe } : {}), encoder: 'auto' };
+}
+
+/** The engine's names for the makers of graphics card encoders, and the encoder ids the page knows them by. */
+export const ENGINE_ENCODERS = { nvidia: 'nvenc', amd: 'amf', intel: 'qsv' };
+
+/**
+ * What `uncbox-stream probe` printed: its version, the graphics cards, and the encoders that were
+ * started for real, as { version, encoders: [{ id, tuning }], adapters }; or null when it isn't
+ * that. `id` is the page's name for the encoder (see ENGINE_ENCODERS); a maker this doesn't know
+ * is left out. A `tuning` ('quality' or 'safe') is taken when the probe gives one, either on the
+ * encoder, next to the list per maker, or as one word for all; it is 'quality' otherwise.
+ */
+export function parseProbe(text) {
+  let p;
+  try {
+    p = JSON.parse(String(text).trim());
+  } catch {
+    return null;
+  }
+  if (!p || typeof p !== 'object' || !Array.isArray(p.encoders)) return null;
+  const tuningOf = (value) => (value === 'safe' || value === 'quality' ? value : null);
+  const encoders = [];
+  for (const entry of p.encoders) {
+    const maker = typeof entry === 'string' ? entry : entry && typeof entry === 'object' ? (entry.id ?? entry.name ?? entry.vendor) : null;
+    const id = ENGINE_ENCODERS[maker];
+    if (!id || encoders.some((e) => e.id === id)) continue;
+    const own = entry && typeof entry === 'object' ? tuningOf(entry.tuning) : null;
+    const listed = p.tuning && typeof p.tuning === 'object' ? tuningOf(p.tuning[maker]) : tuningOf(p.tuning);
+    encoders.push({ id, tuning: own ?? listed ?? 'quality' });
+  }
+  return { version: typeof p.version === 'string' ? p.version : '', encoders, adapters: Array.isArray(p.adapters) ? p.adapters : [] };
+}
+
+const SERVER_DIR = path.dirname(fileURLToPath(import.meta.url));
+
+/**
+ * Where Uncbox's own engine is, or '' when it hasn't been built or packaged. In order: beside the
+ * server (a packaged copy: app\server\uncbox-stream.exe), in the folder above it, and where
+ * `npm run engine` builds it in a checkout (engine\target\release). Windows only.
+ */
+export async function findEngine({ serverDir = SERVER_DIR, platform = process.platform, fs = fsp } = {}) {
+  if (platform !== 'win32') return '';
+  const P = path.win32;
+  const root = P.resolve(serverDir, '..');
+  const candidates = [P.join(serverDir, 'uncbox-stream.exe'), P.join(root, 'uncbox-stream.exe'), P.join(root, 'engine', 'target', 'release', 'uncbox-stream.exe')];
+  for (const candidate of candidates) {
+    if ((await fs.stat(candidate).catch(() => null))?.isFile()) return candidate;
+  }
+  return '';
+}
+
+/** Which program to stream with: 'native' only when asked for it by name, else FFmpeg. */
+export const wantedEngine = (value) => (String(value ?? '').trim().toLowerCase() === 'native' ? 'native' : 'ffmpeg');
 
 const number = (v) => {
   const n = Number.parseFloat(v);
@@ -261,16 +343,21 @@ const NO_ENCODER = 'Uncbox streams with the encoder on your graphics card (NVIDI
 /**
  * The tools as far as anyone knows before a check. `encoder` is the id of the one that works (see
  * ENCODERS), '' when none does, null before the check; `tuning` is whether it took its quality
- * settings or needed the safe ones; `scaler` is how the picture gets scaled.
+ * settings or needed the safe ones; `scaler` is how the picture gets scaled. The page sees the
+ * same fields whoever streams: with Uncbox's own engine `ffmpeg` and `ddagrab` are true (it needs
+ * neither, so the page must never ask for an FFmpeg install) and `scaler` is 'd3d11' (the card
+ * does it). `engine` ('native' or 'ffmpeg') says who streams, and is for diagnosis only.
  */
-const unchecked = () => ({ ffmpeg: false, version: '', encoder: null, tuning: null, scaler: null, ddagrab: null });
+const unchecked = () => ({ ffmpeg: false, version: '', encoder: null, tuning: null, scaler: null, ddagrab: null, engine: 'ffmpeg' });
 
 /** FFmpeg ahead of other programs, so a game that takes every core can't make the stream stutter (OBS does the same). */
 const raiseAboveNormal = (pid) => os.setPriority(pid, os.constants.priority.PRIORITY_ABOVE_NORMAL);
 
 /**
- * `spawn`, `findFfmpeg`, `raisePriority`, `now`, `setTimer` and `clearTimer` are only swapped out by
- * the tests. `twitch` is the Twitch module (its streamKey()).
+ * `spawn`, `findFfmpeg`, `findNative`, `env`, `log`, `raisePriority`, `now`, `setTimer` and
+ * `clearTimer` are only swapped out by the tests. `twitch` is the Twitch module (its streamKey()).
+ * `env` is where UNCBOX_STREAM_ENGINE (who streams, until the shell says otherwise) and
+ * UNCBOX_STREAM_INGEST (test-only, see ingestUrl) are read from.
  */
 export function createStream({
   broadcastEvent,
@@ -281,6 +368,9 @@ export function createStream({
   twitch,
   spawn = nodeSpawn,
   findFfmpeg = () => findTool('ffmpeg'),
+  findNative = () => findEngine(),
+  env = process.env,
+  log = (line) => console.log(line),
   raisePriority = raiseAboveNormal,
   now = Date.now,
   setTimer = setTimeout,
@@ -294,6 +384,9 @@ export function createStream({
   let reading = null; // that first read, shared by everyone who asks while it runs
   let tools = unchecked();
   let ffmpegPath = '';
+  let enginePath = '';
+  let wanted = wantedEngine(env.UNCBOX_STREAM_ENGINE); // who to stream with if it can: 'native' or 'ffmpeg'
+  let generation = 0; // counts checks, so a slow old one can't overwrite a newer answer
   let checking = null;
   let checked = false;
 
@@ -390,8 +483,8 @@ export function createStream({
    * The first encoder in ENCODERS this FFmpeg has and this PC's card can run, and whether it takes
    * the quality settings the stream will use or needs the safe ones; null when there is none.
    */
-  async function findEncoder(encoders) {
-    const encodes = (args) => run(ffmpegPath, ['-hide_banner', '-f', 'lavfi', '-i', 'color=black:s=256x256:r=30', ...args, '-f', 'null', '-']).then((r) => r.code === 0);
+  async function findEncoder(ffmpeg, encoders) {
+    const encodes = (args) => run(ffmpeg, ['-hide_banner', '-f', 'lavfi', '-i', 'color=black:s=256x256:r=30', ...args, '-f', 'null', '-']).then((r) => r.code === 0);
     for (const e of ENCODERS) {
       if (!listsName(encoders, e.codec)) continue;
       // Being compiled in doesn't mean there is a card to use it: encode one frame.
@@ -408,39 +501,76 @@ export function createStream({
    * captured frames with the stream's own encoder settings, since a filter being listed doesn't
    * mean it works with this driver (scale_d3d11 doesn't, with FFmpeg 8.1). 'cpu' always does.
    */
-  async function findScaler(encoder, tuning, filters) {
+  async function findScaler(ffmpeg, encoder, tuning, filters) {
     for (const name of encoder.scalers) {
       if (name === 'cpu') break;
       if (!listsName(filters, SCALERS[name].filter)) continue;
       const video = `ddagrab=output_idx=0:framerate=30,${SCALERS[name].chain(720)}`;
-      const probe = await run(ffmpegPath, ['-hide_banner', '-f', 'lavfi', '-i', video, '-frames:v', '2', ...encoderArgs(encoder.id, 2500, 30, tuning), '-f', 'null', '-']);
+      const probe = await run(ffmpeg, ['-hide_banner', '-f', 'lavfi', '-i', video, '-frames:v', '2', ...encoderArgs(encoder.id, 2500, 30, tuning), '-f', 'null', '-']);
       if (probe.code === 0) return name;
     }
     return 'cpu';
   }
 
-  async function doCheck() {
-    ffmpegPath = noHelpers() ? '' : await findFfmpeg().catch(() => '');
-    if (!ffmpegPath) {
-      tools = unchecked();
-      return;
-    }
-    const [version, encoders, filters] = await Promise.all([run(ffmpegPath, ['-version']), run(ffmpegPath, ['-hide_banner', '-encoders']), run(ffmpegPath, ['-hide_banner', '-filters'])]);
-    const found = await findEncoder(encoders.out);
+  /** What FFmpeg is, what it can encode with and how it can scale; the program's path comes with it. */
+  async function checkFfmpeg() {
+    const found = noHelpers() ? '' : await findFfmpeg().catch(() => '');
+    if (!found) return { path: '', tools: unchecked() };
+    const [version, encoders, filters] = await Promise.all([run(found, ['-version']), run(found, ['-hide_banner', '-encoders']), run(found, ['-hide_banner', '-filters'])]);
+    const encoder = await findEncoder(found, encoders.out);
     const ddagrab = listsName(filters.out, 'ddagrab');
-    tools = {
-      ffmpeg: true,
-      version: /ffmpeg version (\S+)/.exec(version.out)?.[1] ?? '',
-      encoder: found?.encoder.id ?? '',
-      tuning: found?.tuning ?? null,
-      scaler: found && ddagrab ? await findScaler(found.encoder, found.tuning, filters.out) : null,
-      ddagrab,
+    return {
+      path: found,
+      tools: {
+        ffmpeg: true,
+        version: /ffmpeg version (\S+)/.exec(version.out)?.[1] ?? '',
+        encoder: encoder?.encoder.id ?? '',
+        tuning: encoder?.tuning ?? null,
+        scaler: encoder && ddagrab ? await findScaler(found, encoder.encoder, encoder.tuning, filters.out) : null,
+        ddagrab,
+        engine: 'ffmpeg',
+      },
     };
   }
 
   /**
-   * Looks for FFmpeg and what it can do. The answer is kept, except that not finding FFmpeg is
-   * looked into again each time (it may have been installed since); `force` looks again anyway.
+   * Uncbox's own engine, when it is there, starts, and has an encoder that works on this PC; else
+   * null, with one line in the console saying why FFmpeg is used instead. The page sees the same
+   * tools it would for FFmpeg (see `unchecked`).
+   */
+  async function checkNative() {
+    const why = (reason) => {
+      log(`Uncbox: ${reason}, so streaming with FFmpeg.`);
+      return null;
+    };
+    const found = noHelpers() ? '' : await findNative().catch(() => '');
+    if (!found) return why('Uncbox’s own streaming engine (uncbox-stream.exe) isn’t built (npm run engine)');
+    const probe = await run(found, ['probe']);
+    const info = probe.code === 0 ? parseProbe(probe.out) : null;
+    if (!info) return why('Uncbox’s own streaming engine didn’t answer its check');
+    if (!info.encoders.length) return why('Uncbox’s own streaming engine found no graphics card encoder that works here');
+    const [first] = info.encoders;
+    return { path: found, tools: { ffmpeg: true, version: info.version, encoder: first.id, tuning: first.tuning, scaler: 'd3d11', ddagrab: true, engine: 'native' } };
+  }
+
+  async function doCheck() {
+    const mine = ++generation;
+    const native = wanted === 'native' ? await checkNative() : null;
+    const result = native ?? (await checkFfmpeg());
+    // A newer check (the engine was changed meanwhile) has the last word.
+    if (mine !== generation) return;
+    tools = result.tools;
+    if (native) enginePath = native.path;
+    else {
+      enginePath = '';
+      ffmpegPath = result.path;
+    }
+  }
+
+  /**
+   * Looks for the program that will stream and what it can do. The answer is kept, except that not
+   * finding one is looked into again each time (FFmpeg may have been installed since); `force`
+   * looks again anyway.
    */
   function check({ force = false } = {}) {
     if (force || (checked && !tools.ffmpeg)) checking = null;
@@ -451,7 +581,7 @@ export function createStream({
     return checking;
   }
 
-  // ---- running FFmpeg ----
+  // ---- running the stream ----
 
   function lines(onLine) {
     let rest = '';
@@ -463,8 +593,12 @@ export function createStream({
     };
   }
 
-  function launch({ args, key }) {
-    const mine = spawn(ffmpegPath, args, { windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] });
+  /**
+   * Starts the program: FFmpeg with `args`, or Uncbox's own engine, which is told what to do by one
+   * line of JSON on stdin (`config`) instead, so the key is never in anything another program can read.
+   */
+  function launch({ args, config, key }) {
+    const mine = config ? spawn(enginePath, ['run'], { windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] }) : spawn(ffmpegPath, args, { windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] });
     child = mine;
     if (mine.pid) {
       try {
@@ -478,6 +612,14 @@ export function createStream({
     stats = null;
     startedAt = null;
     mine.stdin?.on('error', () => {});
+    if (config) {
+      try {
+        mine.stdin?.write(`${JSON.stringify(config)}
+`);
+      } catch {
+        // It will say why it stopped.
+      }
+    }
 
     const progress = createProgressParser();
     mine.stdout?.on('data', (chunk) => {
@@ -503,7 +645,7 @@ export function createStream({
       child = null;
       clearTimer(stopTimer);
       state = 'error';
-      error = 'Couldn’t start FFmpeg.';
+      error = 'Couldn’t start the stream.';
       void emit();
     });
     mine.on('close', (code) => {
@@ -519,7 +661,7 @@ export function createStream({
       } else {
         // The page starts it again (the audio pipe went with it), so this only says what happened.
         state = 'dropped';
-        error ||= `FFmpeg stopped (code ${code}).`;
+        error ||= `The stream stopped (code ${code}).`;
       }
       void emit();
     });
@@ -548,9 +690,14 @@ export function createStream({
       if (!tools.ffmpeg) throw fail(400, 'FFmpeg isn’t installed. Install it from the Downloads widget.');
       if (tools.ddagrab === false) throw fail(400, 'This FFmpeg can’t capture the screen. Install the latest FFmpeg from the Downloads widget.');
       if (!tools.encoder) throw fail(400, NO_ENCODER);
-      const screenHeight = settings.height > 0 ? await screenHeightOf(settings.screen) : 0;
       test = Boolean(body?.test);
-      launch({ args: buildFfmpegArgs({ settings, key, test, audioPipe, encoder: tools.encoder, tuning: tools.tuning ?? 'quality', scaler: tools.scaler ?? 'cpu', screenHeight }), key });
+      if (tools.engine === 'native') {
+        // The engine finds the screen's size itself, and scales only if the screen isn't the chosen height.
+        launch({ config: buildEngineConfig({ settings, key, test, audioPipe, env }), key });
+      } else {
+        const screenHeight = settings.height > 0 ? await screenHeightOf(settings.screen) : 0;
+        launch({ args: buildFfmpegArgs({ settings, key, test, audioPipe, encoder: tools.encoder, tuning: tools.tuning ?? 'quality', scaler: tools.scaler ?? 'cpu', screenHeight, env }), key });
+      }
     } finally {
       launching = false;
     }
@@ -572,7 +719,7 @@ export function createStream({
     if (state === 'stopping') return;
     state = 'stopping';
     const mine = child;
-    // "q" is how FFmpeg is asked to finish: it flushes and closes the connection properly.
+    // "q" is how either program is asked to finish: it flushes and closes the connection properly.
     try {
       mine.stdin?.write('q\n');
     } catch {
@@ -582,6 +729,21 @@ export function createStream({
     stopTimer = setTimer(() => mine.kill?.(), stopGraceMs);
     stopTimer?.unref?.();
     void emit();
+  }
+
+  // ---- who streams ----
+
+  /**
+   * Picks who streams (the shell does this when it starts, since the server may have been running
+   * already) and looks again at what this PC can do with it. A no-op if it is the one already
+   * asked for. Never while a stream runs: that stream keeps its program.
+   */
+  async function setEngine(raw) {
+    if (raw !== 'native' && raw !== 'ffmpeg') throw fail(400, 'The engine is “native” or “ffmpeg”.');
+    if (busy()) throw fail(409, 'End the stream before changing how it is made.');
+    if (raw === wanted) return;
+    wanted = raw;
+    await check({ force: true });
   }
 
   // ---- the key ----
@@ -645,6 +807,7 @@ export function createStream({
         if (!busy()) void takeSignInKey();
         await check({ force: (await readJson(req)).force === true });
       }
+      else if (route === '/engine') await setEngine((await readJson(req)).engine);
       else if (route === '/start') await start(await readJson(req));
       else if (route === '/stop') stop();
       else return sendJson(res, 404, { error: 'Not found' });
@@ -654,7 +817,7 @@ export function createStream({
     }
   }
 
-  /** Ends FFmpeg now (the server is shutting down). */
+  /** Ends the stream program now (the server is shutting down). */
   handle.close = () => {
     closing = true;
     clearTimer(stopTimer);
@@ -671,5 +834,6 @@ export function createStream({
   handle.check = check;
   handle.start = start;
   handle.stop = stop;
+  handle.setEngine = setEngine;
   return handle;
 }

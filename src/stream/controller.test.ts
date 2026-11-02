@@ -352,9 +352,9 @@ describe('what the server says', () => {
   it('shows an error the server gives', async () => {
     const t = setup();
     await t.goLive();
-    t.c.onStatus(t.status({ state: 'error', error: 'Couldn’t start FFmpeg.' }));
+    t.c.onStatus(t.status({ state: 'error', error: 'Couldn’t start the stream.' }));
     await t.flush();
-    expect(t.c.getState()).toMatchObject({ phase: 'idle', error: 'Couldn’t start FFmpeg.' });
+    expect(t.c.getState()).toMatchObject({ phase: 'idle', error: 'Couldn’t start the stream.' });
   });
 
   it('goes quiet when the stream was ended somewhere else', async () => {

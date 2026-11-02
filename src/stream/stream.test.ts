@@ -77,6 +77,13 @@ describe('what the check found', () => {
     expect(toolsLine(IDLE.tools, true)).toEqual({ state: 'missing', text: 'FFmpeg isn’t installed: install it from the Downloads widget.' });
   });
 
+  it('says the same for Uncbox’s own engine, which needs no FFmpeg, and the page ignores which one it is', () => {
+    const native = { ...tools, version: '0.1.0', scaler: 'd3d11', engine: 'native' } as const;
+    expect(toolsLine(native, true)).toEqual(toolsLine({ ...tools, engine: 'ffmpeg' }, true));
+    expect(toolsLine(native, true)).toEqual({ state: 'ready', text: 'Ready: NVIDIA NVENC on your graphics card' });
+    expect(readStatus({ state: 'off', tools: native })?.tools).toEqual(native);
+  });
+
   it('says when it cannot capture or encode', () => {
     expect(toolsLine({ ...tools, ddagrab: false }, true).state).toBe('unsupported');
     expect(toolsLine({ ...tools, encoder: '', scaler: null }, true)).toMatchObject({ state: 'unsupported', text: expect.stringMatching(/NVIDIA, AMD or Intel/) });
