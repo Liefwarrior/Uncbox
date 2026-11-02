@@ -246,9 +246,14 @@ internal sealed class ShellForm : Form
         var status = new Progress<string>(text => _splash.Text = text);
         if (_options.CanStartServer)
         {
-            if (await _server.EnsureRunning(_options.Url, _options.Root, _options.DataDir, status)) return true;
-            _splash.Text = _server.Error;
-            return false;
+            if (!await _server.EnsureRunning(_options.Url, _options.Root, _options.DataDir, status, _options.Engine))
+            {
+                _splash.Text = _server.Error;
+                return false;
+            }
+            // A server that was already running has its own idea of who streams: say what this launch wants.
+            await ServerHost.TellEngine(_options.Url, _options.Engine);
+            return true;
         }
         // Someone else's server (unc.box, another PC): wait for it rather than start one.
         while (!await ServerHost.IsUp(_options.Url))

@@ -17,6 +17,11 @@
     <NoWarn>$(NoWarn);MSB3277</NoWarn>
   </PropertyGroup>
 
+  <!-- The unit tests (native/UncboxShell.Tests) see the app's internal logic. -->
+  <ItemGroup>
+    <InternalsVisibleTo Include="UncboxShell.Tests" />
+  </ItemGroup>
+
   <!-- The Setup exe (npm run package -p:PayloadZip=...) carries node\ and app\ as a zip inside itself. -->
   <ItemGroup Condition="'$(PayloadZip)' != ''">
     <EmbeddedResource Include="$(PayloadZip)" LogicalName="UncboxPayload.zip" />

@@ -13,6 +13,8 @@ internal sealed record InstallOptions(bool StartWithWindows, bool DesktopShortcu
 /// Installs Uncbox like a normal Windows app, for the current user only (no admin rights):
 /// the app goes to %LOCALAPPDATA%\Programs\Uncbox, with a Start menu shortcut (and a desktop one if
 /// asked), an entry in Settings > Apps, and optionally a start-with-Windows entry (see Autostart).
+/// A copy that carries Uncbox's own streaming engine also gets a second Start menu shortcut,
+/// "Uncbox (lighter streaming)", which starts the same app with --engine=native (StreamEngine.cs).
 ///
 /// Uncbox.exe offers this when it is run from somewhere else (Downloads, an unzipped folder).
 /// Either it is the Setup exe (npm run package embeds the node\ and app\ folders in it as a zip,
@@ -38,6 +40,14 @@ internal static class Installer
 
     private static string InstalledExe => Path.Combine(InstallDir, "Uncbox.exe");
     private static string StartMenuLink => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Programs), "Uncbox.lnk");
+    /// <summary>The second way to launch: the same app, streaming with Uncbox's own engine.</summary>
+    internal const string LighterStreamingName = "Uncbox (lighter streaming)";
+    internal const string LighterStreamingArguments = "--engine=native";
+    private static string LighterStreamingLink => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Programs), LighterStreamingName + ".lnk");
+
+    /// <summary>Where a packaged copy keeps the engine (npm run package puts it beside the server).</summary>
+    private static string EngineIn(string folder) => Path.Combine(folder, "app", "server", "uncbox-stream.exe");
+
     private static string DesktopLink => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory), "Uncbox.lnk");
 
     /// <summary>This build's version (package.json's, stamped in by npm run package).</summary>
@@ -118,6 +128,9 @@ internal static class Installer
         DeleteTree(old);
 
         CreateShortcut(StartMenuLink, InstalledExe);
+        // Only when there is an engine to use: without one the shortcut would just stream with FFmpeg, as the first does.
+        if (File.Exists(EngineIn(dest))) CreateShortcut(LighterStreamingLink, InstalledExe, LighterStreamingArguments, "Uncbox, streaming with its own lighter engine");
+        else TryDelete(LighterStreamingLink);
         if (options.DesktopShortcut) CreateShortcut(DesktopLink, InstalledExe);
         Register(dest);
         Autostart.Set(options.StartWithWindows, InstalledExe);
@@ -222,7 +235,7 @@ internal static class Installer
         if (dialog.ShowDialog() != DialogResult.OK || !EnsureNotRunning(InstallDir, "remove")) return;
 
         // Only the entries that are Uncbox's own: a shortcut someone repointed is theirs.
-        foreach (string link in new[] { StartMenuLink, DesktopLink })
+        foreach (string link in new[] { StartMenuLink, LighterStreamingLink, DesktopLink })
         {
             if (File.Exists(link) && ShortcutTarget(link) is { } target && SamePath(target, InstalledExe)) TryDelete(link);
         }
@@ -331,16 +344,17 @@ internal static class Installer
     }
 
     /// <summary>A .lnk, made with Windows' own scripting object (late-bound, so no extra references).</summary>
-    private static void CreateShortcut(string link, string target)
+    private static void CreateShortcut(string link, string target, string arguments = "", string description = "Uncbox")
     {
         dynamic shell = Activator.CreateInstance(Type.GetTypeFromProgID("WScript.Shell")!)!;
         try
         {
             dynamic shortcut = shell.CreateShortcut(link);
             shortcut.TargetPath = target;
+            shortcut.Arguments = arguments;
             shortcut.WorkingDirectory = Path.GetDirectoryName(target);
             shortcut.IconLocation = target + ",0";
-            shortcut.Description = "Uncbox";
+            shortcut.Description = description;
             shortcut.Save();
             Marshal.FinalReleaseComObject(shortcut);
         }

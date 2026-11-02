@@ -18,6 +18,7 @@ import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statS
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { engineExe, ensureEngine } from './engine.mjs';
 
 // The current LTS line (24). Exact on purpose, so every package ships the same Node; bump it by
 // hand when a new patch is out. The zip is checked against nodejs.org's own checksum file.
@@ -148,10 +149,13 @@ cpSync(path.join(root, 'server'), path.join(out, 'app', 'server'), {
   recursive: true,
   filter: (src) => !/\.test\.mjs$/.test(src),
 });
-// Uncbox's own streaming engine, if it has been built (npm run engine): the server looks for it next to itself.
-const engineExe = path.join(root, 'engine', 'target', 'release', 'uncbox-stream.exe');
+// Uncbox's own streaming engine, built now if it can be (npm run engine does the same): the server
+// looks for it next to itself (app\server\uncbox-stream.exe, see findEngine in server/stream.mjs),
+// and the installer adds the "lighter streaming" Start menu shortcut only when it is there.
+const engine = ensureEngine();
+if (engine.message) console.log(`Note: ${engine.message}`);
 if (existsSync(engineExe)) cpSync(engineExe, path.join(out, 'app', 'server', 'uncbox-stream.exe'));
-else console.log('Note: engine/target/release/uncbox-stream.exe isn't built (npm run engine), so this copy streams with FFmpeg.');
+else console.log('Note: this copy has no streaming engine of its own, so it streams with FFmpeg only.');
 cpSync(path.join(root, 'integrations', 'wow', 'install.mjs'), path.join(out, 'app', 'integrations', 'wow', 'install.mjs'));
 cpSync(path.join(root, 'integrations', 'wow', 'addon'), path.join(out, 'app', 'integrations', 'wow', 'addon'), { recursive: true });
 cpSync(path.join(root, 'dist'), path.join(out, 'app', 'dist'), { recursive: true });
