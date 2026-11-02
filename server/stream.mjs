@@ -77,21 +77,23 @@ export const gpuScale = (height) => `scale_d3d11=width=${evenWidth(height)}:heig
 /**
  * Scaling with CUDA on an NVIDIA card. FFmpeg can't hand ddagrab's frames to CUDA directly, so each
  * one is copied out and back in once, but the scaling itself (Lanczos, sharper than the processor's)
- * runs on the card. Measured on an RTX 5090 laptop at 1440p to 1080p60: about a quarter of the
- * processor time of scaling on the processor, at the full frame rate.
+ * runs on the card and NVENC takes the result as it is. Measured on an RTX 5090 laptop at 1440p to
+ * 1080p60: about 0.4 of the processor time of scaling on the processor.
  */
-export const cudaScale = (height) => `hwdownload,format=bgra,format=bgr0,hwupload_cuda,scale_cuda=w=${evenWidth(height)}:h=${height}:interp_algo=lanczos`;
+export const cudaScale = (height) => `hwdownload,format=bgra,hwupload_cuda,scale_cuda=w=${evenWidth(height)}:h=${height}:interp_algo=lanczos`;
 
 /** Scaling on an AMD card with AMF, frames never leaving it. */
 export const amfScale = (height) => `vpp_amf=w=${evenWidth(height)}:h=${height}:format=nv12`;
 
-/** Frames handed to Intel Quick Sync, which takes its own kind (mapped, not copied). */
+/** Frames handed to Intel Quick Sync, which takes its own kind (mapped, not copied). Only works when the screen is on the Intel chip. */
 const QSV_MAP = 'hwmap=derive_device=qsv,format=qsv';
+/** Frames copied off the card as NV12, for an encoder that can't take the card's own (Quick Sync when the screen is on another card). */
+const DOWNLOAD = 'hwdownload,format=bgra,format=nv12';
 /** Scaling on an Intel graphics chip with Quick Sync. */
 export const qsvScale = (height) => `${QSV_MAP},scale_qsv=w=${evenWidth(height)}:h=${height}:format=nv12`;
 
-/** Scaling on the processor, the last resort: the frames come off the card, are scaled ("area" is the cheapest that still looks right for shrinking) and go back as NV12. */
-export const cpuScale = (height) => `hwdownload,format=bgra,scale=-2:${height}:flags=area,format=nv12`;
+/** Scaling on the processor, the last resort: the frames come off the card, are scaled and handed over as NV12, which every encoder takes. */
+export const cpuScale = (height) => `hwdownload,format=bgra,scale=-2:${height},format=nv12`;
 
 /** Each way of scaling, by name, and the FFmpeg filter it needs to be there. */
 export const SCALERS = {
@@ -106,7 +108,8 @@ export const SCALERS = {
  * The graphics card encoders Uncbox streams with, in the order the check tries them, and the ways
  * of scaling each can take, quickest first ('cpu' always works). All of them get CBR at the chosen
  * bitrate with a buffer of two seconds' worth and a keyframe every two seconds, which is what
- * Twitch asks for.
+ * Twitch asks for. `quality` is what the check tries first; `safe` is for an older card or driver
+ * that refuses part of it (B-frames as references need an RTX 20 or newer, for one).
  */
 export const ENCODERS = [
   {
@@ -114,39 +117,49 @@ export const ENCODERS = [
     codec: 'h264_nvenc',
     label: 'NVIDIA NVENC',
     scalers: ['d3d11', 'cuda', 'cpu'],
-    // The quality end of NVENC: a quarter-size first pass, adaptive quantisation in space and time
-    // (detail goes where eyes look), 20 frames of look-ahead and B-frames used as references. On an
-    // RTX 40 or 50 card this keeps the encoder under 10% busy at 1080p60.
-    args: ['-preset', 'p6', '-tune', 'hq', '-multipass', 'qres', '-rc', 'cbr', '-spatial-aq', '1', '-temporal-aq', '1', '-rc-lookahead', '20', '-bf', '2', '-b_ref_mode', 'middle'],
+    // The quality end of NVENC: a quarter-size first pass, adaptive quantisation over time, 10
+    // frames of look-ahead and B-frames used as references. Scored with VMAF on SMITE footage at
+    // 6000k this beat the old p5/hq by about 1.5 on average and on the worst frames; adaptive
+    // quantisation in space was left out, as it made the worst frames worse. The look-ahead adds
+    // about 60 ms; the encoder stays around 5-12% busy on an RTX 5090 at 1080p60.
+    quality: ['-preset', 'p6', '-tune', 'hq', '-multipass', 'qres', '-rc', 'cbr', '-temporal-aq', '1', '-rc-lookahead', '10', '-bf', '2', '-b_ref_mode', 'middle'],
+    safe: ['-preset', 'p5', '-tune', 'hq', '-rc', 'cbr', '-bf', '2'],
   },
   {
     id: 'amf',
     codec: 'h264_amf',
     label: 'AMD AMF',
     scalers: ['amf', 'd3d11', 'cpu'],
-    args: ['-usage', 'transcoding', '-quality', 'quality', '-rc', 'cbr', '-enforce_hrd', '1', '-vbaq', '1', '-preanalysis', '1'],
+    quality: ['-usage', 'transcoding', '-quality', 'quality', '-rc', 'cbr', '-enforce_hrd', '1', '-vbaq', '1', '-preanalysis', '1'],
+    safe: ['-usage', 'transcoding', '-rc', 'cbr'],
   },
   {
     id: 'qsv',
     codec: 'h264_qsv',
     label: 'Intel Quick Sync',
     scalers: ['qsv', 'cpu'],
-    args: ['-preset', 'slower', '-bf', '2'],
+    quality: ['-preset', 'slower', '-bf', '2'],
+    safe: ['-preset', 'medium'],
   },
 ];
 
 export const encoderById = (id) => ENCODERS.find((e) => e.id === id) ?? ENCODERS[0];
 
-/** The video encoder's arguments for a bitrate and frame rate. */
-export function encoderArgs(id, kbps, fps) {
+/** The video encoder's arguments for a bitrate and frame rate, with its `quality` or `safe` settings. */
+export function encoderArgs(id, kbps, fps, tuning = 'quality') {
   const e = encoderById(id);
-  return ['-c:v', e.codec, ...e.args, '-b:v', `${kbps}k`, '-maxrate', `${kbps}k`, '-bufsize', `${kbps * 2}k`, '-g', String(fps * 2), '-profile:v', 'high'];
+  return ['-c:v', e.codec, ...(tuning === 'safe' ? e.safe : e.quality), '-b:v', `${kbps}k`, '-maxrate', `${kbps}k`, '-bufsize', `${kbps * 2}k`, '-g', String(fps * 2), '-profile:v', 'high'];
 }
 
-/** The filters after ddagrab: the scaling, or for Quick Sync at the screen's own size just the hand-over. */
+/**
+ * The filters after ddagrab: the scaling, or at the screen's own size nothing (NVENC and AMF take
+ * the card's frames as they are), except that Quick Sync needs them mapped to it when the check saw
+ * that work, and copied off the card when it didn't (the screen is on another card).
+ */
 export function videoChain({ encoder = 'nvenc', scaler = 'cpu', height, scale }) {
   if (scale) return [(SCALERS[scaler] ?? SCALERS.cpu).chain(height)];
-  return encoder === 'qsv' ? [QSV_MAP] : [];
+  if (encoder !== 'qsv') return [];
+  return [scaler === 'qsv' ? QSV_MAP : DOWNLOAD];
 }
 
 /**
@@ -154,7 +167,7 @@ export function videoChain({ encoder = 'nvenc', scaler = 'cpu', height, scale })
  * `screenHeight` is the screen's own height when known, so a screen already at the chosen height
  * isn't scaled at all.
  */
-export function buildFfmpegArgs({ settings, key, test = false, audioPipe = '', encoder = 'nvenc', scaler = 'cpu', screenHeight = 0 }) {
+export function buildFfmpegArgs({ settings, key, test = false, audioPipe = '', encoder = 'nvenc', tuning = 'quality', scaler = 'cpu', screenHeight = 0 }) {
   const { screen, fps, height, kbps } = clampSettings(settings);
   const scale = height > 0 && height !== screenHeight;
   const chain = videoChain({ encoder, scaler, height, scale });
@@ -165,12 +178,15 @@ export function buildFfmpegArgs({ settings, key, test = false, audioPipe = '', e
     ...['-hide_banner', '-loglevel', 'warning', '-nostats', '-progress', 'pipe:1'],
     // The capture alone in its input, and the scaling as the output's filter: FFmpeg runs those on
     // separate threads, so a slow copy off the card can't hold up the capture. Scaling inside the
-    // capture's own graph lost about 4 frames a second at 1080p60 (56 fps instead of 60). The queue
-    // between them is short, since every frame waiting in it is a screen-sized texture.
+    // capture's own graph lost 3 to 5 frames a second at 1080p60. The queue between them is kept
+    // short, since every frame waiting in it is a screen-sized texture.
     ...['-thread_queue_size', '8', '-f', 'lavfi', '-i', `ddagrab=output_idx=${screen}:framerate=${fps}:draw_mouse=1`],
     ...audio,
     ...(chain.length ? ['-vf', chain.join(',')] : []),
-    ...encoderArgs(encoder, kbps, fps),
+    // A steady frame rate out: ddagrab still misses about one frame a second, which this fills by
+    // repeating one, so viewers get exactly 60 and keyframes land exactly two seconds apart.
+    ...['-fps_mode', 'cfr', '-r', String(fps)],
+    ...encoderArgs(encoder, kbps, fps, tuning),
     ...['-af', 'aresample=async=1000', '-c:a', 'aac', '-b:a', '160k', '-ar', '48000'],
     ...['-map', '0:v', '-map', '1:a'],
     ...['-flvflags', 'no_duration_filesize', '-f', 'flv', ingestUrl(key, test)],
@@ -242,9 +258,10 @@ const NO_ENCODER = 'Uncbox streams with the encoder on your graphics card (NVIDI
 
 /**
  * The tools as far as anyone knows before a check. `encoder` is the id of the one that works (see
- * ENCODERS), '' when none does, null before the check; `scaler` is how the picture gets scaled.
+ * ENCODERS), '' when none does, null before the check; `tuning` is whether it took its quality
+ * settings or needed the safe ones; `scaler` is how the picture gets scaled.
  */
-const unchecked = () => ({ ffmpeg: false, version: '', encoder: null, scaler: null, ddagrab: null });
+const unchecked = () => ({ ffmpeg: false, version: '', encoder: null, tuning: null, scaler: null, ddagrab: null });
 
 /** FFmpeg ahead of other programs, so a game that takes every core can't make the stream stutter (OBS does the same). */
 const raiseAboveNormal = (pid) => os.setPriority(pid, os.constants.priority.PRIORITY_ABOVE_NORMAL);
@@ -271,7 +288,7 @@ export function createStream({
 }) {
   const keyFile = path.join(dataDir, 'stream.json');
 
-  let saved = null; // { key, source }, read from the file the first time it is needed
+  let saved = null; // { key, source, forgotten }, read from the file the first time it is needed
   let reading = null; // that first read, shared by everyone who asks while it runs
   let tools = unchecked();
   let ffmpegPath = '';
@@ -298,14 +315,16 @@ export function createStream({
     if (saved) return saved;
     reading ??= readJsonSafe(keyFile, {}).then((file) => {
       const key = typeof file?.key === 'string' && KEY_SHAPE.test(file.key) ? file.key : '';
-      saved ??= { key, source: key && ['pasted', 'twitch'].includes(file.source) ? file.source : key ? 'pasted' : null };
+      const source = key && ['pasted', 'twitch'].includes(file.source) ? file.source : key ? 'pasted' : null;
+      saved ??= { key, source, forgotten: !key && file?.forgotten === true };
       return saved;
     });
     return reading;
   }
 
-  async function snapshot() {
-    const { key, source } = await loadKey();
+  /** The status as it is right now; the key must have been loaded. */
+  function current() {
+    const { key, source } = saved;
     return {
       state,
       test,
@@ -317,11 +336,19 @@ export function createStream({
     };
   }
 
+  async function snapshot() {
+    await loadKey();
+    return current();
+  }
+
   async function emit(force = true) {
     if (closing) return;
     if (!force && now() - lastSent < emitMs) return;
     lastSent = now();
-    broadcastEvent('stream', await snapshot());
+    // Read after the wait, in the same breath as it is sent: built before and sent after, a status
+    // could go out after a newer one and leave the page showing, say, no key just after one was saved.
+    await loadKey();
+    if (!closing) broadcastEvent('stream', current());
   }
 
   // ---- looking for FFmpeg ----
@@ -357,13 +384,19 @@ export function createStream({
     });
   }
 
-  /** The first encoder in ENCODERS this FFmpeg has and this PC's card can run, or null. */
+  /**
+   * The first encoder in ENCODERS this FFmpeg has and this PC's card can run, and whether it takes
+   * the quality settings the stream will use or needs the safe ones; null when there is none.
+   */
   async function findEncoder(encoders) {
+    const encodes = (args) => run(ffmpegPath, ['-hide_banner', '-f', 'lavfi', '-i', 'color=black:s=256x256:r=30', ...args, '-f', 'null', '-']).then((r) => r.code === 0);
     for (const e of ENCODERS) {
       if (!listsName(encoders, e.codec)) continue;
       // Being compiled in doesn't mean there is a card to use it: encode one frame.
-      const probe = await run(ffmpegPath, ['-hide_banner', '-f', 'lavfi', '-i', 'color=black:s=256x256', '-frames:v', '1', '-c:v', e.codec, '-f', 'null', '-']);
-      if (probe.code === 0) return e;
+      if (!(await encodes(['-frames:v', '1', '-c:v', e.codec]))) continue;
+      // Then a few with the stream's own settings, which an older card can refuse in part.
+      const tuning = (await encodes(['-frames:v', '5', ...encoderArgs(e.id, 2500, 30, 'quality')])) ? 'quality' : 'safe';
+      return { encoder: e, tuning };
     }
     return null;
   }
@@ -373,12 +406,12 @@ export function createStream({
    * captured frames with the stream's own encoder settings, since a filter being listed doesn't
    * mean it works with this driver (scale_d3d11 doesn't, with FFmpeg 8.1). 'cpu' always does.
    */
-  async function findScaler(encoder, filters) {
+  async function findScaler(encoder, tuning, filters) {
     for (const name of encoder.scalers) {
       if (name === 'cpu') break;
       if (!listsName(filters, SCALERS[name].filter)) continue;
       const video = `ddagrab=output_idx=0:framerate=30,${SCALERS[name].chain(720)}`;
-      const probe = await run(ffmpegPath, ['-hide_banner', '-f', 'lavfi', '-i', video, '-frames:v', '2', ...encoderArgs(encoder.id, 2500, 30), '-f', 'null', '-']);
+      const probe = await run(ffmpegPath, ['-hide_banner', '-f', 'lavfi', '-i', video, '-frames:v', '2', ...encoderArgs(encoder.id, 2500, 30, tuning), '-f', 'null', '-']);
       if (probe.code === 0) return name;
     }
     return 'cpu';
@@ -391,13 +424,14 @@ export function createStream({
       return;
     }
     const [version, encoders, filters] = await Promise.all([run(ffmpegPath, ['-version']), run(ffmpegPath, ['-hide_banner', '-encoders']), run(ffmpegPath, ['-hide_banner', '-filters'])]);
-    const encoder = await findEncoder(encoders.out);
+    const found = await findEncoder(encoders.out);
     const ddagrab = listsName(filters.out, 'ddagrab');
     tools = {
       ffmpeg: true,
       version: /ffmpeg version (\S+)/.exec(version.out)?.[1] ?? '',
-      encoder: encoder?.id ?? '',
-      scaler: encoder && ddagrab ? await findScaler(encoder, filters.out) : null,
+      encoder: found?.encoder.id ?? '',
+      tuning: found?.tuning ?? null,
+      scaler: found && ddagrab ? await findScaler(found.encoder, found.tuning, filters.out) : null,
       ddagrab,
     };
   }
@@ -498,21 +532,23 @@ export function createStream({
 
   async function start(body) {
     if (child || launching || ['starting', 'live', 'stopping'].includes(state)) throw fail(409, 'A stream is already running.');
-    await keyFromSignIn();
-    const { key } = await loadKey();
-    if (!key) throw fail(400, 'Add your Twitch stream key first.');
     const audioPipe = body?.audioPipe === undefined || body.audioPipe === null || body.audioPipe === '' ? '' : String(body.audioPipe);
     if (audioPipe && !PIPE_SHAPE.test(audioPipe)) throw fail(400, 'That isn’t a sound pipe made by the Uncbox app.');
     const settings = clampSettings(body?.settings);
+    // Taken before anything is waited on (the key from Twitch, the check), so a second Go live in
+    // the meantime is turned away instead of starting a second FFmpeg nobody could stop.
     launching = true;
     try {
+      await takeSignInKey();
+      const { key } = await loadKey();
+      if (!key) throw fail(400, 'Add your Twitch stream key first.');
       await check();
       if (!tools.ffmpeg) throw fail(400, 'FFmpeg isn’t installed. Install it from the Downloads widget.');
       if (tools.ddagrab === false) throw fail(400, 'This FFmpeg can’t capture the screen. Install the latest FFmpeg from the Downloads widget.');
       if (!tools.encoder) throw fail(400, NO_ENCODER);
       const screenHeight = settings.height > 0 ? await screenHeightOf(settings.screen) : 0;
       test = Boolean(body?.test);
-      launch({ args: buildFfmpegArgs({ settings, key, test, audioPipe, encoder: tools.encoder, scaler: tools.scaler ?? 'cpu', screenHeight }), key });
+      launch({ args: buildFfmpegArgs({ settings, key, test, audioPipe, encoder: tools.encoder, tuning: tools.tuning ?? 'quality', scaler: tools.scaler ?? 'cpu', screenHeight }), key });
     } finally {
       launching = false;
     }
@@ -548,10 +584,11 @@ export function createStream({
 
   // ---- the key ----
 
+  /** Saves a key, or forgets it ('' ). A forgotten key is remembered as such, so the sign-in doesn't hand it straight back. */
   async function saveKey(key, source) {
-    saved = { key, source: key ? source : null };
+    saved = { key, source: key ? source : null, forgotten: !key };
     if (key) await writeJsonAtomic(keyFile, { key, source }, { mode: 0o600 });
-    else await writeJsonAtomic(keyFile, {}, { mode: 0o600 });
+    else await writeJsonAtomic(keyFile, { forgotten: true }, { mode: 0o600 });
     await emit();
   }
 
@@ -573,14 +610,17 @@ export function createStream({
 
   /**
    * With no key yet, takes it from the Twitch sign-in when that can read it, so signing in to Twitch
-   * is all the setup streaming needs. Quietly does nothing otherwise (not signed in, a sign-in from
+   * is all the setup streaming needs. Never after the key was forgotten on purpose (pasting one or
+   * Get it from Twitch undoes that). Quietly does nothing otherwise (not signed in, a sign-in from
    * before the key permission, Twitch not answering): the Streaming section still offers both ways.
    */
-  async function keyFromSignIn() {
-    if ((await loadKey()).key || busy()) return;
+  async function takeSignInKey() {
+    const { key, forgotten } = await loadKey();
+    if (key || forgotten) return;
     try {
-      const key = await twitch.streamKey();
-      if (KEY_SHAPE.test(key) && !(await loadKey()).key) await saveKey(key, 'twitch');
+      const fresh = await twitch.streamKey();
+      const now = await loadKey();
+      if (KEY_SHAPE.test(fresh) && !now.key && !now.forgotten) await saveKey(fresh, 'twitch');
     } catch {
       // Left to the buttons.
     }
@@ -597,8 +637,11 @@ export function createStream({
       if (route === '/key') await setKey((await readJson(req)).key);
       else if (route === '/key/twitch') await keyFromTwitch();
       else if (route === '/check') {
-        // The page checks when the Streaming section opens: a good moment to pick up the key too.
-        await Promise.all([check({ force: (await readJson(req)).force === true }), keyFromSignIn()]);
+        // The page checks whenever its streaming controls are there (Stream with: Uncbox): a good
+        // moment to pick up the key too. Not waited for, so a slow Twitch can't hold up the check;
+        // the page hears about a key when it is saved.
+        if (!busy()) void takeSignInKey();
+        await check({ force: (await readJson(req)).force === true });
       }
       else if (route === '/start') await start(await readJson(req));
       else if (route === '/stop') stop();
