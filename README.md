@@ -99,9 +99,9 @@ Uncbox is video only. Capture game audio in OBS as usual.
 
 ### Or stream straight from Uncbox
 
-No OBS needed: in the sidebar's **Streaming** section pick **Stream with: Uncbox**, add your Twitch
-stream key, and press **Go live**. Uncbox captures one screen, encodes it on your NVIDIA graphics
-card and sends it to Twitch, with your desktop sound and mic when you run the Uncbox app. See
+No OBS needed and nothing to set up: sign in to Twitch in a Twitch widget and press **Go live**.
+Uncbox reads your stream key from the sign-in, captures one screen, encodes it on your graphics
+card (NVIDIA, AMD or Intel, whichever you have) and sends it to Twitch, with your desktop sound and mic when you run the Uncbox app. See
 [Streaming with Uncbox](docs/streaming-with-uncbox.md).
 
 ## Guide
