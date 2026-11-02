@@ -212,8 +212,8 @@ frame ddagrab misses, so keyframes land exactly 2 s apart. Scaling moved to the 
 (Lanczos): 27-43% of a core instead of 48-106%. The check picks the encoder (NVIDIA NVENC, AMD
 AMF, Intel Quick Sync), tries the stream's own settings and falls back to safe ones on an older
 card, and keeps the quickest scaling it has seen work. NVENC: p6, quarter-size first pass,
-temporal AQ, 10 frames of look-ahead, B-frames as references (VMAF up about 1.5 on SMITE footage,
-better worst frames). FFmpeg runs above normal priority. No setup: Uncbox is the default way to
+temporal AQ, 20 frames of look-ahead, B-frames as references (VMAF 92.6-93.3 against 90.9-91.9 on
+SMITE footage, better worst frames, about 0.27 s more delay). FFmpeg runs above normal priority. No setup: Uncbox is the default way to
 stream, and a Twitch sign-in hands over the stream key (a forgotten key stays forgotten). Fixed on
 the way: a key file race, a double Go live starting two FFmpegs, status events arriving out of
 order, and the app serving a page older than its source. Animated backgrounds draw at 30 fps

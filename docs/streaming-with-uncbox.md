@@ -72,12 +72,12 @@ receiver for 25 seconds at a time (ranges are several runs, quiet and busy deskt
 | Processor time | 48–106% of one core | 27–43% of one core |
 | Scaling | on the processor (bicubic) | on the graphics card (CUDA, Lanczos) |
 | Video encoder busy | 7–11% | 4–12% |
-| Picture (VMAF, SMITE footage) | 90.9–91.9 | about 92.6–93.3, and better on the worst frames |
+| Picture (VMAF, SMITE footage) | 90.9–91.9 | 92.6–93.3, and better on the worst frames |
 
 The picture is scaled with CUDA on NVIDIA cards, AMF on AMD and Quick Sync on Intel, falling back
 to the processor only where none of those work. NVENC runs at its quality end (a quarter-size
-first pass, adaptive quantisation over time, B-frames as references and 10 frames of look-ahead,
-which adds well under a tenth of a second to the delay viewers already have). If a card refuses
+first pass, adaptive quantisation over time, B-frames as references and 20 frames of look-ahead,
+which adds about a quarter of a second to the few seconds viewers are behind anyway). If a card refuses
 any of that, the check finds out and Uncbox streams with plainer settings instead. AMD and Intel
 cards use the same approach but haven't been measured yet.
 

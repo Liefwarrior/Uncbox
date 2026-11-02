@@ -91,9 +91,9 @@ describe('buildFfmpegArgs', () => {
     expect(valueAfter(args, '-tune')).toBe('hq');
     expect(valueAfter(args, '-multipass')).toBe('qres');
     expect(valueAfter(args, '-temporal-aq')).toBe('1');
-    // Spatial AQ made the worst frames worse in VMAF tests, and a longer look-ahead only added delay.
+    // Spatial AQ made the worst frames worse in VMAF tests; look-ahead 20 scored best.
     expect(args).not.toContain('-spatial-aq');
-    expect(valueAfter(args, '-rc-lookahead')).toBe('10');
+    expect(valueAfter(args, '-rc-lookahead')).toBe('20');
     expect(valueAfter(args, '-b_ref_mode')).toBe('middle');
     expect(valueAfter(args, '-rc')).toBe('cbr');
     expect(valueAfter(args, '-b:v')).toBe('6000k');

@@ -26,6 +26,8 @@ export interface StreamTools {
   version: string;
   /** The encoder that works here; '' when none does; null until the check has run (or when there is no FFmpeg to ask). */
   encoder: StreamEncoder | '' | null;
+  /** Whether the encoder took its quality settings or needed plainer ones (an older card). */
+  tuning: 'quality' | 'safe' | null;
   scaler: StreamScaler | null;
   ddagrab: boolean | null;
 }
@@ -48,7 +50,7 @@ export const IDLE: StreamStatus = {
   stats: null,
   error: '',
   key: { set: false, hint: '', source: null },
-  tools: { ffmpeg: false, version: '', encoder: null, scaler: null, ddagrab: null },
+  tools: { ffmpeg: false, version: '', encoder: null, tuning: null, scaler: null, ddagrab: null },
 };
 
 const STATES: readonly string[] = ['off', 'starting', 'live', 'stopping', 'dropped', 'error'];

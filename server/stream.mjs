@@ -117,12 +117,14 @@ export const ENCODERS = [
     codec: 'h264_nvenc',
     label: 'NVIDIA NVENC',
     scalers: ['d3d11', 'cuda', 'cpu'],
-    // The quality end of NVENC: a quarter-size first pass, adaptive quantisation over time, 10
-    // frames of look-ahead and B-frames used as references. Scored with VMAF on SMITE footage at
-    // 6000k this beat the old p5/hq by about 1.5 on average and on the worst frames; adaptive
-    // quantisation in space was left out, as it made the worst frames worse. The look-ahead adds
-    // about 60 ms; the encoder stays around 5-12% busy on an RTX 5090 at 1080p60.
-    quality: ['-preset', 'p6', '-tune', 'hq', '-multipass', 'qres', '-rc', 'cbr', '-temporal-aq', '1', '-rc-lookahead', '10', '-bf', '2', '-b_ref_mode', 'middle'],
+    // The quality end of NVENC: a quarter-size first pass, adaptive quantisation over time, 20
+    // frames of look-ahead and B-frames used as references. Scored with VMAF on two SMITE clips at
+    // 6000k: 92.6-93.3 against the old p5/hq's 90.9-91.9, and better on the worst 5% and 1% of
+    // frames. Adaptive quantisation in space was left out, as it made the worst frames worse.
+    // Look-ahead 10 scored lower (92.4-92.9, worst 1% about even); 20 adds about 0.27 s of delay
+    // over the old settings, which Twitch viewers, seconds behind anyway, never notice. The encoder
+    // stays around 5-17% busy on an RTX 5090 at 1080p60.
+    quality: ['-preset', 'p6', '-tune', 'hq', '-multipass', 'qres', '-rc', 'cbr', '-temporal-aq', '1', '-rc-lookahead', '20', '-bf', '2', '-b_ref_mode', 'middle'],
     safe: ['-preset', 'p5', '-tune', 'hq', '-rc', 'cbr', '-bf', '2'],
   },
   {

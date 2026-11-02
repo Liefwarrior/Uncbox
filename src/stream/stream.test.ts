@@ -61,7 +61,7 @@ describe('the status line', () => {
 });
 
 describe('what the check found', () => {
-  const tools = { ffmpeg: true, version: '8.1.2', encoder: 'nvenc', scaler: 'cuda', ddagrab: true } as const;
+  const tools = { ffmpeg: true, version: '8.1.2', encoder: 'nvenc', tuning: 'quality', scaler: 'cuda', ddagrab: true } as const;
 
   it('waits for the answer before saying anything is missing', () => {
     expect(toolsLine(IDLE.tools, false).state).toBe('checking');
