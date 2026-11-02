@@ -8,13 +8,18 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
+  amfScale,
   buildFfmpegArgs,
   clampSettings,
   cpuScale,
   createProgressParser,
   createStream,
+  cudaScale,
+  encoderArgs,
+  ENCODERS,
   gpuScale,
   ingestUrl,
+  qsvScale,
   listsName,
   parseProgress,
   parseScreenSize,
@@ -82,8 +87,14 @@ describe('buildFfmpegArgs', () => {
     expect(args).toContain('-nostats');
     expect(args[args.indexOf('-i') + 1]).toBe('ddagrab=output_idx=0:framerate=60:draw_mouse=1');
     expect(valueAfter(args, '-c:v')).toBe('h264_nvenc');
-    expect(valueAfter(args, '-preset')).toBe('p5');
+    expect(valueAfter(args, '-preset')).toBe('p6');
     expect(valueAfter(args, '-tune')).toBe('hq');
+    expect(valueAfter(args, '-multipass')).toBe('qres');
+    expect(valueAfter(args, '-temporal-aq')).toBe('1');
+    // Spatial AQ made the worst frames worse in VMAF tests; look-ahead 20 scored best.
+    expect(args).not.toContain('-spatial-aq');
+    expect(valueAfter(args, '-rc-lookahead')).toBe('20');
+    expect(valueAfter(args, '-b_ref_mode')).toBe('middle');
     expect(valueAfter(args, '-rc')).toBe('cbr');
     expect(valueAfter(args, '-b:v')).toBe('6000k');
     expect(valueAfter(args, '-maxrate')).toBe('6000k');
@@ -106,7 +117,7 @@ describe('buildFfmpegArgs', () => {
 
   it('reads the sound from the pipe as the contract says', () => {
     const args = buildFfmpegArgs(base);
-    const at = args.indexOf('-thread_queue_size');
+    const at = args.lastIndexOf('-thread_queue_size');
     expect(args.slice(at, at + 10)).toEqual(['-thread_queue_size', '1024', '-f', 'f32le', '-ar', '48000', '-ac', '2', '-i', PIPE]);
     expect(args.join(' ')).not.toContain('anullsrc');
   });
@@ -127,31 +138,89 @@ describe('buildFfmpegArgs', () => {
 
   it('clamps settings that came from outside', () => {
     const args = buildFfmpegArgs({ ...base, settings: { screen: 40, fps: 240, height: 7, kbps: 1 } });
-    expect(args[args.indexOf('-i') + 1]).toBe('ddagrab=output_idx=7:framerate=60:draw_mouse=1,' + cpuScale(1080));
+    expect(args[args.indexOf('-i') + 1]).toBe('ddagrab=output_idx=7:framerate=60:draw_mouse=1');
+    expect(valueAfter(args, '-vf')).toBe(cpuScale(1080));
     expect(valueAfter(args, '-b:v')).toBe('2500k');
   });
 
+  it('sends a steady frame rate, so viewers get exactly 60 and keyframes land exactly two seconds apart', () => {
+    const args = buildFfmpegArgs(base);
+    expect(valueAfter(args, '-fps_mode')).toBe('cfr');
+    expect(valueAfter(args, '-r')).toBe('60');
+    expect(args.indexOf('-fps_mode')).toBeLessThan(args.indexOf('-c:v'));
+    expect(valueAfter(buildFfmpegArgs({ ...base, settings: { ...base.settings, fps: 30 } }), '-r')).toBe('30');
+  });
+
+  it('uses the safe encoder settings when the check found the card needs them', () => {
+    const args = buildFfmpegArgs({ ...base, tuning: 'safe' });
+    expect(valueAfter(args, '-preset')).toBe('p5');
+    expect(args).not.toContain('-b_ref_mode');
+    expect(valueAfter(args, '-b:v')).toBe('6000k');
+  });
+
+  it('keeps the capture alone in its input, with a short queue, so scaling can’t hold it up', () => {
+    const args = buildFfmpegArgs({ ...base, settings: { ...base.settings, height: 1080 }, screenHeight: 1440, scaler: 'cuda' });
+    const at = args.indexOf('-thread_queue_size');
+    expect(args.slice(at, at + 6)).toEqual(['-thread_queue_size', '8', '-f', 'lavfi', '-i', 'ddagrab=output_idx=0:framerate=60:draw_mouse=1']);
+    expect(args.indexOf('-vf')).toBeGreaterThan(args.lastIndexOf('-i'));
+  });
+
   it('does not scale at the screen’s own size, or when the height is "the screen’s"', () => {
-    const own = buildFfmpegArgs({ ...base, settings: { ...base.settings, height: 1080 }, screenHeight: 1080 });
-    expect(own[own.indexOf('-i') + 1]).not.toContain('scale');
-    expect(buildFfmpegArgs(base)[buildFfmpegArgs(base).indexOf('-i') + 1]).not.toContain('scale');
+    expect(buildFfmpegArgs({ ...base, settings: { ...base.settings, height: 1080 }, screenHeight: 1080 })).not.toContain('-vf');
+    expect(buildFfmpegArgs(base)).not.toContain('-vf');
   });
 
-  it('scales on the processor by default and hands NVENC NV12', () => {
+  it('scales on the processor when nothing quicker works, and hands the encoder NV12', () => {
     const args = buildFfmpegArgs({ ...base, settings: { ...base.settings, height: 720 }, screenHeight: 1440 });
-    const video = args[args.indexOf('-i') + 1];
-    expect(video).toBe('ddagrab=output_idx=0:framerate=60:draw_mouse=1,hwdownload,format=bgra,scale=-2:720,format=nv12');
+    expect(valueAfter(args, '-vf')).toBe('hwdownload,format=bgra,scale=-2:720,format=nv12');
   });
 
-  it('scales on the graphics card when that works', () => {
-    const args = buildFfmpegArgs({ ...base, settings: { ...base.settings, height: 720 }, screenHeight: 2160, scaler: 'gpu' });
-    expect(args[args.indexOf('-i') + 1]).toBe(`ddagrab=output_idx=0:framerate=60:draw_mouse=1,${gpuScale(720)}`);
+  it('scales with CUDA on an NVIDIA card when the check saw that work', () => {
+    const args = buildFfmpegArgs({ ...base, settings: { ...base.settings, height: 1080 }, screenHeight: 1440, scaler: 'cuda' });
+    expect(valueAfter(args, '-vf')).toBe(cudaScale(1080));
+    // No conversion on the processor in between: NVENC takes the scaled BGRA as it is.
+    expect(cudaScale(1080)).toBe('hwdownload,format=bgra,hwupload_cuda,scale_cuda=w=trunc(iw*1080/ih/2)*2:h=1080:interp_algo=lanczos');
+  });
+
+  it('scales with Direct3D when that works, frames never leaving the card', () => {
+    const args = buildFfmpegArgs({ ...base, settings: { ...base.settings, height: 720 }, screenHeight: 2160, scaler: 'd3d11' });
+    expect(valueAfter(args, '-vf')).toBe(gpuScale(720));
     expect(gpuScale(720)).toBe('scale_d3d11=width=trunc(iw*720/ih/2)*2:height=720:format=nv12');
   });
 
   it('scales when the screen’s height is not known', () => {
     const args = buildFfmpegArgs({ ...base, settings: { ...base.settings, height: 1080 } });
-    expect(args[args.indexOf('-i') + 1]).toContain('scale');
+    expect(valueAfter(args, '-vf')).toContain('scale');
+  });
+
+  it('streams with AMD’s encoder and scaler on an AMD card', () => {
+    const args = buildFfmpegArgs({ ...base, settings: { ...base.settings, height: 1080 }, screenHeight: 1440, encoder: 'amf', scaler: 'amf' });
+    expect(valueAfter(args, '-vf')).toBe(amfScale(1080));
+    expect(valueAfter(args, '-c:v')).toBe('h264_amf');
+    expect(valueAfter(args, '-rc')).toBe('cbr');
+    expect(valueAfter(args, '-quality')).toBe('quality');
+    expect(args).not.toContain('-tune');
+  });
+
+  it('hands frames to Intel Quick Sync even at the screen’s own size', () => {
+    const own = buildFfmpegArgs({ ...base, encoder: 'qsv', scaler: 'qsv' });
+    expect(valueAfter(own, '-vf')).toBe('hwmap=derive_device=qsv,format=qsv');
+    expect(valueAfter(own, '-c:v')).toBe('h264_qsv');
+    // When mapping didn't work (the screen is on another card), the frames are copied off instead.
+    expect(valueAfter(buildFfmpegArgs({ ...base, encoder: 'qsv', scaler: 'cpu' }), '-vf')).toBe('hwdownload,format=bgra,format=nv12');
+    const scaled = buildFfmpegArgs({ ...base, settings: { ...base.settings, height: 720 }, screenHeight: 1440, encoder: 'qsv', scaler: 'qsv' });
+    expect(valueAfter(scaled, '-vf')).toBe(qsvScale(720));
+  });
+
+  it('gives every encoder the same rate control: CBR, a two-second buffer and a keyframe every two seconds', () => {
+    for (const [id, tuning] of ENCODERS.flatMap((e) => [[e.id, 'quality'], [e.id, 'safe']])) {
+      const args = encoderArgs(id, 4500, 30, tuning);
+      expect(valueAfter(args, '-b:v'), id).toBe('4500k');
+      expect(valueAfter(args, '-maxrate'), id).toBe('4500k');
+      expect(valueAfter(args, '-bufsize'), id).toBe('9000k');
+      expect(valueAfter(args, '-g'), id).toBe('60');
+      expect(valueAfter(args, '-profile:v'), id).toBe('high');
+    }
   });
 
   it('adds the bandwidth test only for a test stream', () => {
@@ -246,11 +315,18 @@ describe('the audio pipe name', () => {
 /** What a program run through the fake spawn is. */
 const kindOf = (args) => (args.includes('-progress') ? 'stream' : args.includes('-version') ? 'version' : args.includes('-encoders') ? 'encoders' : args.includes('-filters') ? 'filters' : 'probe');
 
-function fakeFfmpeg({ nvenc = true, ddagrab = true, d3d11 = false, gpuWorks = false, screenHeight = 1080 } = {}) {
+/**
+ * `built` are the encoders compiled into this FFmpeg and `cards` the ones the PC can run (`safeOnly`
+ * of them refuse the quality settings, like an old card); `filters`
+ * are the scaling filters it lists and `scales` the ones that work on captured frames.
+ */
+function fakeFfmpeg({ built = ['nvenc', 'amf', 'qsv'], cards = ['nvenc'], safeOnly = [], ddagrab = true, filters = [], scales = [], screenHeight = 1080 } = {}) {
   const runs = [];
   const streams = [];
+  const codec = (id) => ENCODERS.find((e) => e.id === id).codec;
   const spawn = vi.fn((file, args) => {
     const proc = new EventEmitter();
+    proc.pid = 4321;
     proc.stdout = new EventEmitter();
     proc.stderr = new EventEmitter();
     proc.stdin = Object.assign(new EventEmitter(), { written: [], write: (text) => void proc.stdin.written.push(text) });
@@ -263,12 +339,18 @@ function fakeFfmpeg({ nvenc = true, ddagrab = true, d3d11 = false, gpuWorks = fa
     }
     queueMicrotask(() => {
       if (kind === 'version') proc.stdout.emit('data', 'ffmpeg version 8.1.2-full_build Copyright (c) 2000-2026\n');
-      if (kind === 'encoders') proc.stdout.emit('data', nvenc ? ' V....D h264_nvenc           NVIDIA NVENC H.264 encoder\n' : ' V....D libx264              x264\n');
-      if (kind === 'filters') proc.stdout.emit('data', [ddagrab && ' ... ddagrab           |->V       Grab Windows Desktop images', d3d11 && ' ... scale_d3d11        V->V       Scale video using Direct3D11'].filter(Boolean).join('\n') + '\n');
+      if (kind === 'encoders') proc.stdout.emit('data', [' V....D libx264              x264', ...built.map((id) => ` V....D ${codec(id)}           a graphics card's H.264 encoder`)].join('\n') + '\n');
+      if (kind === 'filters') {
+        const listed = [ddagrab && 'ddagrab', 'scale', 'hwdownload', ...filters].filter(Boolean);
+        proc.stdout.emit('data', listed.map((name) => ` ... ${name}           V->V       a filter`).join('\n') + '\n');
+      }
       let code = 0;
+      const line = args.join(' ');
       if (kind === 'probe') {
-        if (args.includes('h264_nvenc') && args.join(' ').includes('color=black')) code = nvenc ? 0 : 1;
-        else if (args.join(' ').includes('scale_d3d11')) code = gpuWorks ? 0 : 1;
+        const card = cards.find((id) => args.includes(codec(id)));
+        // The plain one-frame probe works on any card; the stream's quality settings not on an old one.
+        if (line.includes('color=black')) code = card && !(line.includes('-frames:v 5') && safeOnly.includes(card)) ? 0 : 1;
+        else if (line.includes('-frames:v 2')) code = scales.some((name) => line.includes(name)) ? 0 : 1;
         else proc.stderr.emit('data', `  Stream #0:0: Video: wrapped_avframe, bgra, ${Math.round((screenHeight * 16) / 9)}x${screenHeight} [SAR 1:1 DAR 16:9], 30 fps\n`);
       }
       proc.emit('close', code);
@@ -280,6 +362,10 @@ function fakeFfmpeg({ nvenc = true, ddagrab = true, d3d11 = false, gpuWorks = fa
 
 const PROGRESS = (frame) => `frame=${frame}\nfps=59.9\nbitrate=5876.3kbits/s\ndrop_frames=1\nspeed=1.0x\nprogress=continue\n`;
 const tick = () => new Promise((resolve) => setImmediate(resolve));
+/** Waits (two seconds at most) for something that happens without being awaited, like a file being written. */
+async function until(ok) {
+  for (let i = 0; i < 200 && !(await ok()); i++) await new Promise((resolve) => setTimeout(resolve, 10));
+}
 
 /** One request through the stream's handler (made by make() below, which wires up stream.call). */
 const call = (stream, method, pathname, body, local = true) => stream.call(method, pathname, body, local);
@@ -291,6 +377,7 @@ describe('the stream', () => {
   let timers;
   let ffmpeg;
   let twitch;
+  let priority;
 
   beforeEach(async () => {
     dir = await mkdtemp(path.join(os.tmpdir(), 'uncbox-stream-'));
@@ -298,7 +385,9 @@ describe('the stream', () => {
     clock = 1_000_000;
     timers = [];
     ffmpeg = fakeFfmpeg();
-    twitch = { streamKey: vi.fn(async () => KEY) };
+    // Not signed in to Twitch unless a test says so.
+    twitch = { streamKey: vi.fn(async () => Promise.reject(Object.assign(new Error('Sign in to Twitch first.'), { status: 401, code: 'not-signed-in' }))) };
+    priority = [];
   });
   afterEach(() => rm(dir, { recursive: true, force: true }));
 
@@ -314,6 +403,7 @@ describe('the stream', () => {
       twitch,
       spawn: ffmpeg.spawn,
       findFfmpeg: async () => 'C:\\Tools\\ffmpeg.exe',
+      raisePriority: (pid) => priority.push(pid),
       now: () => clock,
       setTimer: (fn, ms) => {
         const t = { fn, ms, cleared: false };
@@ -346,7 +436,7 @@ describe('the stream', () => {
       stats: null,
       error: '',
       key: { set: false, hint: '', source: null },
-      tools: { ffmpeg: false, version: '', nvenc: null, ddagrab: null },
+      tools: { ffmpeg: false, version: '', encoder: null, tuning: null, scaler: null, ddagrab: null },
     });
   });
 
@@ -374,7 +464,7 @@ describe('the stream', () => {
       await call(stream, 'POST', '/api/stream/key', { key: KEY });
       const res = await call(stream, 'POST', '/api/stream/key', { key: '' });
       expect(res.body.key).toEqual({ set: false, hint: '', source: null });
-      expect(JSON.parse(await readFile(path.join(dir, 'stream.json'), 'utf8'))).toEqual({});
+      expect(JSON.parse(await readFile(path.join(dir, 'stream.json'), 'utf8'))).toEqual({ forgotten: true });
     });
 
     it('turns away anything that is not shaped like a Twitch key', async () => {
@@ -388,6 +478,7 @@ describe('the stream', () => {
     });
 
     it('can be read from the Twitch sign-in, and says where it came from', async () => {
+      twitch.streamKey.mockResolvedValue(KEY);
       const stream = make();
       const res = await call(stream, 'POST', '/api/stream/key/twitch');
       expect(res.status).toBe(200);
@@ -412,6 +503,55 @@ describe('the stream', () => {
       expect((await call(stream, 'POST', '/api/stream/key/twitch')).status).toBe(409);
     });
 
+    it('comes from the Twitch sign-in by itself when there is none yet, so signing in is all the setup', async () => {
+      twitch.streamKey.mockResolvedValue(KEY);
+      const stream = make();
+      await call(stream, 'POST', '/api/stream/check');
+      // The check doesn't wait for it; the page hears when it is saved.
+      await until(() => last()?.key.set);
+      expect(last().key).toEqual({ set: true, hint: 'QrSt', source: 'twitch' });
+      expect((await stream.snapshot()).key).toEqual({ set: true, hint: 'QrSt', source: 'twitch' });
+      // And going live takes it too, without the Streaming section having been opened.
+      await rm(path.join(dir, 'stream.json'));
+      const fresh = make();
+      const res = await call(fresh, 'POST', '/api/stream/start', {});
+      expect(res.status).toBe(200);
+      expect(ffmpeg.last()).toBeDefined();
+    });
+
+    it('stays forgotten: the sign-in doesn’t hand it back, now or after a restart, until one is asked for', async () => {
+      twitch.streamKey.mockResolvedValue(KEY);
+      const stream = make();
+      await call(stream, 'POST', '/api/stream/key/twitch');
+      await call(stream, 'POST', '/api/stream/key', { key: '' });
+      await call(stream, 'POST', '/api/stream/check', { force: true });
+      await tick();
+      expect((await stream.snapshot()).key.set).toBe(false);
+      const restarted = make();
+      expect((await call(restarted, 'POST', '/api/stream/start', {})).body.error).toMatch(/stream key/);
+      expect((await restarted.snapshot()).key.set).toBe(false);
+      expect(ffmpeg.streams).toHaveLength(0);
+      // Asking for it again is fine.
+      expect((await call(restarted, 'POST', '/api/stream/key/twitch')).body.key).toEqual({ set: true, hint: 'QrSt', source: 'twitch' });
+    });
+
+    it('is read from the file once, so a slow first read can’t undo a key saved meanwhile', async () => {
+      const stream = make();
+      const first = stream.snapshot();
+      await call(stream, 'POST', '/api/stream/key', { key: KEY });
+      await first;
+      expect((await stream.snapshot()).key).toEqual({ set: true, hint: 'QrSt', source: 'pasted' });
+    });
+
+    it('is not swapped for the sign-in’s when one is already set', async () => {
+      twitch.streamKey.mockResolvedValue('live_987654321_ZyXwVuTsRqPoNmLkJiHg');
+      const stream = make();
+      await call(stream, 'POST', '/api/stream/key', { key: KEY });
+      await call(stream, 'POST', '/api/stream/check');
+      expect((await stream.snapshot()).key).toEqual({ set: true, hint: 'QrSt', source: 'pasted' });
+      expect(twitch.streamKey).not.toHaveBeenCalled();
+    });
+
     it('is written so only this user can read it', async () => {
       await call(make(), 'POST', '/api/stream/key', { key: KEY });
       if (process.platform !== 'win32') expect((await stat(path.join(dir, 'stream.json'))).mode & 0o077).toBe(0);
@@ -419,13 +559,40 @@ describe('the stream', () => {
   });
 
   describe('checking', () => {
-    it('finds FFmpeg, NVENC and ddagrab', async () => {
+    it('finds FFmpeg, NVENC and ddagrab, and scales on the processor when nothing quicker works', async () => {
       const stream = make();
       const res = await call(stream, 'POST', '/api/stream/check');
-      expect(res.body.tools).toEqual({ ffmpeg: true, version: '8.1.2-full_build', nvenc: true, ddagrab: true });
-      // The one-frame NVENC probe from the ticket.
-      const probe = ffmpeg.runs.find((r) => r.args.join(' ').includes('color=black'));
-      expect(probe.args.join(' ')).toBe('-hide_banner -f lavfi -i color=black:s=256x256 -frames:v 1 -c:v h264_nvenc -f null -');
+      expect(res.body.tools).toEqual({ ffmpeg: true, version: '8.1.2-full_build', encoder: 'nvenc', tuning: 'quality', scaler: 'cpu', ddagrab: true });
+      // The one-frame NVENC probe from the ticket, then a few frames with the stream's own settings.
+      const probes = ffmpeg.runs.filter((r) => r.args.join(' ').includes('color=black')).map((r) => r.args.join(' '));
+      expect(probes[0]).toBe('-hide_banner -f lavfi -i color=black:s=256x256:r=30 -frames:v 1 -c:v h264_nvenc -f null -');
+      expect(probes[1]).toContain(encoderArgs('nvenc', 2500, 30, 'quality').join(' '));
+    });
+
+    it('takes the first encoder the card can run: NVIDIA, then AMD, then Intel', async () => {
+      ffmpeg = fakeFfmpeg({ cards: ['amf', 'qsv'] });
+      expect((await call(make(), 'POST', '/api/stream/check')).body.tools.encoder).toBe('amf');
+      ffmpeg = fakeFfmpeg({ cards: ['qsv'] });
+      expect((await call(make(), 'POST', '/api/stream/check')).body.tools.encoder).toBe('qsv');
+      // An encoder this FFmpeg wasn't built with isn't tried at all.
+      ffmpeg = fakeFfmpeg({ built: ['qsv'], cards: ['nvenc', 'qsv'] });
+      expect((await call(make(), 'POST', '/api/stream/check')).body.tools.encoder).toBe('qsv');
+      expect(ffmpeg.runs.some((r) => r.args.includes('h264_nvenc'))).toBe(false);
+    });
+
+    it('picks the quickest scaling that works on captured frames with the stream’s own encoder settings', async () => {
+      // scale_d3d11 is listed but fails (as with FFmpeg 8.1), so CUDA it is.
+      ffmpeg = fakeFfmpeg({ filters: ['scale_d3d11', 'scale_cuda'], scales: ['scale_cuda'] });
+      expect((await call(make(), 'POST', '/api/stream/check')).body.tools.scaler).toBe('cuda');
+      const tried = ffmpeg.runs.filter((r) => r.args.join(' ').includes('-frames:v 2')).map((r) => r.args);
+      expect(tried).toHaveLength(2);
+      expect(tried[0][tried[0].indexOf('-i') + 1]).toBe(`ddagrab=output_idx=0:framerate=30,${gpuScale(720)}`);
+      expect(tried[1].join(' ')).toContain(encoderArgs('nvenc', 2500, 30).join(' '));
+      ffmpeg = fakeFfmpeg({ filters: ['scale_d3d11', 'scale_cuda'], scales: ['scale_d3d11', 'scale_cuda'] });
+      expect((await call(make(), 'POST', '/api/stream/check')).body.tools.scaler).toBe('d3d11');
+      // AMD's own scaler on an AMD card.
+      ffmpeg = fakeFfmpeg({ cards: ['amf'], filters: ['vpp_amf', 'scale_cuda'], scales: ['vpp_amf', 'scale_cuda'] });
+      expect((await call(make(), 'POST', '/api/stream/check')).body.tools).toMatchObject({ encoder: 'amf', scaler: 'amf' });
     });
 
     it('keeps the answer instead of asking FFmpeg again', async () => {
@@ -441,14 +608,28 @@ describe('the stream', () => {
     it('says when FFmpeg is missing, and looks again next time', async () => {
       let path = '';
       const stream = make({ findFfmpeg: async () => path });
-      expect((await call(stream, 'POST', '/api/stream/check')).body.tools).toEqual({ ffmpeg: false, version: '', nvenc: null, ddagrab: null });
+      expect((await call(stream, 'POST', '/api/stream/check')).body.tools).toEqual({ ffmpeg: false, version: '', encoder: null, tuning: null, scaler: null, ddagrab: null });
       path = 'C:\\Tools\\ffmpeg.exe';
       expect((await call(stream, 'POST', '/api/stream/check')).body.tools.ffmpeg).toBe(true);
     });
 
-    it('says when this FFmpeg has no NVENC, or no card to run it', async () => {
-      ffmpeg = fakeFfmpeg({ nvenc: false });
-      expect((await call(make(), 'POST', '/api/stream/check')).body.tools).toMatchObject({ ffmpeg: true, nvenc: false });
+    it('falls back to the safe settings on a card that refuses the quality ones, and scales with those', async () => {
+      ffmpeg = fakeFfmpeg({ safeOnly: ['nvenc'], filters: ['scale_cuda'], scales: ['scale_cuda'] });
+      expect((await call(make(), 'POST', '/api/stream/check')).body.tools).toMatchObject({ encoder: 'nvenc', tuning: 'safe', scaler: 'cuda' });
+      const scaleProbe = ffmpeg.runs.find((r) => r.args.join(' ').includes('-frames:v 2'));
+      expect(scaleProbe.args.join(' ')).toContain(encoderArgs('nvenc', 2500, 30, 'safe').join(' '));
+    });
+
+    it('does not wait on Twitch, so a slow sign-in can’t hold up the check', async () => {
+      twitch.streamKey.mockImplementation(() => new Promise(() => {}));
+      const res = await call(make(), 'POST', '/api/stream/check');
+      expect(res.status).toBe(200);
+      expect(res.body.tools.encoder).toBe('nvenc');
+    });
+
+    it('says when there is no encoder this PC can run', async () => {
+      ffmpeg = fakeFfmpeg({ cards: [] });
+      expect((await call(make(), 'POST', '/api/stream/check')).body.tools).toMatchObject({ ffmpeg: true, encoder: '', scaler: null });
     });
 
     it('says when this FFmpeg cannot capture the screen', async () => {
@@ -458,7 +639,7 @@ describe('the stream', () => {
 
     it('is told to the page', async () => {
       await call(make(), 'POST', '/api/stream/check');
-      expect(last().tools.nvenc).toBe(true);
+      expect(last().tools.encoder).toBe('nvenc');
     });
   });
 
@@ -489,11 +670,11 @@ describe('the stream', () => {
       expect(res.body.error).toMatch(/FFmpeg isn’t installed.*Downloads widget/);
     });
 
-    it('refuses with plain words when there is no NVENC or no ddagrab', async () => {
-      ffmpeg = fakeFfmpeg({ nvenc: false });
+    it('refuses with plain words when there is no encoder or no ddagrab', async () => {
+      ffmpeg = fakeFfmpeg({ cards: [] });
       let stream = make();
       await call(stream, 'POST', '/api/stream/key', { key: KEY });
-      expect((await call(stream, 'POST', '/api/stream/start', {})).body.error).toMatch(/NVENC/);
+      expect((await call(stream, 'POST', '/api/stream/start', {})).body.error).toMatch(/graphics card \(NVIDIA, AMD or Intel\)/);
       ffmpeg = fakeFfmpeg({ ddagrab: false });
       stream = make();
       expect((await call(stream, 'POST', '/api/stream/start', {})).body.error).toMatch(/capture the screen/);
@@ -514,9 +695,33 @@ describe('the stream', () => {
       expect(res.body.state).toBe('starting');
       const run = ffmpeg.runs.findLast((r) => r.kind === 'stream');
       expect(run.file).toBe('C:\\Tools\\ffmpeg.exe');
-      expect(run.args).toEqual(buildFfmpegArgs({ settings: { screen: 1, fps: 30, height: 720, kbps: 4500 }, key: KEY, audioPipe: PIPE, screenHeight: 1080 }));
+      expect(run.args).toEqual(buildFfmpegArgs({ settings: { screen: 1, fps: 30, height: 720, kbps: 4500 }, key: KEY, audioPipe: PIPE, encoder: 'nvenc', scaler: 'cpu', screenHeight: 1080 }));
       expect(run.args).toContain(PIPE);
       expect(run.args.at(-1)).toBe(ingestUrl(KEY, false));
+    });
+
+    it('runs FFmpeg above normal priority, so a busy game can’t starve the stream', async () => {
+      await liveStream();
+      expect(priority).toEqual([4321]);
+    });
+
+    it('still streams when the priority can’t be raised', async () => {
+      const stream = await liveStream({}, () =>
+        make({
+          raisePriority: () => {
+            throw new Error('EACCES');
+          },
+        }),
+      );
+      expect((await stream.snapshot()).state).toBe('live');
+    });
+
+    it('streams with the encoder and scaling the check found', async () => {
+      ffmpeg = fakeFfmpeg({ cards: ['amf'], filters: ['vpp_amf'], scales: ['vpp_amf'], screenHeight: 1440 });
+      await liveStream({ settings: { height: 1080 } });
+      const args = ffmpeg.runs.findLast((r) => r.kind === 'stream').args;
+      expect(valueAfter(args, '-c:v')).toBe('h264_amf');
+      expect(valueAfter(args, '-vf')).toBe(amfScale(1080));
     });
 
     it('goes live on the first frames, with the stats', async () => {
@@ -547,22 +752,35 @@ describe('the stream', () => {
 
     it('does not scale a screen that is already the chosen height, and scales one that is not', async () => {
       await liveStream({ settings: { height: 1080 } });
-      expect(ffmpeg.runs.findLast((r) => r.kind === 'stream').args[ffmpeg.runs.findLast((r) => r.kind === 'stream').args.indexOf('-i') + 1]).not.toContain('scale');
+      expect(ffmpeg.runs.findLast((r) => r.kind === 'stream').args).not.toContain('-vf');
       ffmpeg = fakeFfmpeg({ screenHeight: 1440 });
       await liveStream({ settings: { height: 1080 } });
       const args = ffmpeg.runs.findLast((r) => r.kind === 'stream').args;
-      expect(args[args.indexOf('-i') + 1]).toContain('scale=-2:1080');
+      expect(valueAfter(args, '-vf')).toContain('scale=-2:1080');
     });
 
     it('scales on the graphics card only when the check saw that work', async () => {
-      ffmpeg = fakeFfmpeg({ screenHeight: 1440, d3d11: true, gpuWorks: true });
+      ffmpeg = fakeFfmpeg({ screenHeight: 1440, filters: ['scale_d3d11'], scales: ['scale_d3d11'] });
       await liveStream({ settings: { height: 720 } });
       let args = ffmpeg.runs.findLast((r) => r.kind === 'stream').args;
-      expect(args[args.indexOf('-i') + 1]).toContain('scale_d3d11');
-      ffmpeg = fakeFfmpeg({ screenHeight: 1440, d3d11: true, gpuWorks: false });
+      expect(valueAfter(args, '-vf')).toContain('scale_d3d11');
+      ffmpeg = fakeFfmpeg({ screenHeight: 1440, filters: ['scale_d3d11'], scales: [] });
       await liveStream({ settings: { height: 720 } });
       args = ffmpeg.runs.findLast((r) => r.kind === 'stream').args;
-      expect(args[args.indexOf('-i') + 1]).toContain('hwdownload');
+      expect(valueAfter(args, '-vf')).toContain('hwdownload');
+    });
+
+    it('does not start twice, even when the second Go live comes while the first waits for the key from Twitch', async () => {
+      let answer;
+      twitch.streamKey.mockImplementation(() => new Promise((resolve) => (answer = resolve)));
+      const stream = make();
+      const first = call(stream, 'POST', '/api/stream/start', {});
+      await until(() => answer);
+      // A second Go live (another window, or the palette) while the first waits on Twitch.
+      await expect(stream.start({})).rejects.toMatchObject({ status: 409 });
+      answer(KEY);
+      expect((await first).status).toBe(200);
+      expect(ffmpeg.streams).toHaveLength(1);
     });
 
     it('does not start twice', async () => {

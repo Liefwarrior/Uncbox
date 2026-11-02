@@ -3,8 +3,9 @@ import { loadSlim } from '@tsparticles/slim';
 import type { BackgroundId } from './backgrounds';
 
 // Loaded on demand (see Backdrop), so the animation library only downloads for people who pick an
-// animated background. It draws once per screen refresh, up to 120 fps, so motion stays smooth on
-// high-refresh monitors; the shapes are few and slow, so that costs the game almost nothing.
+// animated background. It draws 30 times a second: the shapes drift a pixel or so a frame, which
+// looks the same at 30 as at 120, and every frame Network links each of its 140 dots to the ones
+// near it. Measured in Edge with the GPU on: 29–37% of a processor core at 120, 11–21% at 30.
 
 export interface Palette {
   accent: string;
@@ -17,7 +18,7 @@ const ready = loadSlim(tsParticles);
 function optionsFor(id: BackgroundId, c: Palette, still: boolean): ISourceOptions {
   const base: ISourceOptions = {
     fullScreen: { enable: false },
-    fpsLimit: 120,
+    fpsLimit: 30,
     detectRetina: true,
     pauseOnBlur: false,
     pauseOnOutsideViewport: true,

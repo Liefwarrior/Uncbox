@@ -142,13 +142,17 @@ describe('hydrate', () => {
   describe('the streaming settings', () => {
     const stream = (over: unknown) => hydrate({ version: 2, stream: over }).stream;
 
-    it('start with OBS doing the streaming, so nothing changes until Uncbox is picked', () => {
-      expect(defaultState().stream).toEqual({ with: 'obs', screen: 0, fps: 60, height: 1080, kbps: 6000, desktop: true, mic: 'default', desktopVolume: 1, micVolume: 1 });
+    it('start with Uncbox doing the streaming, so going live needs no OBS and no setup', () => {
+      expect(defaultState().stream).toEqual({ with: 'uncbox', screen: 0, fps: 60, height: 1080, kbps: 6000, desktop: true, mic: 'default', desktopVolume: 1, micVolume: 1 });
     });
 
     it('are filled in for a settings file from before they existed', () => {
       expect(hydrate({ version: 2 }).stream).toEqual(defaultState().stream);
       expect(stream('nonsense')).toEqual(defaultState().stream);
+    });
+
+    it('keep OBS for someone who picked it', () => {
+      expect(stream({ with: 'obs' }).with).toBe('obs');
     });
 
     it('keep what was saved', () => {
@@ -165,7 +169,7 @@ describe('hydrate', () => {
 
     it('put anything out of range back to what Uncbox offers', () => {
       expect(stream({ with: 'twitch', screen: 99, fps: 144, height: 900, kbps: 99_999, desktopVolume: 9, micVolume: -1 })).toEqual({
-        with: 'obs',
+        with: 'uncbox',
         screen: 7,
         fps: 60,
         height: 1080,

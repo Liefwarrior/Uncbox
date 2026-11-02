@@ -15,11 +15,20 @@ export interface StreamStats {
   speed: number;
 }
 
+/** The graphics card encoders the server can stream with (see ENCODERS in server/stream.mjs). */
+export type StreamEncoder = 'nvenc' | 'amf' | 'qsv';
+
+/** How the server scales the picture: on the card, through CUDA, or on the processor. */
+export type StreamScaler = 'd3d11' | 'cuda' | 'amf' | 'qsv' | 'cpu';
+
 export interface StreamTools {
   ffmpeg: boolean;
   version: string;
-  /** null until the check has run (or when there is no FFmpeg to ask). */
-  nvenc: boolean | null;
+  /** The encoder that works here; '' when none does; null until the check has run (or when there is no FFmpeg to ask). */
+  encoder: StreamEncoder | '' | null;
+  /** Whether the encoder took its quality settings or needed plainer ones (an older card). */
+  tuning: 'quality' | 'safe' | null;
+  scaler: StreamScaler | null;
   ddagrab: boolean | null;
 }
 
@@ -41,7 +50,7 @@ export const IDLE: StreamStatus = {
   stats: null,
   error: '',
   key: { set: false, hint: '', source: null },
-  tools: { ffmpeg: false, version: '', nvenc: null, ddagrab: null },
+  tools: { ffmpeg: false, version: '', encoder: null, tuning: null, scaler: null, ddagrab: null },
 };
 
 const STATES: readonly string[] = ['off', 'starting', 'live', 'stopping', 'dropped', 'error'];
@@ -125,7 +134,7 @@ export function useStream(on = true): StreamStatus {
   return useSyncExternalStore(on ? subscribe : quiet, () => current, () => IDLE);
 }
 
-// Whether the server has answered a check of FFmpeg and NVENC yet: before that, "not installed"
+// Whether the server has answered a check of FFmpeg and the encoder yet: before that, "not installed"
 // would only be a guess.
 let toolsChecked = false;
 

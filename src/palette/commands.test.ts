@@ -291,7 +291,9 @@ describe('streaming from Uncbox', () => {
   };
 
   it('is left out while OBS is the one that streams', () => {
-    const ids = setup().commands().map((c) => c.id);
+    const state = defaultState();
+    state.stream.with = 'obs';
+    const ids = setup({ state }).commands().map((c) => c.id);
     expect(ids).not.toContain('stream:golive');
     expect(ids).not.toContain('stream:end');
   });

@@ -88,7 +88,7 @@ export interface PaletteContext {
   /** On air: nothing personal (Drive file names) is listed. */
   private?: boolean;
   obs: ObsSnapshot | null;
-  /** Streaming from Uncbox: whether it is going or starting, and whether it could start now (a key, FFmpeg and NVENC). */
+  /** Streaming from Uncbox: whether it is going or starting, and whether it could start now (a key, FFmpeg and a graphics card encoder). */
   stream: { active: boolean; ready: boolean };
   /** The guild's member names, once known (only asked for on the WoW preset). */
   wow: { members: string[] } | null;

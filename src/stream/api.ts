@@ -51,7 +51,7 @@ export async function streamKeyFromTwitch(): Promise<string> {
   return problem(data, 'Couldn’t get the key from Twitch.');
 }
 
-/** Looks for FFmpeg and NVENC on this PC. `force` looks again even if it has already looked. */
+/** Looks for FFmpeg and a graphics card encoder on this PC. `force` looks again even if it has already looked. */
 export async function checkStreamTools(force = false): Promise<void> {
   const { ok } = await post('/check', { force });
   if (ok) markToolsChecked();

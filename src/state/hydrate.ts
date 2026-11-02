@@ -74,7 +74,7 @@ export function defaultState(): AppState {
     preset: 'pokemon',
     twitch: { channel: '', hideBots: true },
     clips: { enabled: true, key: DEFAULT_CLIP_KEY, driveAuto: false, driveShare: false, sound: true, mic: 'default' },
-    stream: { with: 'obs', screen: 0, fps: 60, height: 1080, kbps: 6000, desktop: true, mic: 'default', desktopVolume: 1, micVolume: 1 },
+    stream: { with: 'uncbox', screen: 0, fps: 60, height: 1080, kbps: 6000, desktop: true, mic: 'default', desktopVolume: 1, micVolume: 1 },
     discord: { pinned: [] },
     camera: { enabled: false, deviceId: null, mirrored: true },
     presets: eachPreset(defaultPresetData),
@@ -296,7 +296,7 @@ function hydrateStream(base: AppState['stream'], saved: unknown): AppState['stre
   const gain = (n: number) => Math.min(2, Math.max(0, Math.round(n * 100) / 100));
   const savedMic = isObj(saved) ? saved.mic : undefined;
   return {
-    with: s.with === 'uncbox' ? 'uncbox' : 'obs',
+    with: s.with === 'obs' || s.with === 'uncbox' ? s.with : base.with,
     screen: Math.min(7, Math.max(0, Math.round(s.screen))),
     fps: s.fps === 30 ? 30 : 60,
     height: s.height === 0 || s.height === 720 ? s.height : 1080,

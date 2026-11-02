@@ -52,7 +52,7 @@ function UncboxStreaming({ settings, set }: { settings: StreamSettings; set: (pa
   const checked = useToolsChecked();
   const [problem, setProblem] = useState('');
 
-  // Look for FFmpeg and NVENC now, and again once an install of FFmpeg finishes.
+  // Look for FFmpeg and an encoder now, and again once an install of FFmpeg finishes.
   useEffect(() => void checkStreamTools(), []);
   const installing = downloads.install.running;
   const wasInstalling = useRef(installing);
