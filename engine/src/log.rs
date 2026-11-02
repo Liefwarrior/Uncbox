@@ -3,7 +3,10 @@
 
 use crate::redact;
 
-/// A warning or the reason a stream stopped. The page shows the last line printed.
+/// The reason a stream stopped, in plain words: the page shows the last line printed when a stream
+/// drops, so only that goes here. Notes about how the stream is made (which encoder, settings a
+/// card refused) go to debug(): they would otherwise be shown as the reason for an unrelated drop,
+/// and the person streaming shouldn't have to know which engine is doing it.
 pub fn warn(text: &str) {
     eprintln!("{}", redact::clean_line(text));
 }

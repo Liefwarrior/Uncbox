@@ -9,7 +9,7 @@
 use crate::convert::{Picture, PictureReleaser};
 use crate::error::{Context, Error, Result};
 use crate::gpu::{self, AdapterInfo, Gpu};
-use crate::log::{debug, warn};
+use crate::log::debug;
 use crate::mf::{self, EncodedVideo, HardwareEncoder, VideoConfig, VideoEncoder};
 use crate::nvenc::{self, Nvenc};
 use crate::settings::{Backend, EncoderChoice, Settings, TuningChoice};
@@ -95,7 +95,7 @@ impl Encoder {
                 Ok(encoder) => return Ok(encoder),
                 Err(e) if settings.backend == Backend::Nvenc => return Err(e),
                 Err(e) => {
-                    warn(&format!("The NVIDIA encoder couldn't be opened directly ({e}), so Windows' media services will do it, with a plainer picture."))
+                    debug(&format!("The NVIDIA encoder couldn't be opened directly ({e}), so Windows' media services will do it, with a plainer picture."))
                 }
             }
         }
@@ -147,7 +147,7 @@ impl Encoder {
         })?;
         debug(&format!("encoder {} (async: {}, b-frames: {})", encoder.name, encoder.is_async, encoder.bframes));
         if !encoder.refused.is_empty() {
-            warn(&format!("The video encoder ({}) didn't take: {}.", encoder.name, encoder.refused.join(", ")));
+            debug(&format!("The video encoder ({}) didn't take: {}.", encoder.name, encoder.refused.join(", ")));
         }
         Ok(Encoder {
             label: encoder.name.clone(),

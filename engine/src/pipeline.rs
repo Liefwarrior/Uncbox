@@ -278,7 +278,7 @@ fn prepare(settings: &mut Settings) -> Result<Parts> {
     let mut converter = Converter::new(&gpu, out.0, out.1, settings.fps, encoder.pool)?;
     converter.set_source(geometry)?;
     if geometry.rotation != crate::orient::Rotation::None && !converter.can_rotate() {
-        warn("This graphics card can't turn the picture upright, so the screen is sent sideways.");
+        debug("This graphics card can't turn the picture upright, so the screen is sent sideways.");
     }
     encoder.set_releaser(converter.releaser());
     Ok(Parts { source, converter, encoder, out })
@@ -333,7 +333,7 @@ pub fn run(mut settings: Settings, control: Receiver<Control>) -> Result<()> {
         audio_kbps: settings.audio_kbps,
         encoder: format!("Uncbox ({})", encoder.label),
     }))?;
-    warn(&format!(
+    debug(&format!(
         "Streaming with {}{}.",
         encoder.label,
         match encoder.tuning {

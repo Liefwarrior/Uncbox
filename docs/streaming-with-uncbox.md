@@ -103,9 +103,15 @@ If Uncbox is already running, launching it again just brings the running one bac
 
 It falls back to FFmpeg by itself. If the program isn't built, or can't start an encoder on this PC,
 Uncbox streams with FFmpeg exactly as before, and the only sign is one line in the server's console.
-(`npm run app:native` without Rust installed says how to get it and starts normally.) The one
-thing to know: on NVIDIA cards the program doesn't use B-frames yet, so at the same bitrate FFmpeg's
-picture may look a little better.
+(`npm run app:native` without Rust installed says how to get it and starts normally.)
+
+Viewers can't tell them apart. On NVIDIA the program drives NVENC directly with the same settings
+FFmpeg uses (B-frames, 20 frames of look-ahead, a quarter-size first pass), and scored the same VMAF
+as FFmpeg on two SMITE clips (92.6-93.3). What you get is the processor time back: measured on an
+RTX 5090 laptop at 1080p60, 4-10% of one core against FFmpeg's 35-83%, and it stops in a fifth of
+a second. It also streams HDR screens and turned (portrait) screens upright, and keeps going when a
+screen changes size mid-stream. On AMD and Intel it uses Windows' own encoders, which take fewer
+quality settings (and haven't been tried on those cards yet).
 
 ## What viewers see
 

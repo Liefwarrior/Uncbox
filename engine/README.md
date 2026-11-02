@@ -20,8 +20,8 @@ On NVIDIA cards the encoder is driven directly (`nvEncodeAPI64.dll`), with the s
 over time), because Windows' own interface to NVIDIA's encoder takes none of those. On the same
 clip at 6000 kbit/s the engine's picture scores the same VMAF as FFmpeg's (see [Measured](#measured)).
 
-`server/stream.mjs` uses it automatically when it is built (see [Using it from Uncbox](#using-it-from-uncbox)),
-and falls back to FFmpeg when it isn't.
+Uncbox uses it only when launched the lighter way (see [Using it from Uncbox](#using-it-from-uncbox)),
+and falls back to FFmpeg when it isn't built or can't stream here.
 
 ## Building
 
@@ -213,10 +213,25 @@ with B-frames through a throttled connection: the file decodes with no errors, d
 
 ## Using it from Uncbox
 
+FFmpeg streams by default. The engine streams only when asked for: `npm run app:native` (or
+`--engine=native` on the app), the **Uncbox (lighter streaming)** Start-menu entry of an installed
+copy, `UNCBOX_STREAM_ENGINE=native` for `npm start`, or `POST /api/stream/engine { "engine": "native" }`
+from this PC (409 while a stream runs).
+
 `server/stream.mjs` looks for `uncbox-stream.exe` next to the server (a packaged copy, put there by
-`npm run package`) and in `engine/target/release` (a checkout). If it is there and `probe` lists an
-encoder, the engine does the streaming; otherwise FFmpeg does, exactly as before.
-`UNCBOX_STREAM_ENGINE=ffmpeg` or `=native` forces one.
+`npm run package`), one folder up, then in `engine/target/release` (a checkout). It streams with the
+engine when `probe` answers with a known encoder; otherwise it streams with FFmpeg and prints one
+line in the server's console. The page sees the same status either way: `tools.encoder` is
+nvenc/amf/qsv (the page's names for nvidia/amd/intel), `tools.tuning` comes from the probe, and
+`tools.ffmpeg` and `tools.ddagrab` are true with `scaler` `d3d11`, so the page never asks for FFmpeg.
+`tools.engine` (`native`/`ffmpeg`) is there for diagnosis only. Only reasons a stream stopped go to
+stderr (the page shows the last line when a stream drops); notes on how it is made go to the debug
+log (`UNCBOX_STREAM_DEBUG=1`).
+
+`scripts/engine.mjs` finds cargo (adding `~/.cargo/bin` and LLVM-MinGW's `bin` to PATH), rebuilds a
+stale exe for `npm run app:native`, and `npm run package` builds the engine too. For tests only,
+`UNCBOX_STREAM_INGEST=rtmp://127.0.0.1:PORT/app` sends the stream to a local receiver instead of
+Twitch.
 
 ## Testing and tooling
 
