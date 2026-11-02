@@ -60,6 +60,8 @@ pub struct PacketQueue {
     pub dropped: AtomicU64,
     /// Set when the encoder should make a keyframe soon (the line was cut back).
     pub want_keyframe: AtomicBool,
+    /// Nothing is ever dropped (a stream written to a file for testing has no slow connection to protect).
+    lossless: bool,
 }
 
 fn video_backlog_ms(items: &VecDeque<Packet>) -> i64 {
@@ -75,9 +77,19 @@ impl PacketQueue {
         Self::default()
     }
 
+    /// A line that never thins out video: for a file, which is never "slow".
+    pub fn lossless() -> Self {
+        PacketQueue { lossless: true, ..Self::default() }
+    }
+
     pub fn push(&self, packet: Packet) {
         let mut inner = self.inner.lock().expect("queue lock");
         if inner.closed {
+            return;
+        }
+        if self.lossless {
+            inner.items.push_back(packet);
+            self.ready.notify_one();
             return;
         }
         if let Packet::Video { keyframe, reference, .. } = &packet {
@@ -155,6 +167,60 @@ impl PacketQueue {
 
     pub fn is_empty(&self) -> bool {
         self.len() == 0
+    }
+}
+
+/// Sound that waits for the picture to catch up before it is sent.
+///
+/// An encoder that looks ahead and reorders (B-frames) hands a picture over a few tenths of a second
+/// after it was captured, while sound is ready at once. Sent in the order it arrives, the sound would
+/// run that far ahead of the picture in the stream, and a server wants both in time stamp order, near
+/// enough. So sound waits here until a picture with a later time stamp has gone out, and no longer
+/// than [`AUDIO_HOLD`] in any case (if the picture stalls, the sound must not).
+#[derive(Debug, Default)]
+pub struct AudioHold {
+    items: VecDeque<(i64, std::time::Instant, Vec<u8>)>,
+}
+
+/// How long sound is held for the picture at the most.
+pub const AUDIO_HOLD: Duration = Duration::from_millis(1500);
+/// How much later than the newest picture's time stamp sound may be sent, in milliseconds.
+pub const AUDIO_SLACK_MS: i64 = 20;
+
+impl AudioHold {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn push(&mut self, ts_ms: i64, body: Vec<u8>, now: std::time::Instant) {
+        self.items.push_back((ts_ms, now, body));
+    }
+
+    /// The sound that may go out now, given the time stamp of the newest picture sent.
+    pub fn release(&mut self, video_dts_ms: i64, now: std::time::Instant) -> Vec<(i64, Vec<u8>)> {
+        let mut out = Vec::new();
+        while let Some((ts, since, _)) = self.items.front() {
+            if *ts <= video_dts_ms + AUDIO_SLACK_MS || now.saturating_duration_since(*since) >= AUDIO_HOLD {
+                let (ts, _, body) = self.items.pop_front().expect("checked above");
+                out.push((ts, body));
+            } else {
+                break;
+            }
+        }
+        out
+    }
+
+    /// Everything still held (the stream is ending).
+    pub fn flush(&mut self) -> Vec<(i64, Vec<u8>)> {
+        self.items.drain(..).map(|(ts, _, body)| (ts, body)).collect()
+    }
+
+    pub fn len(&self) -> usize {
+        self.items.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.items.is_empty()
     }
 }
 
@@ -267,6 +333,129 @@ mod tests {
         }
         let audio = drain(&q).iter().filter(|p| matches!(p, Packet::Audio { .. })).count();
         assert_eq!(audio, 200);
+    }
+
+    /// What an encoder with two B-frames sends for display order 0..n, as queue packets: the decode
+    /// order I0 P3 B1 B2 P6 B4 B5 ..., decode times rising 17 ms apart, the keyframe first. `ref_b`
+    /// makes the first B of each pair a reference (B-frames as references).
+    fn b_frame_stream(n: i64, gop: i64, ref_b: bool) -> Vec<Packet> {
+        let mut order = Vec::new();
+        let mut group_start = 0;
+        while group_start < n {
+            let group_end = (group_start + gop).min(n);
+            order.push((group_start, true, true));
+            let mut anchor = group_start;
+            while anchor + 1 < group_end {
+                let next = (anchor + 3).min(group_end - 1);
+                order.push((next, false, true));
+                for shown in anchor + 1..next {
+                    order.push((shown, false, ref_b && shown == anchor + 1 && next - anchor == 3));
+                }
+                anchor = next;
+            }
+            group_start = group_end;
+        }
+        order.iter().enumerate().map(|(decode_index, &(_, key, reference))| video(decode_index as i64 * 17, key, reference)).collect()
+    }
+
+    #[test]
+    fn with_b_frames_only_pictures_nothing_is_built_from_are_thinned_first() {
+        let q = PacketQueue::new();
+        q.push(Packet::VideoHeader { body: vec![1], audio_shift_ms: 33 });
+        let stream = b_frame_stream(60, 120, true);
+        let referenced = stream.iter().filter(|p| matches!(p, Packet::Video { reference: true, .. })).count();
+        for p in stream {
+            q.push(p);
+        }
+        let kept = times(&drain(&q));
+        // Whatever was thinned, the decode times left still rise.
+        assert!(kept.windows(2).all(|w| w[0] < w[1]));
+        // And every picture something is built from is still there.
+        assert!(kept.len() >= referenced, "{} kept of {referenced} referenced", kept.len());
+        assert!(q.dropped.load(Ordering::Relaxed) > 0, "a 1 s backlog is past the point where throwaway pictures go");
+    }
+
+    #[test]
+    fn a_cut_back_through_b_frames_restarts_at_a_keyframe_with_rising_times() {
+        let q = PacketQueue::new();
+        q.push(Packet::VideoHeader { body: vec![1], audio_shift_ms: 33 });
+        // Four keyframe intervals of 30 pictures in decode order with B-frames: well past 1.5 s waiting.
+        for p in b_frame_stream(120, 30, true) {
+            q.push(p);
+        }
+        let got = drain(&q);
+        assert!(matches!(got[0], Packet::VideoHeader { .. }));
+        let pictures: Vec<&Packet> = got.iter().filter(|p| matches!(p, Packet::Video { .. })).collect();
+        assert!(matches!(pictures[0], Packet::Video { keyframe: true, .. }), "what is kept starts at a keyframe");
+        let kept = times(&got);
+        assert!(kept.windows(2).all(|w| w[0] < w[1]));
+        assert!(q.want_keyframe.load(Ordering::Relaxed));
+        assert!(q.dropped.load(Ordering::Relaxed) > 0);
+    }
+
+    #[test]
+    fn after_a_cut_the_pictures_before_the_next_keyframe_are_not_sent() {
+        let q = PacketQueue::new();
+        q.push(video(0, true, true));
+        for i in 1..120 {
+            q.push(video(i * 17, false, true));
+        }
+        drain(&q);
+        // B-frames of the dropped group arrive: useless without their keyframe.
+        q.push(video(3000, false, false));
+        q.push(video(3017, false, true));
+        assert!(times(&drain(&q)).is_empty());
+        q.push(video(3034, true, true));
+        q.push(video(3051, false, true));
+        q.push(video(3068, false, false));
+        assert_eq!(times(&drain(&q)), vec![3034, 3051, 3068]);
+    }
+
+    #[test]
+    fn a_lossless_line_keeps_every_picture_however_long_it_gets() {
+        let q = PacketQueue::lossless();
+        for p in b_frame_stream(600, 120, true) {
+            q.push(p);
+        }
+        assert_eq!(times(&drain(&q)).len(), 600);
+        assert_eq!(q.dropped.load(Ordering::Relaxed), 0);
+        assert!(!q.want_keyframe.load(Ordering::Relaxed));
+    }
+
+    #[test]
+    fn sound_waits_for_the_picture_that_is_late() {
+        let now = std::time::Instant::now();
+        let mut hold = AudioHold::new();
+        for ts in [0, 10, 20, 30, 40] {
+            hold.push(ts, vec![ts as u8], now);
+        }
+        // No picture yet (-1 ms, with the slack): only what is within 20 ms of nothing.
+        assert!(hold.release(-100, now).is_empty());
+        // A picture at 15 ms has gone out: sound up to 15 + 20 = 35 may follow.
+        let out: Vec<i64> = hold.release(15, now).into_iter().map(|(ts, _)| ts).collect();
+        assert_eq!(out, vec![0, 10, 20, 30]);
+        assert_eq!(hold.len(), 1);
+    }
+
+    #[test]
+    fn sound_is_not_held_forever_if_the_picture_stalls() {
+        let start = std::time::Instant::now();
+        let mut hold = AudioHold::new();
+        hold.push(5000, vec![1], start);
+        assert!(hold.release(0, start + Duration::from_millis(1000)).is_empty());
+        let out = hold.release(0, start + AUDIO_HOLD);
+        assert_eq!(out.len(), 1);
+    }
+
+    #[test]
+    fn the_rest_of_the_sound_comes_out_when_the_stream_ends() {
+        let now = std::time::Instant::now();
+        let mut hold = AudioHold::new();
+        hold.push(1, vec![1], now);
+        hold.push(2, vec![2], now);
+        let rest = hold.flush();
+        assert_eq!(rest.iter().map(|(ts, _)| *ts).collect::<Vec<_>>(), vec![1, 2]);
+        assert!(hold.is_empty());
     }
 
     #[test]

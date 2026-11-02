@@ -1,41 +1,45 @@
 //! One stream, start to finish: capture, convert, encode, mux, send.
 //!
 //! Threads, and why there are several:
-//! - **capture** wakes on the frame clock, takes the newest screen, converts it on the card and
-//!   hands the picture to the encoder. It never waits on anything slow.
+//! - **capture** wakes on the frame clock, takes the newest picture (the screen, or the next picture
+//!   of a video file), converts it on the card and hands it to the encoder. For the screen it never
+//!   waits on anything slow.
 //! - **encoder** feeds the card's encoder and collects what comes out as FLV packets.
 //! - **sound** reads the Uncbox app's pipe (or makes silence), keeps it on the same clock, and encodes it.
-//! - **network** is the only thread that writes to the server, from a line that thins out video
-//!   when the connection can't keep up (see `queue.rs`).
+//! - **network** is the only thread that writes to the server (or the file), from a line that thins
+//!   out video when the connection can't keep up (see `queue.rs`).
 //! - the **main** thread listens for `q`, prints the once-a-second report and ends everything.
 //!
 //! One clock rules: `Instant` (Windows' high-resolution performance counter). Picture n is stamped
 //! n / fps seconds after the start; sound is stamped by how many samples have gone out. If the
 //! machine can't make a picture in time its slot is skipped, never stretched, so sound and picture
-//! never drift apart.
+//! never drift apart. (A video file is the exception to skipping: its pictures are all sent.)
 
 use crate::audio::{self, AudioParams, AudioStats};
-use crate::capture::{Capturer, Grab};
-use crate::convert::Converter;
+use crate::capture::Capturer;
+use crate::convert::{Converter, Picture};
+use crate::encoder::{self, Encoder};
 use crate::error::{Context, Error, Result};
 use crate::flv::{self, AvcPacket, Metadata};
-use crate::gpu::{self, Gpu};
+use crate::gpu::{self, AdapterInfo, Gpu};
 use crate::h264;
 use crate::log::{debug, warn};
-use crate::mf::{self, EncodedVideo, HardwareEncoder, VideoConfig, VideoEncoder};
+use crate::mf::{self, EncodedVideo};
 use crate::net;
+use crate::probe::{self, EncoderCheck, ProbeAdapter, ProbeOutput};
 use crate::progress::{Progress, RateWindow};
-use crate::queue::{Packet, PacketQueue, Taken};
+use crate::queue::{AudioHold, Packet, PacketQueue, Taken};
 use crate::rtmp::{Publisher, RtmpUrl};
-use crate::settings::{target_size, EncoderChoice, Settings};
+use crate::settings::{target_size, EncoderChoice, Output, Settings, Source as SourceSetting};
+use crate::sink::{FileSink, Sink};
+use crate::source::{Source, Y4mSource};
 use std::io::Write;
 use std::sync::atomic::{AtomicBool, AtomicI64, AtomicU64, Ordering};
-use std::sync::mpsc::{sync_channel, Receiver, RecvTimeoutError, TrySendError};
+use std::sync::mpsc::{sync_channel, Receiver, RecvTimeoutError, SyncSender, TrySendError};
 use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 use windows::Win32::Foundation::{CloseHandle, HANDLE};
-use windows::Win32::Media::MediaFoundation::IMFSample;
 use windows::Win32::System::Threading::{
     CreateWaitableTimerExW, GetCurrentProcess, SetPriorityClass, SetWaitableTimer, WaitForSingleObject, ABOVE_NORMAL_PRIORITY_CLASS,
     CREATE_WAITABLE_TIMER_HIGH_RESOLUTION, TIMER_ALL_ACCESS,
@@ -48,14 +52,16 @@ pub enum Control {
 
 /// How long the whole stream gets to shut down after a stop.
 const SHUTDOWN_BUDGET: Duration = Duration::from_millis(1400);
-/// Converted pictures that rotate between the converter and the encoder.
-const PICTURE_POOL: usize = 12;
 
 /// State all the threads read or add to.
 #[derive(Default)]
 struct Shared {
-    /// Set when the stream should end (asked to, or because something failed); shared with the sound thread.
+    /// Set when the stream should end now (asked to, or because something failed).
     stop: Arc<AtomicBool>,
+    /// Set to end the sound: with `stop`, or alone when a video file has been played to its end.
+    audio_stop: Arc<AtomicBool>,
+    /// Set by the encoder thread when it has taken every picture there will be and sent all it made.
+    input_done: AtomicBool,
     fatal: Mutex<Option<String>>,
     /// Video packets handed to the server.
     frames_sent: AtomicU64,
@@ -76,27 +82,12 @@ impl Shared {
             *slot = Some(message);
         }
         self.stop.store(true, Ordering::SeqCst);
+        self.audio_stop.store(true, Ordering::SeqCst);
     }
 
     fn fatal(&self) -> Option<String> {
         self.fatal.lock().expect("fatal lock").clone()
     }
-}
-
-/// Which encoder runs the picture for this screen, or why none can.
-pub fn choose_encoder(choice: EncoderChoice, adapter: &gpu::AdapterInfo) -> Result<HardwareEncoder> {
-    let vendor = gpu::vendor_name(adapter.vendor_id);
-    if choice != EncoderChoice::Auto && choice.name() != vendor {
-        return Err(Error::new(format!(
-            "You asked for the {} encoder, but this screen is on {} graphics ({}). Use Automatic.",
-            choice.name(),
-            vendor,
-            adapter.name
-        )));
-    }
-    mf::hardware_h264_encoders(adapter.luid).into_iter().next().ok_or_else(|| {
-        Error::new(format!("{} has no video encoder Uncbox can use. It needs a recent NVIDIA, AMD or Intel graphics card with current drivers.", adapter.name))
-    })
 }
 
 /// A high-resolution timer to sleep until exact moments on the frame clock.
@@ -221,115 +212,171 @@ impl<T> Moved<T> {
     }
 }
 
-type Picture = (Moved<IMFSample>, u64);
+/// A converted picture on its way to the encoder, with the time it is shown.
+struct Frame {
+    picture: Moved<Picture>,
+    pts: i64,
+}
 
 /// Everything `run` sets up before the first picture.
 struct Parts {
-    capturer: Capturer,
+    source: Source,
     converter: Converter,
-    encoder: VideoEncoder,
+    encoder: Encoder,
     out: (u32, u32),
-    encoder_name: String,
 }
 
-fn prepare(settings: &Settings) -> Result<Parts> {
+/// The card a video file is encoded on: the one asked for by name, else the one the screen is on, else the first.
+fn adapter_for_file<'a>(adapters: &'a [AdapterInfo], settings: &Settings) -> Result<&'a AdapterInfo> {
+    let usable = |a: &&AdapterInfo| gpu::vendor_name(a.vendor_id) != "other";
+    if settings.encoder != EncoderChoice::Auto {
+        return adapters
+            .iter()
+            .find(|a| gpu::vendor_name(a.vendor_id) == settings.encoder.name())
+            .ok_or_else(|| Error::new(format!("This PC has no {} graphics card.", settings.encoder.name())));
+    }
+    if let Ok((adapter, _)) = gpu::find_output(adapters, settings.screen) {
+        return Ok(adapter);
+    }
+    adapters.iter().find(usable).ok_or_else(|| Error::new("Windows shows no graphics card to encode on."))
+}
+
+fn prepare(settings: &mut Settings) -> Result<Parts> {
     let adapters = gpu::enumerate()?;
-    let (adapter, output) = gpu::find_output(&adapters, settings.screen)?;
-    debug(&format!("screen {} is output {} of {} ({})", settings.screen, output.on_adapter, adapter.name, gpu::vendor_name(adapter.vendor_id)));
-    let hardware = choose_encoder(settings.encoder, adapter)?;
-    let dxgi_adapter = gpu::open_adapter(adapter.index)?;
-    let gpu = Gpu::open(&dxgi_adapter)?;
-    let dxgi_output = gpu::open_output(&dxgi_adapter, output.on_adapter)?;
-    let capturer = Capturer::new(&gpu, &dxgi_output)?;
-    let out = target_size(capturer.width, capturer.height, settings.height);
-    debug(&format!("capturing {}x{}, sending {}x{}", capturer.width, capturer.height, out.0, out.1));
-    let converter = Converter::new(&gpu, capturer.width, capturer.height, out.0, out.1, settings.fps, PICTURE_POOL)?;
-    let config = VideoConfig {
-        width: out.0,
-        height: out.1,
-        fps: settings.fps,
-        kbps: settings.kbps,
-        gop: settings.gop(),
-        bframes: settings.bframes,
-        quality: settings.quality,
-    };
-    let encoder = VideoEncoder::new(&gpu, &hardware, &config).or_else(|first| {
-        // Some encoders refuse the B-frame setting outright: try again without.
-        if settings.bframes > 0 {
-            VideoEncoder::new(&gpu, &hardware, &VideoConfig { bframes: 0, ..config.clone() })
-        } else {
-            Err(first)
+    let (adapter, gpu, source) = match settings.source.clone() {
+        SourceSetting::Screen => {
+            let (adapter, output) = gpu::find_output(&adapters, settings.screen)?;
+            debug(&format!("screen {} is output {} of {} ({})", settings.screen, output.on_adapter, adapter.name, gpu::vendor_name(adapter.vendor_id)));
+            let dxgi_adapter = gpu::open_adapter(adapter.index)?;
+            let gpu = Gpu::open(&dxgi_adapter)?;
+            let mut capturer = Capturer::new(&gpu, &dxgi_adapter, output.on_adapter)?;
+            // Wait (briefly) for the first picture of the screen: a still screen may not send one at
+            // once, the clock must not start before there is something to put on it, and the shape of
+            // the picture (a screen on its side) is only certain once one has come.
+            capturer.wait_for_picture(Duration::from_secs(2)).context("Couldn't capture the screen")?;
+            (adapter, gpu, Source::Screen(Box::new(capturer)))
         }
-    })?;
-    debug(&format!("encoder {} (async: {}, b-frames: {})", encoder.name, encoder.is_async, encoder.bframes));
-    let encoder_name = encoder.name.clone();
-    Ok(Parts { capturer, converter, encoder, out, encoder_name })
+        SourceSetting::Y4m(path) => {
+            let adapter = adapter_for_file(&adapters, settings)?;
+            debug(&format!("encoding a video file on {} ({})", adapter.name, gpu::vendor_name(adapter.vendor_id)));
+            let dxgi_adapter = gpu::open_adapter(adapter.index)?;
+            let gpu = Gpu::open(&dxgi_adapter)?;
+            let file = Y4mSource::open(&gpu, &path)?;
+            // The file's own rate rules: its pictures are stamped at it.
+            settings.fps = file.fps;
+            (adapter, gpu, Source::Y4m(Box::new(file)))
+        }
+    };
+
+    let geometry = source.geometry();
+    let (upright_w, upright_h) = geometry.rotation.upright_size(geometry.width, geometry.height);
+    let out = target_size(upright_w, upright_h, settings.height);
+    debug(&format!("picture {}x{} turned {:?}, sending {}x{}", geometry.width, geometry.height, geometry.rotation, out.0, out.1));
+
+    let mut encoder = Encoder::open(&gpu, adapter, settings, out)?;
+    debug(&format!("encoder {} ({}, {} B-frames, tuning {:?})", encoder.label, encoder.backend, encoder.bframes, encoder.tuning));
+    let mut converter = Converter::new(&gpu, out.0, out.1, settings.fps, encoder.pool)?;
+    converter.set_source(geometry)?;
+    if geometry.rotation != crate::orient::Rotation::None && !converter.can_rotate() {
+        warn("This graphics card can't turn the picture upright, so the screen is sent sideways.");
+    }
+    encoder.set_releaser(converter.releaser());
+    Ok(Parts { source, converter, encoder, out })
 }
 
-/// Streams until told to stop (or something goes wrong). Prints the report on stdout.
-pub fn run(settings: Settings, control: Receiver<Control>) -> Result<()> {
+/// The lines added to every progress block: which encoder is running and how it is set.
+fn encoder_lines(encoder: &Encoder, source: &Source) -> String {
+    let mut text = format!("encoder_backend={}\nencoder_name={}\nencoder_bframes={}\n", encoder.backend, encoder.label, encoder.bframes);
+    if let Some(tuning) = encoder.tuning {
+        text.push_str(&format!("encoder_tuning={}\n", tuning.name()));
+    }
+    text.push_str(if source.is_live() { "source=screen\n" } else { "source=y4m\n" });
+    text
+}
+
+/// Streams until told to stop (or something goes wrong, or a video file ends). Prints the report on stdout.
+pub fn run(mut settings: Settings, control: Receiver<Control>) -> Result<()> {
     // Above normal, so a game using the whole machine doesn't make the stream stutter.
     // SAFETY: plain calls on this process.
     unsafe {
         let _ = SetPriorityClass(GetCurrentProcess(), ABOVE_NORMAL_PRIORITY_CLASS);
     }
     mf::startup()?;
-    let url = RtmpUrl::parse(&settings.url)?;
-    let parts = prepare(&settings)?;
-    let Parts { mut capturer, converter, encoder, out, encoder_name } = parts;
+    let rtmp_url = match &settings.output {
+        Output::Rtmp(url) => Some(RtmpUrl::parse(url)?),
+        Output::File(_) => None,
+    };
+    let Parts { source, converter, encoder, out } = prepare(&mut settings)?;
+    let extra = encoder_lines(&encoder, &source);
+    let live = source.is_live();
+    // A video file played as fast as it will go has no clock, so no sound either.
+    let paced = live || settings.pace;
+    let has_sound = paced;
+    let fps = settings.fps;
 
-    // Connect before capturing anything, so a refused key fails fast and cheaply.
-    let connection = net::connect(&url)?;
-    // The handshake wants some bytes that differ from one connection to the next, not secret ones.
-    let seed = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(1, |d| d.as_nanos() as u64) ^ u64::from(std::process::id());
-    let mut publisher = Publisher::open(connection, &url, 0, seed)?;
-    publisher.send_metadata(&flv::metadata_payload(&Metadata {
+    // Connect before capturing a single picture, so a refused key fails fast and cheaply.
+    let (mut sink, lossless): (Box<dyn Sink + Send>, bool) = match (&settings.output, &rtmp_url) {
+        (Output::Rtmp(_), Some(url)) => {
+            let connection = net::connect(url)?;
+            // The handshake wants some bytes that differ from one connection to the next, not secret ones.
+            let seed = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(1, |d| d.as_nanos() as u64) ^ u64::from(std::process::id());
+            (Box::new(Publisher::open(connection, url, 0, seed)?), false)
+        }
+        (Output::File(path), _) => (Box::new(FileSink::create(path, has_sound)?), true),
+        _ => return Err(Error::new("There is no stream address to send to.")),
+    };
+    sink.send_metadata(&flv::metadata_payload(&Metadata {
         width: out.0,
         height: out.1,
-        fps: settings.fps,
+        fps,
         video_kbps: settings.kbps,
         audio_kbps: settings.audio_kbps,
-        encoder: format!("Uncbox ({encoder_name})"),
+        encoder: format!("Uncbox ({})", encoder.label),
     }))?;
-
-    // Wait (briefly) for the first picture of the screen: a still screen may not send one at once,
-    // and the clock must not start before there is something to put on it.
-    capturer.wait_for_picture(Duration::from_secs(2)).context("Couldn't capture the screen")?;
+    warn(&format!(
+        "Streaming with {}{}.",
+        encoder.label,
+        match encoder.tuning {
+            Some(t) => format!(" ({} settings, {} B-frames)", t.name(), encoder.bframes),
+            None => format!(" ({} B-frames)", encoder.bframes),
+        }
+    ));
 
     // The app's pipe is opened last: its writer starts its real-time clock on connection.
-    let pipe = match &settings.audio_pipe {
-        Some(name) => Some(audio::open_pipe(name)?),
-        None => None,
+    let pipe = match (&settings.audio_pipe, has_sound) {
+        (Some(name), true) => Some(audio::open_pipe(name)?),
+        _ => None,
     };
     let start = Instant::now();
 
     let shared = Arc::new(Shared::default());
-    let queue = Arc::new(PacketQueue::new());
+    let queue = Arc::new(if lossless { PacketQueue::lossless() } else { PacketQueue::new() });
     let audio_stats = Arc::new(AudioStats::default());
     let mut handles: Vec<JoinHandle<()>> = Vec::new();
-    let (tx, rx) = sync_channel::<Picture>(4);
+    let (tx, rx) = sync_channel::<Frame>(4);
 
     // -- network --
     let net_handle = {
         let (shared, queue) = (shared.clone(), queue.clone());
-        spawn("network", shared.clone(), move || network_thread(publisher, queue, shared))
+        spawn("network", shared.clone(), move || network_thread(sink, queue, shared))
     };
 
     // -- sound --
-    {
+    let sound_handle = if has_sound {
         let (shared, queue, stats) = (shared.clone(), queue.clone(), audio_stats.clone());
-        let params = AudioParams { pipe, kbps: settings.audio_kbps, start, stop: shared.stop.clone() };
-        handles.push(spawn("sound", shared.clone(), move || {
+        let params = AudioParams { pipe, kbps: settings.audio_kbps, start, stop: shared.audio_stop.clone() };
+        Some(spawn("sound", shared.clone(), move || {
             if let Err(e) = audio::run(params, queue, stats, warn) {
                 shared.fail(e.to_string());
             }
-        }));
-    }
+        }))
+    } else {
+        None
+    };
 
     // -- encoder --
     {
         let (shared, queue) = (shared.clone(), queue.clone());
-        let fps = settings.fps;
         let encoder = Moved(encoder);
         handles.push(spawn("encoder", shared.clone(), move || {
             if let Err(e) = encoder_thread(encoder.into_inner(), rx, queue, fps, shared.clone()) {
@@ -341,22 +388,29 @@ pub fn run(settings: Settings, control: Receiver<Control>) -> Result<()> {
     // -- capture --
     {
         let shared = shared.clone();
-        let fps = settings.fps;
-        let graphics = Moved((capturer, converter));
+        let graphics = Moved((source, converter));
         handles.push(spawn("capture", shared.clone(), move || {
-            let (capturer, converter) = graphics.into_inner();
-            if let Err(e) = capture_thread(capturer, converter, tx, fps, start, shared.clone()) {
+            let (source, converter) = graphics.into_inner();
+            if let Err(e) = capture_thread(source, converter, tx, fps, start, paced, shared.clone()) {
                 shared.fail(e.to_string());
             }
         }));
     }
 
-    report_loop(&shared, &queue, &control, start);
+    report_loop(&shared, &queue, &control, start, &extra);
 
-    // Stop: capture ends first (it drops the channel, which ends the encoder), then the line is closed.
+    // A video file that played to its end finishes the usual way: everything it made is sent, with no
+    // time limit. Anything else (a stop, a failure) has a budget.
     let stop_at = Instant::now();
-    shared.stop.store(true, Ordering::SeqCst);
+    let finished_by_itself = shared.input_done.load(Ordering::SeqCst) && !shared.stop.load(Ordering::SeqCst);
+    if !finished_by_itself {
+        shared.stop.store(true, Ordering::SeqCst);
+    }
+    shared.audio_stop.store(true, Ordering::SeqCst);
     for h in handles {
+        let _ = h.join();
+    }
+    if let Some(h) = sound_handle {
         let _ = h.join();
     }
     queue.close();
@@ -368,7 +422,7 @@ pub fn run(settings: Settings, control: Receiver<Control>) -> Result<()> {
         audio_stats.dropped_blocks.load(Ordering::Relaxed)
     ));
 
-    let progress = snapshot(&shared, &queue, start, 0.0, 0.0);
+    let progress = snapshot(&shared, &queue, start, 0.0, 0.0, &extra);
     print_block(&progress, true);
     match shared.fatal() {
         Some(message) => Err(Error::new(message)),
@@ -389,7 +443,7 @@ fn spawn(name: &str, shared: Arc<Shared>, body: impl FnOnce() + Send + 'static) 
         .expect("spawn thread")
 }
 
-fn snapshot(shared: &Shared, queue: &PacketQueue, start: Instant, fps: f64, kbps: f64) -> Progress {
+fn snapshot(shared: &Shared, queue: &PacketQueue, start: Instant, fps: f64, kbps: f64, extra: &str) -> Progress {
     let out_ms = shared.last_video_ms.load(Ordering::Relaxed).max(0);
     let wall = start.elapsed().as_secs_f64();
     Progress {
@@ -401,6 +455,7 @@ fn snapshot(shared: &Shared, queue: &PacketQueue, start: Instant, fps: f64, kbps
         dup_frames: shared.repeated.load(Ordering::Relaxed),
         drop_frames: shared.skipped.load(Ordering::Relaxed) + queue.dropped.load(Ordering::Relaxed),
         speed: if wall > 0.5 { (out_ms as f64 / 1000.0) / wall } else { 0.0 },
+        extra: extra.to_string(),
     }
 }
 
@@ -410,7 +465,7 @@ fn print_block(progress: &Progress, last: bool) {
     let _ = out.flush();
 }
 
-fn report_loop(shared: &Shared, queue: &PacketQueue, control: &Receiver<Control>, start: Instant) {
+fn report_loop(shared: &Shared, queue: &PacketQueue, control: &Receiver<Control>, start: Instant, extra: &str) {
     let mut rate = RateWindow::new(4);
     let mut previous = (Instant::now(), 0u64);
     let mut next_report = Instant::now() + Duration::from_secs(1);
@@ -419,7 +474,7 @@ fn report_loop(shared: &Shared, queue: &PacketQueue, control: &Receiver<Control>
             Ok(Control::Stop) | Err(RecvTimeoutError::Disconnected) => return,
             Err(RecvTimeoutError::Timeout) => {}
         }
-        if shared.stop.load(Ordering::Relaxed) {
+        if shared.stop.load(Ordering::Relaxed) || shared.input_done.load(Ordering::Relaxed) {
             return;
         }
         if Instant::now() < next_report {
@@ -433,63 +488,95 @@ fn report_loop(shared: &Shared, queue: &PacketQueue, control: &Receiver<Control>
         let kbps = rate.push(start.elapsed().as_micros() as i64, shared.bytes_sent.load(Ordering::Relaxed));
         // Nothing to report until the first picture has really gone out.
         if frames > 0 {
-            print_block(&snapshot(shared, queue, start, fps, kbps), false);
+            print_block(&snapshot(shared, queue, start, fps, kbps, extra), false);
         }
     }
 }
 
 fn capture_thread(
-    mut capturer: Capturer,
+    mut source: Source,
     mut converter: Converter,
-    tx: std::sync::mpsc::SyncSender<Picture>,
+    tx: SyncSender<Frame>,
     fps: u32,
     start: Instant,
+    paced: bool,
     shared: Arc<Shared>,
 ) -> Result<()> {
+    let live = source.is_live();
     let ticker = Ticker::new();
     let slot = |n: u64| start + Duration::from_nanos(n * 1_000_000_000 / u64::from(fps));
-    let frame_ticks = 10_000_000 / i64::from(fps);
     let mut n: u64 = 0;
     while !shared.stop.load(Ordering::Relaxed) {
-        ticker.sleep_until(slot(n));
-        if shared.stop.load(Ordering::Relaxed) {
+        if paced {
+            ticker.sleep_until(slot(n));
+            if shared.stop.load(Ordering::Relaxed) {
+                break;
+            }
+        }
+        // The screen, behind by whole frames: skip those slots (and count them) rather than stretch the stream.
+        // A video file is never skipped: every one of its pictures is sent.
+        if live {
+            let late = Instant::now().saturating_duration_since(slot(n)).as_nanos() as u64 * u64::from(fps) / 1_000_000_000;
+            if late >= 1 {
+                shared.skipped.fetch_add(late, Ordering::Relaxed);
+                n += late;
+            }
+        }
+        let Some(grabbed) = source.next_frame()? else {
+            // The video file has played to its end.
+            debug("the video file has ended");
             break;
+        };
+        if grabbed.same {
+            shared.repeated.fetch_add(1, Ordering::Relaxed);
         }
-        // Behind by whole frames: skip those slots (and count them) rather than stretch the stream.
-        let late = Instant::now().saturating_duration_since(slot(n)).as_nanos() as u64 * u64::from(fps) / 1_000_000_000;
-        if late >= 1 {
-            shared.skipped.fetch_add(late, Ordering::Relaxed);
-            n += late;
-        }
-        match capturer.grab().context("Couldn't capture the screen")? {
-            Grab::New => {}
-            Grab::Same => {
-                shared.repeated.fetch_add(1, Ordering::Relaxed);
+        converter.set_source(grabbed.geometry)?;
+        let picture = loop {
+            match converter.convert(&grabbed.texture)? {
+                Some(p) => break Some(p),
+                // Every picture is with the encoder: the screen moves on, a file waits.
+                None if live => break None,
+                None => {
+                    if shared.stop.load(Ordering::Relaxed) {
+                        break None;
+                    }
+                    std::thread::sleep(Duration::from_millis(1));
+                }
             }
-        }
-        let screen = capturer.picture().clone();
-        let picture = converter.convert(&screen)?;
-        let sample = VideoEncoder::sample_for(&picture, (n * 10_000_000 / u64::from(fps)) as i64, frame_ticks)
-            .context("Couldn't hand a picture to the video encoder")?;
-        match tx.try_send((Moved(sample), n)) {
-            Ok(()) => {}
-            Err(TrySendError::Full(_)) => {
+        };
+        let Some(picture) = picture else {
+            if live {
                 shared.skipped.fetch_add(1, Ordering::Relaxed);
+                n += 1;
+                continue;
             }
-            Err(TrySendError::Disconnected(_)) => break,
+            break;
+        };
+        let frame = Frame { picture: Moved(picture), pts: (n * 10_000_000 / u64::from(fps)) as i64 };
+        if live {
+            match tx.try_send(frame) {
+                Ok(()) => {}
+                Err(TrySendError::Full(_)) => {
+                    shared.skipped.fetch_add(1, Ordering::Relaxed);
+                }
+                Err(TrySendError::Disconnected(_)) => break,
+            }
+        } else if tx.send(frame).is_err() {
+            break;
         }
         n += 1;
     }
-    if capturer.restarts > 0 {
-        debug(&format!("the screen capture restarted {} time(s)", capturer.restarts));
+    if source.restarts() > 0 {
+        debug(&format!("the screen capture restarted {} time(s)", source.restarts()));
     }
     Ok(())
 }
 
-fn encoder_thread(mut encoder: VideoEncoder, rx: Receiver<Picture>, queue: Arc<PacketQueue>, fps: u32, shared: Arc<Shared>) -> Result<()> {
+fn encoder_thread(mut encoder: Encoder, rx: Receiver<Frame>, queue: Arc<PacketQueue>, fps: u32, shared: Arc<Shared>) -> Result<()> {
     let mut mux = VideoMux::new(queue.clone(), encoder.bframes, fps);
+    let frame_ticks = 10_000_000 / i64::from(fps);
     let mut out: Vec<EncodedVideo> = Vec::new();
-    let mut pending: Option<IMFSample> = None;
+    let mut pending: Option<Frame> = None;
     let mut disconnected = false;
     loop {
         encoder.poll(&mut out)?;
@@ -498,17 +585,17 @@ fn encoder_thread(mut encoder: VideoEncoder, rx: Receiver<Picture>, queue: Arc<P
         }
         if pending.is_none() && !disconnected {
             match rx.recv_timeout(Duration::from_millis(2)) {
-                Ok((sample, _)) => pending = Some(sample.into_inner()),
+                Ok(frame) => pending = Some(frame),
                 Err(RecvTimeoutError::Timeout) => {}
                 Err(RecvTimeoutError::Disconnected) => disconnected = true,
             }
         } else if pending.is_some() && !encoder.wants_input() {
             std::thread::sleep(Duration::from_millis(1));
         }
-        if let Some(sample) = &pending {
-            if encoder.wants_input() {
-                encoder.feed(sample, &mut out)?;
-                pending = None;
+        if pending.is_some() && encoder.wants_input() {
+            if let Some(frame) = pending.take() {
+                let picture = frame.picture.into_inner();
+                encoder.feed(&picture, frame.pts, frame_ticks, &mut out)?;
             }
         }
         for enc in out.drain(..) {
@@ -521,36 +608,30 @@ fn encoder_thread(mut encoder: VideoEncoder, rx: Receiver<Picture>, queue: Arc<P
             return Ok(());
         }
     }
-    encoder.drain(&mut out, Duration::from_millis(500));
+    encoder.finish(&mut out)?;
     for enc in out.drain(..) {
         mux.push(enc);
     }
+    shared.input_done.store(true, Ordering::SeqCst);
     Ok(())
 }
 
-fn network_thread(mut publisher: Publisher<net::Connection>, queue: Arc<PacketQueue>, shared: Arc<Shared>) {
+/// Sends a piece of sound at its time stamp (never negative).
+fn send_sound(sink: &mut dyn Sink, shared: &Shared, ts_ms: i64, body: &[u8]) -> Result<()> {
+    sink.send_audio(ts_ms.max(0) as u32, body)?;
+    shared.bytes_sent.store(sink.bytes_sent(), Ordering::Relaxed);
+    Ok(())
+}
+
+fn network_thread(mut sink: Box<dyn Sink + Send>, queue: Arc<PacketQueue>, shared: Arc<Shared>) {
     let mut audio_shift = 0i64;
     let mut header_seen = false;
-    let mut stashed: Vec<Packet> = Vec::new();
+    let mut stashed: Vec<(i64, Vec<u8>)> = Vec::new();
+    // Sound waits here for the picture to catch up (see AudioHold).
+    let mut hold = AudioHold::new();
+    let mut last_video_ms = -1i64;
     let mut next_poll = Instant::now() + Duration::from_millis(250);
     let mut stop_deadline: Option<Instant> = None;
-
-    let send = |publisher: &mut Publisher<net::Connection>, packet: Packet, shift: i64| -> Result<()> {
-        match packet {
-            Packet::VideoHeader { body, .. } => publisher.send_video(0, &body)?,
-            Packet::Video { dts_ms, body, .. } => {
-                publisher.send_video(dts_ms as u32, &body)?;
-                shared.frames_sent.fetch_add(1, Ordering::Relaxed);
-                shared.last_video_ms.store(dts_ms, Ordering::Relaxed);
-            }
-            Packet::Audio { ts_ms, body } => {
-                let is_config = body.get(1) == Some(&0);
-                publisher.send_audio(if is_config { 0 } else { (ts_ms + shift) as u32 }, &body)?;
-            }
-        }
-        shared.bytes_sent.store(publisher.bytes_sent(), Ordering::Relaxed);
-        Ok(())
-    };
 
     let result = (|| -> Result<()> {
         loop {
@@ -562,78 +643,114 @@ fn network_thread(mut publisher: Publisher<net::Connection>, queue: Arc<PacketQu
             }
             match queue.take(Duration::from_millis(20)) {
                 Taken::Packet(packet) => match packet {
-                    Packet::VideoHeader { audio_shift_ms, .. } => {
+                    Packet::VideoHeader { body, audio_shift_ms } => {
                         audio_shift = audio_shift_ms;
                         header_seen = true;
-                        send(&mut publisher, packet, 0)?;
-                        for held in stashed.drain(..) {
-                            send(&mut publisher, held, audio_shift)?;
+                        sink.send_video(0, &body)?;
+                        for (ts_ms, body) in stashed.drain(..) {
+                            hold.push(ts_ms + audio_shift, body, Instant::now());
                         }
                     }
-                    Packet::Audio { ref body, .. } if body.get(1) != Some(&0) && !header_seen => {
-                        stashed.push(packet);
-                        if stashed.len() > 300 {
-                            // No video is coming: send the sound on its own rather than hold it forever.
-                            header_seen = true;
-                            for held in stashed.drain(..) {
-                                send(&mut publisher, held, 0)?;
+                    Packet::Video { dts_ms, body, .. } => {
+                        sink.send_video(dts_ms as u32, &body)?;
+                        shared.frames_sent.fetch_add(1, Ordering::Relaxed);
+                        shared.last_video_ms.store(dts_ms, Ordering::Relaxed);
+                        last_video_ms = dts_ms;
+                    }
+                    Packet::Audio { ts_ms, body } => {
+                        if body.get(1) == Some(&0) {
+                            // The decoder's note about the sound goes out at once.
+                            send_sound(sink.as_mut(), &shared, 0, &body)?;
+                        } else if !header_seen {
+                            stashed.push((ts_ms, body));
+                            if stashed.len() > 300 {
+                                // No video is coming: send the sound on its own rather than hold it forever.
+                                header_seen = true;
+                                for (ts_ms, body) in stashed.drain(..) {
+                                    hold.push(ts_ms, body, Instant::now());
+                                }
                             }
+                        } else {
+                            hold.push(ts_ms + audio_shift, body, Instant::now());
                         }
                     }
-                    other => send(&mut publisher, other, audio_shift)?,
                 },
                 Taken::Empty => {}
-                Taken::Done => return Ok(()),
+                Taken::Done => {
+                    // The end: whatever sound is still waiting goes out after the last picture.
+                    for (ts_ms, body) in hold.flush() {
+                        send_sound(sink.as_mut(), &shared, ts_ms, &body)?;
+                    }
+                    return Ok(());
+                }
             }
+            for (ts_ms, body) in hold.release(last_video_ms, Instant::now()) {
+                send_sound(sink.as_mut(), &shared, ts_ms, &body)?;
+            }
+            shared.bytes_sent.store(sink.bytes_sent(), Ordering::Relaxed);
             if Instant::now() >= next_poll {
                 next_poll = Instant::now() + Duration::from_millis(250);
-                publisher.poll(Duration::from_millis(1))?;
+                sink.poll(Duration::from_millis(1))?;
             }
         }
     })();
     if let Err(e) = result {
         shared.fail(e.to_string());
     }
-    publisher.close();
+    sink.close();
 }
 
 // ---- probing ----
 
-/// What `probe` reports.
+/// What `probe` reports (the shape is in `probe.rs`).
 pub fn probe_json() -> serde_json::Value {
     let _ = mf::startup();
     let adapters = gpu::enumerate().unwrap_or_default();
-    let mut encoders: Vec<&'static str> = Vec::new();
-    let mut listed = Vec::new();
-    for adapter in &adapters {
-        let vendor = gpu::vendor_name(adapter.vendor_id);
-        listed.push(serde_json::json!({
-            "name": adapter.name,
-            "vendor": vendor,
-            "outputs": adapter.outputs.iter().map(|o| serde_json::json!({
-                "index": o.index, "width": o.width, "height": o.height, "primary": o.primary,
-            })).collect::<Vec<_>>(),
-        }));
-        if vendor != "other" && !adapter.outputs.is_empty() && !encoders.contains(&vendor) && encoder_starts(adapter) {
-            encoders.push(vendor);
-        }
-    }
-    serde_json::json!({ "version": env!("CARGO_PKG_VERSION"), "adapters": listed, "encoders": encoders })
+    let mut tested: Vec<&'static str> = Vec::new();
+    let listed: Vec<ProbeAdapter> = adapters
+        .iter()
+        .map(|adapter| {
+            let vendor = gpu::vendor_name(adapter.vendor_id);
+            let mut check = None;
+            // Only a card with a screen on it is tried, and one card of each maker is enough.
+            if vendor != "other" && !adapter.outputs.is_empty() && !tested.contains(&vendor) {
+                tested.push(vendor);
+                check = check_encoder(adapter);
+            }
+            ProbeAdapter {
+                name: adapter.name.clone(),
+                vendor,
+                outputs: adapter.outputs.iter().map(|o| ProbeOutput { index: o.index, width: o.width, height: o.height, primary: o.primary }).collect(),
+                check,
+            }
+        })
+        .collect();
+    probe::to_json(env!("CARGO_PKG_VERSION"), &listed)
 }
 
-/// Whether the adapter's hardware encoder really starts (an installed driver can still refuse).
-fn encoder_starts(adapter: &gpu::AdapterInfo) -> bool {
-    let list = mf::hardware_h264_encoders(adapter.luid);
-    let Some(hardware) = list.first() else { return false };
-    let Ok(dxgi) = gpu::open_adapter(adapter.index) else { return false };
-    let Ok(gpu) = Gpu::open(&dxgi) else { return false };
-    let config = VideoConfig { width: 1280, height: 720, fps: 30, kbps: 2500, gop: 60, bframes: 0, quality: 70 };
-    VideoEncoder::new(&gpu, hardware, &config).is_ok()
+/// Whether the adapter's hardware encoder really encodes (an installed driver can still refuse), and
+/// with which settings: a few dozen tiny pictures are put through it. NVIDIA cards are tried with
+/// the direct encoder first.
+fn check_encoder(adapter: &AdapterInfo) -> Option<EncoderCheck> {
+    let dxgi = gpu::open_adapter(adapter.index).ok()?;
+    let gpu = Gpu::open(&dxgi).ok()?;
+    let defaults = Settings::default();
+    if gpu::vendor_name(adapter.vendor_id) == "nvidia" {
+        let attempts = crate::tuning::attempts(crate::settings::TuningChoice::Auto, defaults.bframes);
+        if let Some((tuning, bframes)) = crate::nvenc::first_working(&gpu.device, defaults.kbps, defaults.fps, defaults.keyframe_seconds, &attempts) {
+            return Some(EncoderCheck { backend: "nvenc", tuning: tuning.name(), bframes });
+        }
+    }
+    let hardware = mf::hardware_h264_encoders(adapter.luid, gpu::vendor_name(adapter.vendor_id)).into_iter().next()?;
+    let config = encoder::mf_config(&defaults, (320, 192), defaults.bframes);
+    let bframes = encoder::mf_self_test(&gpu, &hardware, &config).ok()?;
+    Some(EncoderCheck { backend: "mediafoundation", tuning: if bframes > 0 { "quality" } else { "safe" }, bframes })
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::reorder::DtsClock;
 
     const SPS: &[u8] = &[0x67, 0x64, 0x00, 0x28, 0xAC, 0xD9, 0x40, 0x78, 0x02, 0x27];
     const PPS: &[u8] = &[0x68, 0xEB, 0xE3, 0xCB];
@@ -739,6 +856,112 @@ mod tests {
         assert_eq!(times(&got), vec![(0, 33), (16, 67)]);
     }
 
+    /// What NVENC does with B-frames: pictures leave in decode order carrying their own PTS, and the
+    /// decode times come from a `DtsClock` fed the same way the encoder is.
+    fn nvenc_like_stream(pictures: i64, gop: i64, bframes: i64) -> Vec<EncodedVideo> {
+        let step = bframes + 1;
+        let mut order = Vec::new(); // (shown index, is a keyframe, is a reference)
+        let mut group = 0;
+        while group < pictures {
+            let end = (group + gop).min(pictures);
+            order.push((group, true, true));
+            let mut anchor = group;
+            while anchor + 1 < end {
+                let next = (anchor + step).min(end - 1);
+                order.push((next, false, true));
+                for shown in anchor + 1..next {
+                    order.push((shown, false, shown == anchor + 1 && next - anchor == 3));
+                }
+                anchor = next;
+            }
+            group = end;
+        }
+        let mut clock = DtsClock::new(bframes as u32, FRAME);
+        for i in 0..pictures {
+            clock.picture_in(i * FRAME);
+        }
+        order
+            .into_iter()
+            .map(|(shown, keyframe, reference)| {
+                let dts = clock.picture_out();
+                if keyframe {
+                    key(shown * FRAME, dts)
+                } else {
+                    inter(shown * FRAME, dts, if reference { 2 } else { 0 })
+                }
+            })
+            .collect()
+    }
+
+    #[test]
+    fn nvenc_style_b_frames_give_rising_decode_times_and_never_negative_composition_offsets() {
+        let queue = Arc::new(PacketQueue::lossless());
+        let mut mux = VideoMux::new(queue.clone(), 2, 60);
+        for e in nvenc_like_stream(400, 120, 2) {
+            mux.push(e);
+        }
+        let got = drain(&queue);
+        // The first GOP: the very first decode time is two frames before the first picture is shown.
+        assert_eq!(shift_of(&got), 33, "the sound is delayed by two frames to match");
+        let t = times(&got);
+        assert_eq!(t.len(), 400);
+        assert_eq!(t[0], (0, 33), "the keyframe is decoded at 0 and shown 33 ms later");
+        let mut last = -1;
+        for (i, (dts, cts)) in t.iter().enumerate() {
+            assert!(*dts > last, "decode time {dts} after {last} at picture {i}");
+            assert!(*cts >= 0, "composition offset {cts} at picture {i}");
+            last = *dts;
+        }
+        // Shown time = decode time + offset must cover each shown time once: the multiset of shown
+        // times is the capture times (plus the shift), 0 to 399 frames.
+        let mut shown: Vec<i64> = t.iter().map(|(d, c)| d + i64::from(*c)).collect();
+        shown.sort_unstable();
+        assert!(shown.windows(2).all(|w| w[1] > w[0]), "no two pictures are shown at the same time");
+        assert_eq!(shown[0], 33);
+        assert_eq!(*shown.last().unwrap(), (399 * FRAME + 2 * FRAME) / 10_000);
+    }
+
+    #[test]
+    fn keyframes_stay_exactly_a_gop_apart_in_time() {
+        let queue = Arc::new(PacketQueue::lossless());
+        let mut mux = VideoMux::new(queue.clone(), 2, 60);
+        for e in nvenc_like_stream(480, 120, 2) {
+            mux.push(e);
+        }
+        let got = drain(&queue);
+        let keys: Vec<i64> = got.iter().filter_map(|p| if let Packet::Video { dts_ms, keyframe: true, .. } = p { Some(*dts_ms) } else { None }).collect();
+        assert_eq!(keys.len(), 4);
+        for pair in keys.windows(2) {
+            // 120 frames at 60 fps is two seconds; the rounding to milliseconds can move it by one.
+            assert!((pair[1] - pair[0] - 2000).abs() <= 1, "{keys:?}");
+        }
+    }
+
+    #[test]
+    fn after_a_slow_connection_cuts_the_line_back_a_playable_stream_remains() {
+        let queue = Arc::new(PacketQueue::new());
+        let mut mux = VideoMux::new(queue.clone(), 2, 60);
+        // 600 pictures (10 s) with a keyframe every 2 s, pushed without anything being taken: the line is
+        // cut back to the newest keyframe whenever it holds more than 1.5 s.
+        for e in nvenc_like_stream(600, 120, 2) {
+            mux.push(e);
+        }
+        let got = drain(&queue);
+        let t = times(&got);
+        assert!(queue.dropped.load(Ordering::Relaxed) > 0);
+        assert!(queue.want_keyframe.load(Ordering::Relaxed));
+        assert!(matches!(got[0], Packet::VideoHeader { .. }));
+        // (If the last cut left nothing, the line is waiting for the next keyframe and holds no video yet.)
+        if let Some(first) = got.iter().find(|p| matches!(p, Packet::Video { .. })) {
+            assert!(matches!(first, Packet::Video { keyframe: true, .. }), "what is left starts at a keyframe");
+        }
+        let mut last = -1;
+        for (dts, cts) in t {
+            assert!(dts > last && cts >= 0);
+            last = dts;
+        }
+    }
+
     #[test]
     fn marks_pictures_nothing_depends_on() {
         let queue = Arc::new(PacketQueue::new());
@@ -750,10 +973,13 @@ mod tests {
     }
 
     #[test]
-    fn picks_an_encoder_by_name_only_when_the_screen_is_on_that_makers_card() {
-        let adapter =
-            gpu::AdapterInfo { index: 0, name: "Test GPU".into(), vendor_id: 0x10DE, luid: windows::Win32::Foundation::LUID::default(), outputs: vec![] };
-        let err = choose_encoder(EncoderChoice::Amd, &adapter).err().expect("should refuse");
-        assert!(err.message().contains("amd") && err.message().contains("nvidia"), "{err}");
+    fn the_extra_progress_lines_name_the_encoder() {
+        // The lines are built from an encoder; here only the shape of the text is checked.
+        let lines = "encoder_backend=nvenc\nencoder_name=NVIDIA NVENC\nencoder_bframes=2\nencoder_tuning=quality\nsource=screen\n";
+        let p = Progress { frames: 1, extra: lines.to_string(), ..Default::default() };
+        let block = p.block(false);
+        assert!(block.contains("encoder_backend=nvenc\n") && block.ends_with("progress=continue\n"));
+        // The server's parser takes the keys it knows and skips the rest.
+        assert!(block.contains("frame=1\n"));
     }
 }

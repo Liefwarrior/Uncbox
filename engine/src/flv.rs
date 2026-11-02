@@ -125,6 +125,10 @@ impl<W: std::io::Write> FlvWriter<W> {
         self.out.write_all(&file_tag(tag_type, timestamp_ms, body))
     }
 
+    pub fn flush(&mut self) -> std::io::Result<()> {
+        self.out.flush()
+    }
+
     pub fn into_inner(self) -> W {
         self.out
     }

@@ -86,8 +86,21 @@ fn string_attribute(activate: &IMFActivate, key: &GUID) -> String {
     }
 }
 
-/// The hardware H.264 encoders that belong to the graphics card with this LUID.
-pub fn hardware_h264_encoders(luid: LUID) -> Vec<HardwareEncoder> {
+/// Whether a hardware encoder's name says it is made by `vendor` ("nvidia", "amd" or "intel"). Media Foundation lists
+/// the encoders of other cards too when asked for one card's (an NVIDIA encoder is offered for an
+/// Intel card on a laptop that has both), and handing a card's textures to another maker's encoder fails.
+pub fn name_is_from(name: &str, vendor: &str) -> bool {
+    let name = name.to_ascii_lowercase();
+    match vendor {
+        "nvidia" => name.contains("nvidia"),
+        "amd" => name.contains("amd") || name.contains("radeon") || name.contains("advanced micro"),
+        "intel" => name.contains("intel"),
+        _ => false,
+    }
+}
+
+/// The hardware H.264 encoders that belong to the graphics card with this LUID, made by `vendor`.
+pub fn hardware_h264_encoders(luid: LUID, vendor: &str) -> Vec<HardwareEncoder> {
     let mut found = Vec::new();
     // SAFETY: MFTEnum2 hands back an array of activation objects that we take ownership of and free.
     unsafe {
@@ -108,7 +121,12 @@ pub fn hardware_h264_encoders(luid: LUID) -> Vec<HardwareEncoder> {
         }
         for i in 0..count as usize {
             if let Some(activate) = ptr::read(list.add(i)) {
-                found.push(HardwareEncoder { name: string_attribute(&activate, &MFT_FRIENDLY_NAME_Attribute), activate });
+                let name = string_attribute(&activate, &MFT_FRIENDLY_NAME_Attribute);
+                if name_is_from(&name, vendor) {
+                    found.push(HardwareEncoder { name, activate });
+                } else {
+                    debug(&format!("skipping the encoder {name}: it is not {vendor}'s"));
+                }
             }
         }
         CoTaskMemFree(Some(list as *const _));
@@ -155,8 +173,10 @@ pub struct VideoEncoder {
     drained: bool,
     pub name: String,
     pub is_async: bool,
-    /// Whether the encoder accepted a B-frame setting.
+    /// The B-frames the encoder accepted (0 if it took none).
     pub bframes: u32,
+    /// Settings the encoder turned down (see [`apply_codec_settings`]).
+    pub refused: Vec<&'static str>,
 }
 
 impl VideoEncoder {
@@ -185,8 +205,11 @@ impl VideoEncoder {
 
             // The encoder reads these properties when the types are set, so they come first.
             let mut bframes = 0;
+            let mut refused = Vec::new();
             if let Some(codec) = &codec {
-                bframes = apply_codec_settings(codec, cfg);
+                let applied = apply_codec_settings(codec, cfg);
+                bframes = applied.bframes;
+                refused = applied.refused;
                 // Without B-frames, pictures are handed over as soon as they are made. With them the
                 // encoder has to hold a few back, which is the cost of the smaller stream.
                 let low_latency = bframes == 0;
@@ -243,6 +266,7 @@ impl VideoEncoder {
                 name: encoder.name.clone(),
                 is_async,
                 bframes,
+                refused,
             })
         }
     }
@@ -387,38 +411,64 @@ impl VideoEncoder {
     }
 }
 
+/// What an encoder took of the settings asked for through the "codec API" properties.
+#[derive(Debug, Clone, Default)]
+pub struct AppliedSettings {
+    /// B-frames the encoder accepted (0 if it takes none).
+    pub bframes: u32,
+    /// The settings it turned down, in words.
+    pub refused: Vec<&'static str>,
+}
+
 /// The rate control, keyframe interval and quality settings, which Media Foundation takes as
-/// "codec API" properties. Returns the B-frame count if the encoder took one (NVIDIA's doesn't).
+/// "codec API" properties. These are the equivalents of what FFmpeg's `h264_amf` and `h264_qsv` are
+/// asked for (`-quality quality` / `-preset slower`, B-frames); look-ahead, pre-analysis and adaptive
+/// quantisation have no Media Foundation setting, so they cannot be asked for. Every result is
+/// checked: what an encoder refuses is listed, not ignored.
 ///
 /// # Safety
 /// `codec` must be a live interface; the calls are plain property sets.
-unsafe fn apply_codec_settings(codec: &ICodecAPI, cfg: &VideoConfig) -> u32 {
-    let set = |key: &GUID, value: VARIANT| {
-        // SAFETY: as the function's own contract says.
+unsafe fn apply_codec_settings(codec: &ICodecAPI, cfg: &VideoConfig) -> AppliedSettings {
+    fn set(codec: &ICodecAPI, applied: &mut AppliedSettings, name: &'static str, key: &GUID, value: VARIANT) -> bool {
+        // SAFETY: as the contract of `apply_codec_settings` says.
         let result = unsafe { codec.SetValue(key, &value) };
         if let Err(e) = &result {
-            debug(&format!("the video encoder doesn't take setting {key:?}: {e}"));
+            debug(&format!("the video encoder doesn't take setting {name}: {e}"));
+            if !applied.refused.contains(&name) {
+                applied.refused.push(name);
+            }
         }
         result.is_ok()
-    };
-    set(&CODECAPI_AVEncCommonRateControlMode, variant_u32(eAVEncCommonRateControlMode_CBR.0 as u32));
+    }
+    let mut applied = AppliedSettings::default();
+    let a = &mut applied;
+    set(codec, a, "constant bitrate", &CODECAPI_AVEncCommonRateControlMode, variant_u32(eAVEncCommonRateControlMode_CBR.0 as u32));
     // This encoder's "constant" bitrate runs a few percent over on busy pictures (measured about 7 to 13
     // percent), and a stream over the limit it was told is what a service complains about. So it is aimed
     // a little low; busy pictures then come out at the rate that was asked for.
     let aim = cfg.kbps * 93 / 100;
-    set(&CODECAPI_AVEncCommonMeanBitRate, variant_u32(aim * 1000));
-    set(&CODECAPI_AVEncCommonMaxBitRate, variant_u32(aim * 1000));
+    set(codec, a, "mean bitrate", &CODECAPI_AVEncCommonMeanBitRate, variant_u32(aim * 1000));
+    set(codec, a, "maximum bitrate", &CODECAPI_AVEncCommonMaxBitRate, variant_u32(aim * 1000));
     // The buffer is twice the bitrate (two seconds of it), counted in bits.
-    set(&CODECAPI_AVEncCommonBufferSize, variant_u32(cfg.kbps * 2000));
-    set(&CODECAPI_AVEncMPVGOPSize, variant_u32(cfg.gop));
-    set(&CODECAPI_AVEncH264CABACEnable, variant_bool(true));
-    set(&CODECAPI_AVEncCommonQualityVsSpeed, variant_u32(cfg.quality));
+    set(codec, a, "buffer size", &CODECAPI_AVEncCommonBufferSize, variant_u32(cfg.kbps * 2000));
+    set(codec, a, "keyframe interval", &CODECAPI_AVEncMPVGOPSize, variant_u32(cfg.gop));
+    set(codec, a, "CABAC", &CODECAPI_AVEncH264CABACEnable, variant_bool(true));
+    set(codec, a, "quality over speed", &CODECAPI_AVEncCommonQualityVsSpeed, variant_u32(cfg.quality));
+    // Not "real time": the stream is a few seconds behind anyway, and the encoder may take its time.
+    set(codec, a, "no real-time mode", &CODECAPI_AVEncCommonRealTime, variant_bool(false));
+    if cfg.quality >= 80 {
+        // A second pass where the encoder has one.
+        set(codec, a, "two passes", &CODECAPI_AVEncCommonMultipassMode, variant_u32(2));
+    }
     for n in (1..=cfg.bframes).rev() {
-        if set(&CODECAPI_AVEncMPVDefaultBPictureCount, variant_u32(n)) {
-            return n;
+        if set(codec, a, "B-frames", &CODECAPI_AVEncMPVDefaultBPictureCount, variant_u32(n)) {
+            // The refusals of larger counts on the way down are not refusals of B-frames.
+            a.refused.retain(|r| *r != "B-frames");
+            a.bframes = n;
+            break;
         }
     }
-    0
+    applied
 }
 
 fn read_video_sample(sample: &IMFSample) -> Result<EncodedVideo> {
@@ -562,5 +612,30 @@ impl AudioEncoder {
             let _ = self.transform.ProcessMessage(MFT_MESSAGE_COMMAND_DRAIN, 0);
         }
         let _ = self.pull(out);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn an_encoder_is_matched_to_its_makers_card_by_name() {
+        assert!(name_is_from("NVIDIA H.264 Encoder MFT", "nvidia"));
+        assert!(name_is_from("AMDh264Encoder", "amd"));
+        assert!(name_is_from("AMD H.264 Encoder MFT", "amd"));
+        assert!(name_is_from("Intel\u{ae} Quick Sync Video H.264 Encoder MFT", "intel"));
+        // Windows offers the NVIDIA encoder when asked for an Intel card's on a laptop with both.
+        assert!(!name_is_from("NVIDIA H.264 Encoder MFT", "intel"));
+        assert!(!name_is_from("Intel\u{ae} Quick Sync Video H.264 Encoder MFT", "nvidia"));
+        assert!(!name_is_from("AMDh264Encoder", "nvidia"));
+        assert!(!name_is_from("Something", "other"));
+        assert!(!name_is_from("", "nvidia"));
+    }
+
+    #[test]
+    fn packs_a_luid_into_one_number() {
+        assert_eq!(pack(1, 2), (1u64 << 32) | 2);
+        assert_eq!(pack(0, 0xFFFF_FFFF), 0xFFFF_FFFF);
     }
 }

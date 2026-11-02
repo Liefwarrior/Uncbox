@@ -45,6 +45,56 @@ pub fn nal_ref_idc(nal: &[u8]) -> u8 {
     nal.first().map_or(0, |b| (b >> 5) & 3)
 }
 
+/// The kind of picture a slice NAL unit starts: `P`, `B` or `I` (the "all slices the same" forms
+/// count as the plain ones), or `None` for anything that isn't a readable slice.
+pub fn slice_kind(nal: &[u8]) -> Option<char> {
+    if !matches!(nal_type(nal), NAL_SLICE | NAL_IDR) {
+        return None;
+    }
+    // The first two values of a slice header (first_mb_in_slice, slice_type) are Exp-Golomb codes.
+    // Undo the 00 00 03 padding in the few bytes they can span.
+    let mut bytes = Vec::with_capacity(8);
+    let mut zeros = 0;
+    for &b in nal.iter().skip(1).take(12) {
+        if zeros >= 2 && b == 3 {
+            zeros = 0;
+            continue;
+        }
+        zeros = if b == 0 { zeros + 1 } else { 0 };
+        bytes.push(b);
+    }
+    let mut at = 0usize;
+    let mut ue = || -> Option<u32> {
+        let mut leading = 0;
+        while *bytes.get(at / 8)? & (0x80 >> (at % 8)) == 0 {
+            leading += 1;
+            at += 1;
+            if leading > 16 {
+                return None;
+            }
+        }
+        at += 1;
+        let mut value = 1u32;
+        for _ in 0..leading {
+            value = (value << 1) | u32::from(*bytes.get(at / 8)? & (0x80 >> (at % 8)) != 0);
+            at += 1;
+        }
+        Some(value - 1)
+    };
+    ue()?;
+    match ue()? % 5 {
+        0 => Some('P'),
+        1 => Some('B'),
+        2 => Some('I'),
+        _ => None,
+    }
+}
+
+/// Whether an access unit (Annex B) holds a B picture.
+pub fn is_b_picture(annexb: &[u8]) -> bool {
+    split_annexb(annexb).iter().any(|nal| slice_kind(nal) == Some('B'))
+}
+
 /// One picture, ready for FLV.
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub struct Picture {
@@ -174,6 +224,30 @@ mod tests {
         assert_eq!(&cfg[at + 3..at + 3 + PPS.len()], PPS);
         // High profile adds the chroma format and bit depth bytes.
         assert_eq!(&cfg[at + 3 + PPS.len()..], &[0xFD, 0xF8, 0xF8, 0]);
+    }
+
+    #[test]
+    fn reads_the_picture_kind_from_the_slice_header() {
+        // first_mb_in_slice = 0 is the bit 1; then slice_type as an Exp-Golomb code.
+        assert_eq!(slice_kind(&[0x41, 0xC0]), Some('P')); // 1 1: slice_type 0
+        assert_eq!(slice_kind(&[0x01, 0xA0]), Some('B')); // 1 010: slice_type 1
+        assert_eq!(slice_kind(&[0x41, 0xB0]), Some('I')); // 1 011: slice_type 2
+        assert_eq!(slice_kind(&[0x41, 0x98]), Some('P')); // 1 00110: slice_type 5, "all P"
+        assert_eq!(slice_kind(&[0x01, 0x90]), None); // 1 00100: slice_type 3, a switching slice
+        assert_eq!(slice_kind(IDR), Some('I')); // 1 0001000: slice_type 7, "all I"
+        assert_eq!(slice_kind(B_FRAME), Some('B')); // 1 0011110: slice_type 6, "all B"
+        assert_eq!(slice_kind(&[0x67, 0xC0]), None, "a parameter set isn't a slice");
+        assert_eq!(slice_kind(&[0x41]), None);
+        assert_eq!(slice_kind(&[]), None);
+    }
+
+    #[test]
+    fn finds_b_pictures_in_a_picture() {
+        let b = annexb(&[(&[0, 0, 0, 1], &[0x01, 0xA0, 0x11])]);
+        let p = annexb(&[(&[0, 0, 0, 1], &[0x41, 0xC0, 0x11])]);
+        assert!(is_b_picture(&b));
+        assert!(!is_b_picture(&p));
+        assert!(!is_b_picture(&annexb(&[(&[0, 0, 0, 1], IDR)])));
     }
 
     #[test]

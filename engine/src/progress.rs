@@ -20,6 +20,9 @@ pub struct Progress {
     pub drop_frames: u64,
     /// Stream time divided by clock time: 1.00 is exactly real time.
     pub speed: f64,
+    /// More `key=value` lines for the block, each ending in a newline (what encoder is running and how
+    /// it is set; FFmpeg's parser skips keys it doesn't know).
+    pub extra: String,
 }
 
 fn clock_text(us: i64) -> String {
@@ -32,7 +35,7 @@ impl Progress {
     /// One block. `last` ends it with `progress=end` instead of `progress=continue`.
     pub fn block(&self, last: bool) -> String {
         format!(
-            "frame={}\nfps={:.2}\nbitrate={:.1}kbits/s\ntotal_size={}\nout_time_us={}\nout_time_ms={}\nout_time={}\ndup_frames={}\ndrop_frames={}\nspeed={:.2}x\nprogress={}\n",
+            "frame={}\nfps={:.2}\nbitrate={:.1}kbits/s\ntotal_size={}\nout_time_us={}\nout_time_ms={}\nout_time={}\ndup_frames={}\ndrop_frames={}\nspeed={:.2}x\n{}progress={}\n",
             self.frames,
             self.fps,
             self.bitrate_kbps,
@@ -43,6 +46,7 @@ impl Progress {
             self.dup_frames,
             self.drop_frames,
             self.speed,
+            self.extra,
             if last { "end" } else { "continue" },
         )
     }
@@ -82,7 +86,27 @@ mod tests {
     use super::*;
 
     fn sample() -> Progress {
-        Progress { frames: 295, fps: 59.94, bitrate_kbps: 5876.3, total_size: 3_145_728, out_time_us: 4_433_333, dup_frames: 4, drop_frames: 2, speed: 0.998 }
+        Progress {
+            frames: 295,
+            fps: 59.94,
+            bitrate_kbps: 5876.3,
+            total_size: 3_145_728,
+            out_time_us: 4_433_333,
+            dup_frames: 4,
+            drop_frames: 2,
+            speed: 0.998,
+            extra: String::new(),
+        }
+    }
+
+    #[test]
+    fn extra_lines_go_before_the_end_of_the_block() {
+        let mut p = sample();
+        p.extra = "encoder_backend=nvenc\nencoder_tuning=quality\n".to_string();
+        let text = p.block(false);
+        assert!(text.ends_with("speed=1.00x\nencoder_backend=nvenc\nencoder_tuning=quality\nprogress=continue\n"), "{text}");
+        // The first nine keys are the ones FFmpeg prints, in its order.
+        assert!(text.starts_with("frame=295\nfps=59.94\nbitrate=5876.3kbits/s\n"));
     }
 
     #[test]

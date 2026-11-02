@@ -6,11 +6,16 @@
 //! never reaches the capture or the encoder. Fields we don't know are ignored, which lets the
 //! config grow (another service, a second output, a recording, overlays) without breaking older
 //! callers: add a field here, give it a default, and read it where it is needed.
+//!
+//! For testing and tooling there are two more ways to run: `"source": { "y4m": "<file>" }` encodes a
+//! Y4M video file instead of the screen, and a `file:<path>.flv` address writes the stream to a file
+//! instead of sending it (see README.md).
 
 use crate::error::{Error, Result};
 use crate::redact;
 use serde_json::Value;
 use std::fmt;
+use std::path::PathBuf;
 
 /// Which hardware encoder to use.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -43,11 +48,86 @@ impl EncoderChoice {
     }
 }
 
+/// Which encoder program runs the picture.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Backend {
+    /// NVENC directly on NVIDIA cards (the best picture), Media Foundation otherwise or when NVENC can't open.
+    Auto,
+    Nvenc,
+    MediaFoundation,
+}
+
+impl Backend {
+    pub fn parse(name: &str) -> Option<Self> {
+        match name.trim().to_ascii_lowercase().as_str() {
+            "" | "auto" => Some(Self::Auto),
+            "nvenc" => Some(Self::Nvenc),
+            "mf" | "mediafoundation" | "media-foundation" => Some(Self::MediaFoundation),
+            _ => None,
+        }
+    }
+}
+
+/// Which set of NVENC settings to start with (see `tuning.rs`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TuningChoice {
+    /// Quality, falling back to safe if the card refuses.
+    Auto,
+    Quality,
+    /// Skip the quality set (the probe already found the card refuses it).
+    Safe,
+}
+
+impl TuningChoice {
+    pub fn parse(name: &str) -> Option<Self> {
+        match name.trim().to_ascii_lowercase().as_str() {
+            "" | "auto" => Some(Self::Auto),
+            "quality" => Some(Self::Quality),
+            "safe" => Some(Self::Safe),
+            _ => None,
+        }
+    }
+}
+
+/// Where the picture comes from.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Source {
+    Screen,
+    /// A Y4M video file (testing and tooling).
+    Y4m(PathBuf),
+}
+
+/// Where the stream goes.
+#[derive(Clone, PartialEq, Eq)]
+pub enum Output {
+    /// `rtmp://` or `rtmps://` with the stream key in the path. A secret: never printed.
+    Rtmp(String),
+    /// An FLV file (testing and tooling).
+    File(PathBuf),
+}
+
+impl fmt::Debug for Output {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Output::Rtmp(_) => f.write_str("Rtmp(<hidden>)"),
+            Output::File(path) => f.debug_tuple("File").field(path).finish(),
+        }
+    }
+}
+
 #[derive(Clone)]
 pub struct Settings {
-    /// Where the stream goes: `rtmp://` or `rtmps://`, with the stream key in the path. This is a
-    /// secret: it is never printed (see the `Debug` below) and is registered with [`redact`].
+    /// Where the stream goes, as given: `rtmp://` or `rtmps://` with the stream key in the path, or
+    /// `file:<path>.flv`. For RTMP this is a secret: it is never printed (see the `Debug` below)
+    /// and is registered with [`redact`].
     pub url: String,
+    pub output: Output,
+    pub source: Source,
+    /// With a file as the source: whether to send the pictures at the file's frame rate (true, the
+    /// default) or as fast as the encoder takes them. The screen is always real time.
+    pub pace: bool,
+    pub backend: Backend,
+    pub tuning: TuningChoice,
     /// Which monitor to capture, counting from 0 across all graphics cards (0 is the main one).
     pub screen: u32,
     /// 30 or 60.
@@ -74,6 +154,11 @@ impl Default for Settings {
     fn default() -> Self {
         Settings {
             url: String::new(),
+            output: Output::Rtmp(String::new()),
+            source: Source::Screen,
+            pace: true,
+            backend: Backend::Auto,
+            tuning: TuningChoice::Auto,
             screen: 0,
             fps: 60,
             height: 1080,
@@ -92,6 +177,10 @@ impl fmt::Debug for Settings {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Settings")
             .field("url", &"<hidden>")
+            .field("source", &self.source)
+            .field("pace", &self.pace)
+            .field("backend", &self.backend)
+            .field("tuning", &self.tuning)
             .field("screen", &self.screen)
             .field("fps", &self.fps)
             .field("height", &self.height)
@@ -123,6 +212,64 @@ pub fn is_audio_pipe_name(name: &str) -> bool {
     }
 }
 
+/// Whether the address is the `file:` form (a stream written to a file for testing).
+pub fn is_file_url(url: &str) -> bool {
+    url.get(..5).is_some_and(|p| p.eq_ignore_ascii_case("file:"))
+}
+
+/// The path in a `file:` address, or `None` if it isn't a usable one: it has to name a `.flv` file.
+/// Takes the forms people write: `file:C:\x\a.flv`, `file:C:/x/a.flv`, `file:out/a.flv`,
+/// `file:/C:/x/a.flv` and `file:///C:/x/a.flv` (the last two the way a URL spells it, where
+/// `%20` and the like also mean what they say).
+pub fn parse_file_url(url: &str) -> Option<PathBuf> {
+    if !is_file_url(url) {
+        return None;
+    }
+    let mut rest = &url[5..];
+    // The URL spellings (a leading slash) mean what percent signs say; a plain `file:C:\x` path doesn't.
+    let url_form = rest.starts_with('/');
+    if rest.starts_with("//") {
+        rest = &rest[2..];
+    }
+    // "/C:/x" (the empty host of a URL, then a drive) is "C:/x".
+    let bytes = rest.as_bytes();
+    if bytes.len() >= 3 && bytes[0] == b'/' && bytes[1].is_ascii_alphabetic() && bytes[2] == b':' {
+        rest = &rest[1..];
+    }
+    let decoded;
+    if url_form {
+        decoded = percent_decode(rest)?;
+        rest = &decoded;
+    }
+    let rest = rest.trim();
+    if rest.is_empty() || rest.contains('\0') || !rest.to_ascii_lowercase().ends_with(".flv") || rest.len() <= 4 {
+        return None;
+    }
+    // A bare ".flv" or a name that is only a separator before it isn't a file.
+    let name = rest.rsplit(['/', '\\']).next().unwrap_or("");
+    if name.len() <= 4 {
+        return None;
+    }
+    Some(PathBuf::from(rest))
+}
+
+fn percent_decode(text: &str) -> Option<String> {
+    let bytes = text.as_bytes();
+    let mut out = Vec::with_capacity(bytes.len());
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] == b'%' {
+            let hex = text.get(i + 1..i + 3)?;
+            out.push(u8::from_str_radix(hex, 16).ok()?);
+            i += 3;
+        } else {
+            out.push(bytes[i]);
+            i += 1;
+        }
+    }
+    String::from_utf8(out).ok()
+}
+
 impl Settings {
     /// Reads and clamps the config line. Fails (with a sentence for the person) only when there is
     /// nothing sensible to do: no usable address, or a sound pipe that isn't Uncbox's.
@@ -134,17 +281,25 @@ impl Settings {
     pub fn from_value(value: &Value) -> Result<Settings> {
         let defaults = Settings::default();
         let url = value.get("url").and_then(Value::as_str).unwrap_or("").trim().to_string();
-        if !(url.starts_with("rtmp://") || url.starts_with("rtmps://")) {
-            return Err(Error::new("There is no stream address to send to."));
-        }
-        redact::add_secret(&url);
-        if let Some(key) = url.splitn(4, '/').nth(3).and_then(|path| path.split_once('/')).map(|(_, rest)| rest) {
-            redact::add_secret(key);
-            // The key without a query ("?bandwidthtest=true") is also a secret on its own.
-            if let Some((bare, _)) = key.split_once('?') {
-                redact::add_secret(bare);
+        let output = if is_file_url(&url) {
+            Output::File(parse_file_url(&url).ok_or_else(|| Error::new("The file to write the stream to has to be a .flv file."))?)
+        } else if url.starts_with("rtmp://") || url.starts_with("rtmps://") {
+            redact::add_secret(&url);
+            if let Some(key) = url.splitn(4, '/').nth(3).and_then(|path| path.split_once('/')).map(|(_, rest)| rest) {
+                redact::add_secret(key);
+                // The key without a query ("?bandwidthtest=true") is also a secret on its own.
+                if let Some((bare, _)) = key.split_once('?') {
+                    redact::add_secret(bare);
+                }
             }
-        }
+            Output::Rtmp(url.clone())
+        } else {
+            return Err(Error::new("There is no stream address to send to."));
+        };
+        let source = match value.get("source").and_then(|s| s.get("y4m")).and_then(Value::as_str).map(str::trim) {
+            Some(path) if !path.is_empty() => Source::Y4m(PathBuf::from(path)),
+            _ => Source::Screen,
+        };
 
         let audio_pipe = match value.get("audioPipe") {
             None | Some(Value::Null) => None,
@@ -157,6 +312,11 @@ impl Settings {
         let audio = whole(value.get("audioKbps"), i64::from(defaults.audio_kbps));
         Ok(Settings {
             url,
+            output,
+            source,
+            pace: value.get("pace").and_then(Value::as_bool).unwrap_or(defaults.pace),
+            backend: value.get("backend").and_then(Value::as_str).and_then(Backend::parse).unwrap_or(defaults.backend),
+            tuning: value.get("tuning").and_then(Value::as_str).and_then(TuningChoice::parse).unwrap_or(defaults.tuning),
             screen: whole(value.get("screen"), i64::from(defaults.screen)).clamp(0, 7) as u32,
             fps: if whole(value.get("fps"), 60) == 30 { 30 } else { 60 },
             height: if matches!(height, 0 | 720 | 1080) { height as u32 } else { defaults.height },
@@ -282,6 +442,87 @@ mod tests {
         assert_eq!(target_size(1366, 768, 720), (1280, 720));
         assert_eq!(target_size(1921, 1081, 0), (1920, 1080));
         assert_eq!(target_size(1000, 1000, 720), (720, 720));
+    }
+
+    fn path(url: &str) -> Option<String> {
+        parse_file_url(url).map(|p| p.to_string_lossy().into_owned())
+    }
+
+    #[test]
+    fn file_addresses_in_the_forms_people_write() {
+        assert_eq!(path(r"file:C:\clips\out.flv").as_deref(), Some(r"C:\clips\out.flv"));
+        assert_eq!(path("file:C:/clips/out.flv").as_deref(), Some("C:/clips/out.flv"));
+        assert_eq!(path("file:out/a.flv").as_deref(), Some("out/a.flv"));
+        assert_eq!(path("file:a.flv").as_deref(), Some("a.flv"));
+        assert_eq!(path("file:/C:/clips/out.flv").as_deref(), Some("C:/clips/out.flv"));
+        assert_eq!(path("file:///C:/clips/out.flv").as_deref(), Some("C:/clips/out.flv"));
+        assert_eq!(path("file://C:/clips/out.flv").as_deref(), Some("C:/clips/out.flv"));
+        assert_eq!(path("FILE:C:/clips/OUT.FLV").as_deref(), Some("C:/clips/OUT.FLV"));
+    }
+
+    #[test]
+    fn percent_signs_mean_what_they_say_only_in_the_url_spelling() {
+        assert_eq!(path("file:///C:/my%20clips/out.flv").as_deref(), Some("C:/my clips/out.flv"));
+        assert_eq!(path("file:/C:/my%20clips/out.flv").as_deref(), Some("C:/my clips/out.flv"));
+        assert_eq!(path("file:C:/100%25/out.flv").as_deref(), Some("C:/100%25/out.flv"));
+        assert_eq!(path("file:///C:/bad%2/out.flv"), None);
+        assert_eq!(path("file:///C:/bad%zz/out.flv"), None);
+    }
+
+    #[test]
+    fn only_flv_files_are_written() {
+        for bad in [
+            "file:",
+            "file:///",
+            "file:C:/x/out.mp4",
+            "file:C:/x/",
+            "file:C:/x/.flv",
+            "file:.flv",
+            "file:C:/x/out.flv.txt",
+            "file:C:/x/a\0.flv",
+            "rtmp://x/y/z.flv",
+            "C:/x/a.flv",
+            "",
+        ] {
+            assert_eq!(path(bad), None, "{bad:?}");
+        }
+    }
+
+    #[test]
+    fn a_file_address_is_an_output_and_not_a_secret() {
+        let s = Settings::from_json(r#"{"url":"file:C:/clips/out.flv"}"#).unwrap();
+        assert_eq!(s.output, Output::File(PathBuf::from("C:/clips/out.flv")));
+        assert_eq!(s.source, Source::Screen);
+        assert!(Settings::from_json(r#"{"url":"file:C:/clips/out.mp4"}"#).is_err());
+        let s = parse("");
+        assert_eq!(s.output, Output::Rtmp(URL.to_string()));
+    }
+
+    #[test]
+    fn a_y4m_file_can_stand_in_for_the_screen() {
+        let s = Settings::from_json(r#"{"url":"file:C:/o.flv","source":{"y4m":"C:\\clips\\in.y4m"},"pace":false}"#).unwrap();
+        assert_eq!(s.source, Source::Y4m(PathBuf::from(r"C:\clips\in.y4m")));
+        assert!(!s.pace);
+        assert!(parse("").pace, "paced unless told not to");
+        // Anything that isn't a path string leaves the screen as the source.
+        for odd in [r#","source":{}"#, r#","source":"x.y4m""#, r#","source":{"y4m":5}"#, r#","source":{"y4m":""}"#, r#","source":null"#] {
+            assert_eq!(parse(odd).source, Source::Screen, "{odd}");
+        }
+        assert!(parse(r#","pace":"no""#).pace, "only a real true or false counts");
+    }
+
+    #[test]
+    fn backend_and_tuning_can_be_chosen_and_default_to_automatic() {
+        let s = parse("");
+        assert_eq!((s.backend, s.tuning), (Backend::Auto, TuningChoice::Auto));
+        let s = parse(r#","backend":"nvenc","tuning":"safe""#);
+        assert_eq!((s.backend, s.tuning), (Backend::Nvenc, TuningChoice::Safe));
+        let s = parse(r#","backend":"MF","tuning":"Quality""#);
+        assert_eq!((s.backend, s.tuning), (Backend::MediaFoundation, TuningChoice::Quality));
+        let s = parse(r#","backend":"mediafoundation","tuning":"auto""#);
+        assert_eq!((s.backend, s.tuning), (Backend::MediaFoundation, TuningChoice::Auto));
+        let s = parse(r#","backend":"cuda","tuning":7"#);
+        assert_eq!((s.backend, s.tuning), (Backend::Auto, TuningChoice::Auto));
     }
 
     #[test]
