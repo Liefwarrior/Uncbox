@@ -67,14 +67,44 @@ export const TWITCH_INGEST = 'rtmps://live.twitch.tv:443/app';
 /**
  * Where the video goes. A test stream is taken by Twitch but not shown to anyone.
  *
- * UNCBOX_STREAM_INGEST replaces rtmps://live.twitch.tv:443/app with another rtmp:// or rtmps://
- * address, so a stream can be tried against a listener on this PC without going to Twitch. It is
- * for testing only and is not set in normal use; anything that isn't an rtmp(s) address is ignored.
+ * UNCBOX_STREAM_INGEST replaces rtmps://live.twitch.tv:443/app with an rtmp:// or rtmps:// address
+ * on this PC, so a stream can be tried against a local listener without going to Twitch. It is for
+ * testing only. Any other host is ignored: the address carries the stream key, and a variable left
+ * set (or set by something else) must not be able to send it anywhere but Twitch.
  */
 export function ingestUrl(key, test = false, env = process.env) {
+  return `${testIngest(env) || TWITCH_INGEST}/${key}${test ? '?bandwidthtest=true' : ''}`;
+}
+
+/** The hosts that count as this PC. */
+const LOOPBACK = new Set(['127.0.0.1', 'localhost', '[::1]']);
+
+/** UNCBOX_STREAM_INGEST when it is an rtmp(s) address on this PC (see ingestUrl), otherwise ''. */
+export function testIngest(env = process.env) {
   const given = String(env?.UNCBOX_STREAM_INGEST ?? '').trim().replace(/\/+$/, '');
-  const base = /^rtmps?:\/\/[^\s?#]+$/i.test(given) ? given : TWITCH_INGEST;
-  return `${base}/${key}${test ? '?bandwidthtest=true' : ''}`;
+  if (!/^rtmps?:\/\/[^\s?#]+$/i.test(given)) return '';
+  try {
+    return LOOPBACK.has(new URL(given).hostname.toLowerCase()) ? given : '';
+  } catch {
+    return '';
+  }
+}
+
+/**
+ * A line the streaming program printed, as the reason a stream stopped: '' for a line that isn't one
+ * (a debug note, FFmpeg remarking on its input), the engine's own sentence for the network failures
+ * FFmpeg only gives a number for, and otherwise the line as it is. Both programs then say the same
+ * thing for the same failure, so nobody can tell from it which one was streaming. `host` is the
+ * server the stream goes to. The line must already be redacted.
+ */
+export function plainReason(line, host = 'the server') {
+  const text = String(line).trim();
+  if (!text || text.startsWith('[debug]') || /Guessed Channel Layout|Estimating duration from bitrate/i.test(text)) return '';
+  if (/Error number -138\b|Error number -10061\b|Connection refused/i.test(text)) return `The server ${host} refused the connection.`;
+  if (/Error number -(10054|10053|32)\b|Connection reset|Broken pipe/i.test(text)) return 'The connection to the server was lost.';
+  if (/Error number -(10060|138)\b.*timed out|Connection timed out|Operation timed out/i.test(text)) return `The server ${host} didn't answer.`;
+  if (/Failed to resolve hostname|Error number -11001\b|Name or service not known/i.test(text)) return `Couldn't find the server ${host}. Check the internet connection.`;
+  return text;
 }
 
 /** The text with the stream key (and anything shaped like one) blanked out. */
@@ -192,7 +222,9 @@ export function buildFfmpegArgs({ settings, key, test = false, audioPipe = '', e
   const scale = height > 0 && height !== screenHeight;
   const chain = videoChain({ encoder, scaler, height, scale });
   const audio = audioPipe
-    ? ['-thread_queue_size', '1024', '-f', 'f32le', '-ar', '48000', '-ac', '2', '-i', audioPipe]
+    ? // A named layout, not just two channels: otherwise FFmpeg guesses one and says so on stderr,
+      // where the line would stand as the reason for a drop that has none of its own.
+      ['-thread_queue_size', '1024', '-f', 'f32le', '-ar', '48000', '-ch_layout', 'stereo', '-i', audioPipe]
     : ['-f', 'lavfi', '-i', 'anullsrc=channel_layout=stereo:sample_rate=48000'];
   return [
     ...['-hide_banner', '-loglevel', 'warning', '-nostats', '-progress', 'pipe:1'],
@@ -218,11 +250,13 @@ export function buildFfmpegArgs({ settings, key, test = false, audioPipe = '', e
 /**
  * What the engine is told on stdin, as one line of JSON. The address (with the key in it) goes
  * here rather than in the arguments, which other programs on this PC can read. The engine reads
- * the same settings FFmpeg does, and picks the encoder itself ('auto').
+ * the same settings FFmpeg does and picks the card itself ('auto'), but only ever drives NVENC
+ * directly ('nvenc'): through Windows' own encoder its picture is worse than FFmpeg's (see
+ * checkNative), and a stream must look the same whichever program makes it.
  */
 export function buildEngineConfig({ settings, key, test = false, audioPipe = '', env = process.env }) {
   const { screen, fps, height, kbps } = clampSettings(settings);
-  return { url: ingestUrl(key, test, env), screen, fps, height, kbps, ...(audioPipe ? { audioPipe } : {}), encoder: 'auto' };
+  return { url: ingestUrl(key, test, env), screen, fps, height, kbps, ...(audioPipe ? { audioPipe } : {}), encoder: 'auto', backend: 'nvenc' };
 }
 
 /** The engine's names for the makers of graphics card encoders, and the encoder ids the page knows them by. */
@@ -230,10 +264,12 @@ export const ENGINE_ENCODERS = { nvidia: 'nvenc', amd: 'amf', intel: 'qsv' };
 
 /**
  * What `uncbox-stream probe` printed: its version, the graphics cards, and the encoders that were
- * started for real, as { version, encoders: [{ id, tuning }], adapters }; or null when it isn't
- * that. `id` is the page's name for the encoder (see ENGINE_ENCODERS); a maker this doesn't know
- * is left out. A `tuning` ('quality' or 'safe') is taken when the probe gives one, either on the
- * encoder, next to the list per maker, or as one word for all; it is 'quality' otherwise.
+ * started for real, as { version, encoders: [{ id, tuning, backend }], adapters }; or null when it
+ * isn't that. `id` is the page's name for the encoder (see ENGINE_ENCODERS); a maker this doesn't
+ * know is left out. A `tuning` ('quality' or 'safe') is taken when the probe gives one, either on
+ * the encoder, next to the list per maker, or as one word for all; it is 'quality' otherwise.
+ * `backend` is how the engine drives it ('nvenc' directly, 'mediafoundation' through Windows), or
+ * null when the probe doesn't say.
  */
 export function parseProbe(text) {
   let p;
@@ -251,7 +287,8 @@ export function parseProbe(text) {
     if (!id || encoders.some((e) => e.id === id)) continue;
     const own = entry && typeof entry === 'object' ? tuningOf(entry.tuning) : null;
     const listed = p.tuning && typeof p.tuning === 'object' ? tuningOf(p.tuning[maker]) : tuningOf(p.tuning);
-    encoders.push({ id, tuning: own ?? listed ?? 'quality' });
+    const backend = entry && typeof entry === 'object' && typeof entry.backend === 'string' ? entry.backend : p.backend && typeof p.backend === 'object' && typeof p.backend[maker] === 'string' ? p.backend[maker] : null;
+    encoders.push({ id, tuning: own ?? listed ?? 'quality', backend });
   }
   return { version: typeof p.version === 'string' ? p.version : '', encoders, adapters: Array.isArray(p.adapters) ? p.adapters : [] };
 }
@@ -549,7 +586,11 @@ export function createStream({
     const info = probe.code === 0 ? parseProbe(probe.out) : null;
     if (!info) return why('Uncbox’s own streaming engine didn’t answer its check');
     if (!info.encoders.length) return why('Uncbox’s own streaming engine found no graphics card encoder that works here');
-    const [first] = info.encoders;
+    // Only where it drives NVENC itself. Through Windows' Media Foundation (AMD, Intel, or an
+    // NVIDIA card whose NVENC won't open) it has no look-ahead or adaptive quantisation, which
+    // measured about 4 VMAF worse than FFmpeg's encoders: a viewer would see the difference.
+    const first = info.encoders.find((e) => e.backend === 'nvenc');
+    if (!first) return why('Uncbox’s own streaming engine can only use Windows’ plainer encoder on this graphics card');
     return { path: found, tools: { ffmpeg: true, version: info.version, encoder: first.id, tuning: first.tuning, scaler: 'd3d11', ddagrab: true, engine: 'native' } };
   }
 
@@ -633,10 +674,18 @@ export function createStream({
         void emit();
       } else void emit(false);
     });
+    const url = config ? config.url : ingestUrl(key, test, env);
+    let host = 'the server';
+    try {
+      host = new URL(url).hostname || host;
+    } catch {
+      // A plain "the server" will do.
+    }
+    if (testIngest(env)) log(`Uncbox: UNCBOX_STREAM_INGEST is set, so this stream goes to ${testIngest(env)} on this PC, not to Twitch.`);
     mine.stderr?.on(
       'data',
       lines((line) => {
-        const clean = redact(line, key).trim();
+        const clean = plainReason(redact(line, key), host);
         if (clean && child === mine) error = clean;
       }),
     );

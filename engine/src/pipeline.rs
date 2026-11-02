@@ -23,7 +23,7 @@ use crate::error::{Context, Error, Result};
 use crate::flv::{self, AvcPacket, Metadata};
 use crate::gpu::{self, AdapterInfo, Gpu};
 use crate::h264;
-use crate::log::{debug, warn};
+use crate::log::debug;
 use crate::mf::{self, EncodedVideo};
 use crate::net;
 use crate::probe::{self, EncoderCheck, ProbeAdapter, ProbeOutput};
@@ -204,7 +204,10 @@ impl VideoMux {
 struct Moved<T>(T);
 
 // SAFETY: see above; every `Moved` value is used by exactly one thread after it is handed over.
-unsafe impl<T> Send for Moved<T> {}
+// Only for the three things that are handed over, so nothing else can be moved this way by mistake.
+unsafe impl Send for Moved<Encoder> {}
+unsafe impl Send for Moved<(Source, Converter)> {}
+unsafe impl Send for Moved<Picture> {}
 
 impl<T> Moved<T> {
     fn into_inner(self) -> T {
@@ -366,7 +369,7 @@ pub fn run(mut settings: Settings, control: Receiver<Control>) -> Result<()> {
         let (shared, queue, stats) = (shared.clone(), queue.clone(), audio_stats.clone());
         let params = AudioParams { pipe, kbps: settings.audio_kbps, start, stop: shared.audio_stop.clone() };
         Some(spawn("sound", shared.clone(), move || {
-            if let Err(e) = audio::run(params, queue, stats, warn) {
+            if let Err(e) = audio::run(params, queue, stats, debug) {
                 shared.fail(e.to_string());
             }
         }))

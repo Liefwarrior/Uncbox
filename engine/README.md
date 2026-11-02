@@ -198,8 +198,9 @@ of samples that have gone out; both are measured from the moment the app's pipe 
 starts its own real-time clock then). If the screen hasn't changed the last picture is sent again
 (counted in `dup_frames`). If the machine is late, whole slots are skipped and counted as dropped,
 never stretched. If the pipe goes quiet, silence is filled in; if a late burst follows, the blocks
-that would put the sound ahead are dropped; if the pipe closes, the app is gone and the engine exits
-with an error (the page starts the stream again).
+that would put the sound ahead are dropped; if the pipe closes, the stream goes on with silence, as
+FFmpeg's does, and the page (told by the app that its sound stopped) ends it with the same words
+whichever program is streaming.
 
 **The pictures.** Each converted picture comes from a pool and stays out of it until the encoder is
 done with it, which with look-ahead is about 27 pictures (34 in the pool). If the pool is empty the
@@ -231,7 +232,14 @@ log (`UNCBOX_STREAM_DEBUG=1`).
 `scripts/engine.mjs` finds cargo (adding `~/.cargo/bin` and LLVM-MinGW's `bin` to PATH), rebuilds a
 stale exe for `npm run app:native`, and `npm run package` builds the engine too. For tests only,
 `UNCBOX_STREAM_INGEST=rtmp://127.0.0.1:PORT/app` sends the stream to a local receiver instead of
-Twitch.
+Twitch. It is honoured only for an address on this PC (127.0.0.1, localhost, ::1), since the address
+carries the stream key, and the server's console says so whenever it is in use.
+
+The server uses the engine only where its probe says it drives NVENC directly (`backend: "nvenc"`),
+and tells it so (`"backend": "nvenc"` in the run config). Through Media Foundation (AMD, Intel, or an
+NVIDIA card whose NVENC won't open) the picture measured about 4 VMAF below FFmpeg's, so there the
+lighter launch streams with FFmpeg. engine/src/tuning.rs and FFmpeg's `encoderArgs` are tied by a
+test in server/stream.test.mjs, so the two can't drift apart.
 
 ## Testing and tooling
 
@@ -259,7 +267,10 @@ file that arrives with ffprobe: H.264 High, B-frames (on NVENC), keyframes never
 decode times that only go up, AAC 48 kHz stereo, and about as many pictures as the time asked for.
 `quality.mjs` is the VMAF comparison described below. `UNCBOX_STREAM_DEBUG=1` prints what the engine
 is doing (key filtered, as everything is), and `UNCBOX_STREAM_TLS_ROOT=<certificate file>` adds one
-certificate to those Windows trusts, so a local TLS test server can be used.
+certificate to those Windows trusts, so a local TLS test server can be used. Only for a server on
+this PC: for any other host (Twitch) it is ignored, or it would let whoever set it read the key on its
+way. Only reasons a stream stopped are printed on stderr; everything else (which encoder, a stall in
+the sound, the sound pipe closing) goes to the debug log.
 
 ## Measured
 

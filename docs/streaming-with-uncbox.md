@@ -110,8 +110,9 @@ FFmpeg uses (B-frames, 20 frames of look-ahead, a quarter-size first pass), and 
 as FFmpeg on two SMITE clips (92.6-93.3). What you get is the processor time back: measured on an
 RTX 5090 laptop at 1080p60, 4-10% of one core against FFmpeg's 35-83%, and it stops in a fifth of
 a second. It also streams HDR screens and turned (portrait) screens upright, and keeps going when a
-screen changes size mid-stream. On AMD and Intel it uses Windows' own encoders, which take fewer
-quality settings (and haven't been tried on those cards yet).
+screen changes size mid-stream. On AMD and Intel cards the lighter launch streams with FFmpeg: the
+program could only use Windows' own encoders there, whose picture is visibly plainer, so FFmpeg's
+AMF and Quick Sync encoders do it instead and the stream looks the same either way.
 
 ## What viewers see
 

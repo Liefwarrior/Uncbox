@@ -5,7 +5,9 @@
 //! (see native/UncboxShell/StreamAudio.cs). A reader thread takes it in 10 ms blocks. The sound
 //! thread then watches the clock: if the pipe goes quiet, silence is filled in so the sound never
 //! falls behind the picture; if a late burst arrives after that, the blocks that would put the
-//! sound ahead are dropped. If the pipe closes, the app has gone, and that ends the stream.
+//! sound ahead are dropped. If the pipe closes, the stream carries on with silence, as FFmpeg's does:
+//! the page hears from the app that its sound stopped and ends the stream itself, with the same words
+//! whichever program is streaming.
 
 use crate::error::{Error, Result};
 use crate::flv::{self, AacPacket};
@@ -100,24 +102,25 @@ pub struct AudioParams {
     pub stop: Arc<AtomicBool>,
 }
 
-/// Runs the sound until `stop` is set; returns an error if the pipe closes or the encoder fails.
-pub fn run(params: AudioParams, queue: Arc<PacketQueue>, stats: Arc<AudioStats>, warn: impl Fn(&str)) -> Result<()> {
+/// Runs the sound until `stop` is set; returns an error if the encoder fails. `note` gets remarks
+/// for whoever works on the engine (a stall, the pipe closing); they are not reasons to stop.
+pub fn run(params: AudioParams, queue: Arc<PacketQueue>, stats: Arc<AudioStats>, note: impl Fn(&str)) -> Result<()> {
     crate::mf::init_thread();
     let mut encoder = AudioEncoder::new(params.kbps)?;
     // The two-byte "how to decode this" note goes before any sound.
     queue.push(Packet::Audio { ts_ms: 0, body: flv::audio_body(AacPacket::SequenceHeader, &flv::aac_config(SAMPLE_RATE, 2)) });
 
-    let reader = params.pipe.map(spawn_reader);
+    let mut reader = params.pipe.map(spawn_reader);
     // The clock started when the pipe was opened, so the app's real-time writer and ours agree.
     let start = params.start;
     let mut frames_in: u64 = 0;
     let mut frames_sent: u64 = 0;
     let mut aac_frames: Vec<Vec<u8>> = Vec::new();
     let mut last_warning: Option<Instant> = None;
-    let mut warn_stall = |text: &str| {
+    let mut note_stall = |text: &str| {
         if last_warning.is_none_or(|t| t.elapsed() > Duration::from_secs(10)) {
             last_warning = Some(Instant::now());
-            warn(text);
+            note(text);
         }
     };
     // How long, in a row, silence has been put in because the pipe said nothing.
@@ -137,7 +140,7 @@ pub fn run(params: AudioParams, queue: Arc<PacketQueue>, stats: Arc<AudioStats>,
             Some(rx) => match rx.recv_timeout(wait) {
                 Ok(msg) => Some(msg),
                 Err(RecvTimeoutError::Timeout) => None,
-                Err(RecvTimeoutError::Disconnected) => return Err(Error::new("The Uncbox app stopped sending sound.")),
+                Err(RecvTimeoutError::Disconnected) => Some(FromPipe::Closed("The Uncbox app stopped sending sound.".into())),
             },
             None => {
                 std::thread::sleep(wait);
@@ -146,7 +149,11 @@ pub fn run(params: AudioParams, queue: Arc<PacketQueue>, stats: Arc<AudioStats>,
         };
         let got_block = matches!(got, Some(FromPipe::Block(_)));
         match got {
-            Some(FromPipe::Closed(why)) => return Err(Error::new(why)),
+            Some(FromPipe::Closed(why)) => {
+                // Silence from here on (see the top of this file).
+                note(&format!("{why} Going on with silence."));
+                reader = None;
+            }
             Some(FromPipe::Block(block)) => {
                 let ahead = frames_in as i64 + (block.len() / 2) as i64 - elapsed_frames;
                 if ahead > AHEAD_FRAMES {
@@ -166,7 +173,7 @@ pub fn run(params: AudioParams, queue: Arc<PacketQueue>, stats: Arc<AudioStats>,
             silent_run += BLOCK_FRAMES as u64;
             // A gap of a fifth of a second or more is worth a word; a hiccup at the start is not.
             if reader.is_some() && silent_run >= u64::from(SAMPLE_RATE) / 5 && start.elapsed() > Duration::from_secs(2) {
-                warn_stall("The sound stalled for a moment; filling it with silence.");
+                note_stall("The sound stalled for a moment; filling it with silence.");
             }
             stats.filled_blocks.fetch_add(1, Ordering::Relaxed);
             deliver(&mut encoder, &silence, &mut frames_in, &mut aac_frames)?;

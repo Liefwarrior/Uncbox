@@ -89,7 +89,10 @@ pub fn connect(url: &RtmpUrl) -> Result<Connection> {
     }
     let mut builder = TlsConnector::builder();
     builder.min_protocol_version(Some(Protocol::Tlsv12));
-    if let Ok(path) = std::env::var("UNCBOX_STREAM_TLS_ROOT") {
+    // A test-only extra certificate, honoured only for a server on this PC: trusted for any host it
+    // would let someone who can set this variable read the stream key on its way to Twitch.
+    if let Some(path) = std::env::var("UNCBOX_STREAM_TLS_ROOT").ok().filter(|_| is_loopback(&url.host)) {
+        crate::log::debug("Trusting the extra test certificate for this local server.");
         let bytes = std::fs::read(&path).map_err(|_| Error::new("The extra test certificate couldn't be read."))?;
         let cert = Certificate::from_der(&bytes)
             .or_else(|_| Certificate::from_pem(&bytes))
@@ -103,8 +106,29 @@ pub fn connect(url: &RtmpUrl) -> Result<Connection> {
     Ok(Connection::Tls(Box::new(tls)))
 }
 
+/// Whether a host is this PC (the only place the test certificate is trusted for).
+pub fn is_loopback(host: &str) -> bool {
+    let host = host.trim_start_matches('[').trim_end_matches(']');
+    host.eq_ignore_ascii_case("localhost") || host.parse::<std::net::IpAddr>().is_ok_and(|ip| ip.is_loopback())
+}
+
 fn short(text: &str) -> String {
     // Windows ends its own sentences with " (os error N)", which is no use to a person.
     let text = text.split(" (os error").next().unwrap_or(text);
     text.split_whitespace().collect::<Vec<_>>().join(" ").chars().take(160).collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::is_loopback;
+
+    #[test]
+    fn the_test_certificate_is_only_for_this_pc() {
+        for host in ["127.0.0.1", "127.8.9.10", "localhost", "LOCALHOST", "::1", "[::1]"] {
+            assert!(is_loopback(host), "{host}");
+        }
+        for host in ["live.twitch.tv", "127.0.0.1.example.com", "localhost.example.com", "10.0.0.1", "0.0.0.0", ""] {
+            assert!(!is_loopback(host), "{host}");
+        }
+    }
 }

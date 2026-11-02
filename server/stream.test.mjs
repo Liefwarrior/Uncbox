@@ -4,6 +4,7 @@
 // replaced by fakes, and the key file goes in a temp folder.
 
 import { EventEmitter } from 'node:events';
+import { readFileSync } from 'node:fs';
 import { mkdtemp, readFile, rm, stat } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -32,6 +33,8 @@ import {
   redact,
   TWITCH_INGEST,
   wantedEngine,
+  plainReason,
+  testIngest,
 } from './stream.mjs';
 
 const KEY = 'live_123456789_AbCdEfGhIjKlMnOpQrSt';
@@ -72,6 +75,16 @@ describe('ingestUrl', () => {
       expect(ingestUrl(KEY, true, { UNCBOX_STREAM_INGEST: ' rtmps://localhost/app/ ' })).toBe(`rtmps://localhost/app/${KEY}?bandwidthtest=true`);
     });
 
+    it('only ever points at this PC: the address carries the stream key', () => {
+      for (const here of ['rtmp://127.0.0.1:19350/live', 'rtmp://localhost/app', 'rtmps://LOCALHOST/app', 'rtmp://[::1]:1935/app']) {
+        expect(testIngest({ UNCBOX_STREAM_INGEST: here }), here).toBe(here);
+      }
+      for (const away of ['rtmp://evil.example/app', 'rtmps://live.twitch.tv:443/app', 'rtmp://127.0.0.1.evil.example/app', 'rtmp://localhost.evil.example/app', 'rtmp://10.0.0.5/app']) {
+        expect(testIngest({ UNCBOX_STREAM_INGEST: away }), away).toBe('');
+        expect(ingestUrl(KEY, false, { UNCBOX_STREAM_INGEST: away }), away).toBe(`${TWITCH_INGEST}/${KEY}`);
+      }
+    });
+
     it('is ignored unless it is an rtmp(s) address', () => {
       for (const bad of ['', '   ', 'http://127.0.0.1/live', 'file:///c:/x', '127.0.0.1:1935', 'rtmp://', 'rtmp://host/app?x=1', '-f flv x', 'rtmp://a b/c']) {
         expect(ingestUrl(KEY, false, { UNCBOX_STREAM_INGEST: bad }), bad).toBe(`${TWITCH_INGEST}/${KEY}`);
@@ -87,8 +100,63 @@ describe('ingestUrl', () => {
   });
 });
 
+describe('plainReason', () => {
+  it('gives FFmpeg’s numbered network errors the engine’s own sentences, so both say the same', () => {
+    expect(plainReason('Error opening output files: Error number -138 occurred', 'live.twitch.tv')).toBe('The server live.twitch.tv refused the connection.');
+    expect(plainReason('[out#0/flv @ 000001] Error closing file: Error number -10054 occurred', 'live.twitch.tv')).toBe('The connection to the server was lost.');
+    expect(plainReason('[tcp @ 0x1] Connection to tcp://live.twitch.tv:443 failed: Connection timed out', 'live.twitch.tv')).toBe("The server live.twitch.tv didn't answer.");
+    expect(plainReason('[tcp @ 0x1] Failed to resolve hostname live.twitch.tv: Unknown host', 'live.twitch.tv')).toBe("Couldn't find the server live.twitch.tv. Check the internet connection.");
+    // The engine's sentences pass through as they are.
+    for (const own of ['The server 127.0.0.1 refused the connection.', 'The connection to the server was lost.', 'The Uncbox app stopped sending sound.']) expect(plainReason(own, '127.0.0.1')).toBe(own);
+  });
+
+  it('is nothing for a line that isn’t a reason to stop', () => {
+    for (const line of ['', '   ', '[debug] Streaming with NVENC', '[aist#0:0/pcm_f32le @ 0x1] Guessed Channel Layout: stereo', '[in#0/f32le @ 0x1] Estimating duration from bitrate, this may be inaccurate']) {
+      expect(plainReason(line), line).toBe('');
+    }
+  });
+});
+
+describe('the engine’s NVENC settings', () => {
+  // The engine sets NVENC up itself (engine/src/tuning.rs) and must ask for what FFmpeg is asked
+  // for here, or the picture differs by which program streams. This reads the Rust source, so a
+  // change on one side without the other fails here.
+  const rust = readFileSync(new URL('../engine/src/tuning.rs', import.meta.url), 'utf8');
+  const pick = (re) => {
+    const m = re.exec(rust);
+    if (!m) throw new Error(`tuning.rs no longer has ${re}`);
+    return m;
+  };
+  const quality = encoderArgs('nvenc', 6000, 60, 'quality');
+  const safe = encoderArgs('nvenc', 6000, 60, 'safe');
+
+  it('are FFmpeg’s, for the quality set and the safe set', () => {
+    const [, qPreset, sPreset] = pick(/preset: if quality \{ Preset::P(\d) \} else \{ Preset::P(\d) \}/);
+    expect(`p${qPreset}`).toBe(valueAfter(quality, '-preset'));
+    expect(`p${sPreset}`).toBe(valueAfter(safe, '-preset'));
+    expect(pick(/lookahead: if quality \{ (\d+) \}/)[1]).toBe(valueAfter(quality, '-rc-lookahead'));
+    expect(safe).not.toContain('-rc-lookahead');
+    pick(/multipass: if quality \{ Multipass::QuarterResolution \} else \{ Multipass::Disabled \}/);
+    expect(valueAfter(quality, '-multipass')).toBe('qres');
+    expect(safe).not.toContain('-multipass');
+    pick(/temporal_aq: quality,/);
+    expect(valueAfter(quality, '-temporal-aq')).toBe('1');
+    pick(/spatial_aq: false,/);
+    expect(quality).not.toContain('-spatial-aq');
+    pick(/b_frame_ref: if quality && bframes >= 2 \{ BFrameRef::Middle \}/);
+    expect(valueAfter(quality, '-b_ref_mode')).toBe('middle');
+    expect(valueAfter(quality, '-bf')).toBe('2');
+    pick(/vbv_buffer: bitrate\.saturating_mul\(2\)/);
+    expect(valueAfter(quality, '-bufsize')).toBe('12000k');
+    pick(/max_bitrate: bitrate,/);
+    expect(valueAfter(quality, '-maxrate')).toBe('6000k');
+    expect(valueAfter(quality, '-rc')).toBe('cbr');
+    expect(valueAfter(quality, '-tune')).toBe('hq');
+  });
+});
+
 describe('buildEngineConfig', () => {
-  it('is the settings, the address with the key, the sound pipe and an automatic encoder', () => {
+  it('is the settings, the address with the key, the sound pipe, an automatic card and direct NVENC', () => {
     expect(buildEngineConfig({ settings: { screen: 1, fps: 30, height: 720, kbps: 4500 }, key: KEY, test: false, audioPipe: PIPE, env: {} })).toEqual({
       url: `rtmps://live.twitch.tv:443/app/${KEY}`,
       screen: 1,
@@ -97,12 +165,13 @@ describe('buildEngineConfig', () => {
       kbps: 4500,
       audioPipe: PIPE,
       encoder: 'auto',
+      backend: 'nvenc',
     });
   });
 
   it('leaves out the pipe when there is none, and clamps what came from outside', () => {
     const config = buildEngineConfig({ settings: { screen: 40, fps: 240, height: 7, kbps: 1 }, key: KEY, test: true, env: {} });
-    expect(config).toEqual({ url: `rtmps://live.twitch.tv:443/app/${KEY}?bandwidthtest=true`, screen: 7, fps: 60, height: 1080, kbps: 2500, encoder: 'auto' });
+    expect(config).toEqual({ url: `rtmps://live.twitch.tv:443/app/${KEY}?bandwidthtest=true`, screen: 7, fps: 60, height: 1080, kbps: 2500, encoder: 'auto', backend: 'nvenc' });
     expect('audioPipe' in config).toBe(false);
   });
 });
@@ -122,28 +191,36 @@ describe('parseProbe', () => {
     expect(p.version).toBe('0.1.0');
     expect(p.adapters).toHaveLength(1);
     expect(p.encoders).toEqual([
-      { id: 'nvenc', tuning: 'quality' },
-      { id: 'amf', tuning: 'quality' },
-      { id: 'qsv', tuning: 'quality' },
+      { id: 'nvenc', tuning: 'quality', backend: null },
+      { id: 'amf', tuning: 'quality', backend: null },
+      { id: 'qsv', tuning: 'quality', backend: null },
     ]);
   });
 
   it('leaves out makers it does not know and repeats', () => {
-    expect(parseProbe(probe({ encoders: ['other', 7, null, 'intel', 'intel'] })).encoders).toEqual([{ id: 'qsv', tuning: 'quality' }]);
+    expect(parseProbe(probe({ encoders: ['other', 7, null, 'intel', 'intel'] })).encoders).toEqual([{ id: 'qsv', tuning: 'quality', backend: null }]);
     expect(parseProbe(probe({ encoders: [] })).encoders).toEqual([]);
   });
 
   it('takes a tuning when the probe gives one: on the encoder, per maker or for all', () => {
     expect(parseProbe(probe({ encoders: [{ id: 'nvidia', tuning: 'safe' }, { name: 'amd' }] })).encoders).toEqual([
-      { id: 'nvenc', tuning: 'safe' },
-      { id: 'amf', tuning: 'quality' },
+      { id: 'nvenc', tuning: 'safe', backend: null },
+      { id: 'amf', tuning: 'quality', backend: null },
     ]);
     expect(parseProbe(probe({ encoders: ['nvidia', 'amd'], tuning: { amd: 'safe' } })).encoders).toEqual([
-      { id: 'nvenc', tuning: 'quality' },
-      { id: 'amf', tuning: 'safe' },
+      { id: 'nvenc', tuning: 'quality', backend: null },
+      { id: 'amf', tuning: 'safe', backend: null },
     ]);
-    expect(parseProbe(probe({ tuning: 'safe' })).encoders).toEqual([{ id: 'nvenc', tuning: 'safe' }]);
-    expect(parseProbe(probe({ tuning: 'fast' })).encoders).toEqual([{ id: 'nvenc', tuning: 'quality' }]);
+    expect(parseProbe(probe({ tuning: 'safe' })).encoders).toEqual([{ id: 'nvenc', tuning: 'safe', backend: null }]);
+  });
+
+  it('says how the engine drives each encoder, on the encoder or per maker', () => {
+    expect(parseProbe(probe({ encoders: [{ id: 'nvidia', backend: 'nvenc' }, { id: 'amd', backend: 'mediafoundation' }] })).encoders).toEqual([
+      { id: 'nvenc', tuning: 'quality', backend: 'nvenc' },
+      { id: 'amf', tuning: 'quality', backend: 'mediafoundation' },
+    ]);
+    expect(parseProbe(probe({ encoders: ['nvidia'], backend: { nvidia: 'nvenc' } })).encoders).toEqual([{ id: 'nvenc', tuning: 'quality', backend: 'nvenc' }]);
+    expect(parseProbe(probe({ tuning: 'fast' })).encoders).toEqual([{ id: 'nvenc', tuning: 'quality', backend: null }]);
   });
 
   it('is null for anything that is not a probe', () => {
@@ -247,7 +324,7 @@ describe('buildFfmpegArgs', () => {
   it('reads the sound from the pipe as the contract says', () => {
     const args = buildFfmpegArgs(base);
     const at = args.lastIndexOf('-thread_queue_size');
-    expect(args.slice(at, at + 10)).toEqual(['-thread_queue_size', '1024', '-f', 'f32le', '-ar', '48000', '-ac', '2', '-i', PIPE]);
+    expect(args.slice(at, at + 10)).toEqual(['-thread_queue_size', '1024', '-f', 'f32le', '-ar', '48000', '-ch_layout', 'stereo', '-i', PIPE]);
     expect(args.join(' ')).not.toContain('anullsrc');
   });
 
@@ -493,7 +570,7 @@ const NATIVE_EXE = 'C:\\Uncbox\\engine\\target\\release\\uncbox-stream.exe';
 const PROBE = {
   version: '0.1.0',
   adapters: [{ name: 'NVIDIA GeForce RTX', vendor: 'nvidia', outputs: [{ index: 0, width: 2560, height: 1440, primary: true }] }],
-  encoders: ['nvidia'],
+  encoders: [{ id: 'nvidia', maker: 'nvidia', tuning: 'quality', backend: 'nvenc', bframes: 2 }],
 };
 
 /**
@@ -1010,7 +1087,7 @@ describe('the stream', () => {
       ffmpeg.last().stderr.emit('data', 'Warning: something\nConnection reset by peer\n');
       ffmpeg.last().emit('close', 1);
       await tick();
-      expect(await stream.snapshot()).toMatchObject({ state: 'dropped', error: 'Connection reset by peer' });
+      expect(await stream.snapshot()).toMatchObject({ state: 'dropped', error: 'The connection to the server was lost.' });
       expect(last().state).toBe('dropped');
     });
 
@@ -1154,16 +1231,35 @@ describe('the stream', () => {
       expect(consoleLines).toEqual([]);
     });
 
-    it('maps the engine’s encoders to the page’s names, and takes the tuning from the probe when it says', async () => {
-      native = fakeNative({ probe: { ...PROBE, encoders: ['amd', 'nvidia'] } });
-      expect((await call(asking('native'), 'POST', '/api/stream/check')).body.tools).toMatchObject({ encoder: 'amf', tuning: 'quality' });
-      native = fakeNative({ probe: { ...PROBE, encoders: [{ id: 'intel', tuning: 'safe' }] } });
-      expect((await call(asking('native'), 'POST', '/api/stream/check')).body.tools).toMatchObject({ encoder: 'qsv', tuning: 'safe' });
+    it('takes the tuning from the probe, and the encoder it drives directly even when another is listed first', async () => {
+      native = fakeNative({ probe: { ...PROBE, encoders: [{ id: 'nvidia', tuning: 'safe', backend: 'nvenc' }] } });
+      expect((await call(asking('native'), 'POST', '/api/stream/check')).body.tools).toMatchObject({ engine: 'native', encoder: 'nvenc', tuning: 'safe' });
+      native = fakeNative({ probe: { ...PROBE, encoders: [{ id: 'intel', backend: 'mediafoundation' }, { id: 'nvidia', backend: 'nvenc' }] } });
+      expect((await call(asking('native'), 'POST', '/api/stream/check')).body.tools).toMatchObject({ engine: 'native', encoder: 'nvenc' });
     });
 
-    it('works with a probe that has none of the newer fields', async () => {
+    it('streams with FFmpeg where the engine would only have Windows’ plainer encoder (AMD, Intel), so the picture is the same', async () => {
+      native = fakeNative({ probe: { ...PROBE, encoders: [{ id: 'amd', tuning: 'quality', backend: 'mediafoundation' }] } });
+      ffmpeg = fakeFfmpeg({ cards: ['amf'] });
+      const tools = (await call(asking('native'), 'POST', '/api/stream/check')).body.tools;
+      expect(tools).toMatchObject({ engine: 'ffmpeg', encoder: 'amf' });
+      expect(consoleLines.join('\n')).toMatch(/plainer encoder.*streaming with FFmpeg/);
+    });
+
+    it('says in the console when the test address is in use, for either engine', async () => {
+      for (const engine of ['ffmpeg', 'native']) {
+        consoleLines.length = 0;
+        const stream = make({ env: { UNCBOX_STREAM_ENGINE: engine, UNCBOX_STREAM_INGEST: 'rtmp://127.0.0.1:19350/app' } });
+        await call(stream, 'POST', '/api/stream/key', { key: KEY });
+        expect((await call(stream, 'POST', '/api/stream/start', {})).status, engine).toBe(200);
+        expect(consoleLines.join('\n'), engine).toMatch(/UNCBOX_STREAM_INGEST is set.*127\.0\.0\.1.*not to Twitch/);
+        expect(consoleLines.join('\n'), engine).not.toContain(KEY);
+      }
+    });
+
+    it('streams with FFmpeg when the probe doesn’t say it drives NVENC directly (an older engine)', async () => {
       native = fakeNative({ probe: { version: '0.0.9', adapters: [], encoders: ['nvidia'] } });
-      expect((await call(asking('native'), 'POST', '/api/stream/check')).body.tools).toMatchObject({ engine: 'native', encoder: 'nvenc', tuning: 'quality', version: '0.0.9' });
+      expect((await call(asking('native'), 'POST', '/api/stream/check')).body.tools).toMatchObject({ engine: 'ffmpeg', encoder: 'nvenc' });
     });
 
     it('can be told by the shell which to use, and checks again', async () => {
@@ -1407,6 +1503,7 @@ describe('the stream', () => {
         kbps: 4500,
         audioPipe: PIPE,
         encoder: 'auto',
+        backend: 'nvenc',
       });
       expect(proc.stdin.written[0].trim().split('\n')).toHaveLength(1);
       // FFmpeg was only ever asked about the screen's size when it was the one streaming.
@@ -1423,7 +1520,7 @@ describe('the stream', () => {
 
     it('sends the defaults, clamped, with no sound pipe when there is none', async () => {
       await live({ settings: { screen: 99, fps: 144, height: 900, kbps: 99_999 } });
-      expect(JSON.parse(native.last().stdin.written[0])).toEqual({ url: ingestUrl(KEY), screen: 7, fps: 60, height: 1080, kbps: 8000, encoder: 'auto' });
+      expect(JSON.parse(native.last().stdin.written[0])).toEqual({ url: ingestUrl(KEY), screen: 7, fps: 60, height: 1080, kbps: 8000, encoder: 'auto', backend: 'nvenc' });
     });
 
     it('makes a test stream the bandwidth test address, and a normal one not', async () => {
@@ -1599,7 +1696,7 @@ describe('the stream', () => {
       fake().last().stderr.emit('data', 'Warning: something\nConnection reset by peer\n');
       fake().last().emit('close', 1);
       await tick();
-      expect(await stream.snapshot()).toMatchObject({ state: 'dropped', error: 'Connection reset by peer' });
+      expect(await stream.snapshot()).toMatchObject({ state: 'dropped', error: 'The connection to the server was lost.' });
       expect(last().state).toBe('dropped');
     });
 
