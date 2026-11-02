@@ -1,7 +1,9 @@
 // Writes THIRD_PARTY_NOTICES.md: the license of every package that ships with Uncbox
 // (production dependencies and everything they pull in, plus the native shell's NuGet packages,
-// listed by hand in SHELL_PACKAGES below). Run with `npm run notices` after adding or updating
-// a dependency, and keep SHELL_PACKAGES in step with native/UncboxShell/UncboxShell.csproj.
+// listed by hand in SHELL_PACKAGES below, and the Rust crates in the streaming engine, listed by
+// hand in RUST_PACKAGES). Run with `npm run notices` after adding or updating a dependency, and
+// keep SHELL_PACKAGES in step with native/UncboxShell/UncboxShell.csproj and RUST_PACKAGES with
+// the crates that engine/Cargo.lock builds into uncbox-stream.exe.
 
 import { execFileSync } from 'node:child_process';
 import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
@@ -80,6 +82,42 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.`,
   },
 ];
 
+// The Rust crates built into engine's uncbox-stream.exe (see engine/Cargo.lock). Those that offer a
+// choice of licenses ("MIT OR Apache-2.0") are used under the MIT license. Build-only crates (the
+// parsers and code generators that run while compiling) leave nothing in the program and aren't listed.
+const mitLicense = (holder) => `MIT License
+
+${holder ? `Copyright (c) ${holder}\n\n` : ''}Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.`;
+
+const RUST_PACKAGES = [
+  ...[
+    ['windows', '0.61.3'],
+    ['windows-collections', '0.2.0'],
+    ['windows-core', '0.61.2'],
+    ['windows-future', '0.2.1'],
+    ['windows-implement', '0.60.2'],
+    ['windows-interface', '0.59.3'],
+    ['windows-link', '0.1.3'],
+    ['windows-link', '0.2.1'],
+    ['windows-numerics', '0.2.0'],
+    ['windows-result', '0.3.4'],
+    ['windows-strings', '0.4.2'],
+    ['windows-sys', '0.61.2'],
+    ['windows-threading', '0.1.0'],
+  ].map(([name, version]) => ({ name, version, license: 'MIT OR Apache-2.0', repo: 'https://github.com/microsoft/windows-rs', text: mitLicense('Microsoft Corporation.') })),
+  { name: 'serde_core', version: '1.0.229', license: 'MIT OR Apache-2.0', repo: 'https://github.com/serde-rs/serde', text: mitLicense('') },
+  { name: 'serde_json', version: '1.0.154', license: 'MIT OR Apache-2.0', repo: 'https://github.com/serde-rs/json', text: mitLicense('') },
+  { name: 'itoa', version: '1.0.18', license: 'MIT OR Apache-2.0', repo: 'https://github.com/dtolnay/itoa', text: mitLicense('') },
+  { name: 'zmij', version: '1.0.23', license: 'MIT', repo: 'https://github.com/dtolnay/zmij', text: mitLicense('') },
+  { name: 'memchr', version: '2.8.3', license: 'Unlicense OR MIT', repo: 'https://github.com/BurntSushi/memchr', text: mitLicense('2015 Andrew Gallant') },
+  { name: 'native-tls', version: '0.2.18', license: 'MIT OR Apache-2.0', repo: 'https://github.com/sfackler/rust-native-tls', text: mitLicense('2016 The rust-native-tls Developers') },
+  { name: 'schannel', version: '0.1.30', license: 'MIT', repo: 'https://github.com/steffengy/schannel-rs', text: mitLicense('2015 steffengy') },
+];
+
 const packages = [
   ...dirs
   .map((dir) => {
@@ -91,6 +129,7 @@ const packages = [
     return { name: pkg.name, version: pkg.version, license, repo, text };
   }),
   ...SHELL_PACKAGES,
+  ...RUST_PACKAGES,
 ]
   .sort((a, b) => a.name.localeCompare(b.name));
 

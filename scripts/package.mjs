@@ -148,6 +148,10 @@ cpSync(path.join(root, 'server'), path.join(out, 'app', 'server'), {
   recursive: true,
   filter: (src) => !/\.test\.mjs$/.test(src),
 });
+// Uncbox's own streaming engine, if it has been built (npm run engine): the server looks for it next to itself.
+const engineExe = path.join(root, 'engine', 'target', 'release', 'uncbox-stream.exe');
+if (existsSync(engineExe)) cpSync(engineExe, path.join(out, 'app', 'server', 'uncbox-stream.exe'));
+else console.log('Note: engine/target/release/uncbox-stream.exe isn't built (npm run engine), so this copy streams with FFmpeg.');
 cpSync(path.join(root, 'integrations', 'wow', 'install.mjs'), path.join(out, 'app', 'integrations', 'wow', 'install.mjs'));
 cpSync(path.join(root, 'integrations', 'wow', 'addon'), path.join(out, 'app', 'integrations', 'wow', 'addon'), { recursive: true });
 cpSync(path.join(root, 'dist'), path.join(out, 'app', 'dist'), { recursive: true });

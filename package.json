@@ -17,6 +17,7 @@
     "setup-domain": "node scripts/setup-domain.mjs",
     "remove-domain": "node scripts/setup-domain.mjs --remove",
     "app": "node scripts/app.mjs",
+    "engine": "cd engine && cargo build --release",
     "package": "node scripts/package.mjs"
   },
   "engines": {
