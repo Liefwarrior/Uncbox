@@ -20,7 +20,7 @@
 // A single run prints one JSON object: what the engine reported, CPU used by the engine's process,
 // GPU load while it ran (nvidia-smi), and what ffprobe found in the file that arrived. `--suite` runs
 // 1080p60 at 6000 kbit/s, the screen's own size at 60 fps and 6000, and 720p30 at 3000, each with sound,
-// and checks every file: H.264 High, B-frames where the encoder has them, keyframes 2 s apart,
+// and checks every file: H.264 High, B-frames where the encoder has them, keyframes at most 2 s apart (exactly 2 s on a steady picture),
 // decode times that only go up, AAC at 48 kHz in stereo, and about as many pictures as the time
 // asked for. The exit code says whether every check held.
 
@@ -246,7 +246,8 @@ function check(result, { expectBFrames }) {
   want(r.videoDtsMonotonic && r.audioDtsMonotonic, 'decode times go backwards');
   if (expectBFrames) want((r.pictureTypes.B ?? 0) > 0, 'no B-frames');
   const gaps = r.keyframeGapsSeconds;
-  want(gaps && gaps.min >= 1.99 && gaps.max <= 2.01, `keyframes are ${gaps ? `${gaps.min} to ${gaps.max}` : 'not found'} seconds apart, not 2`);
+  // Never more than 2 s apart. NVENC with look-ahead also starts a keyframe at a scene change (FFmpeg does the same with the same settings), so a gap can be shorter; on a steady picture every gap is exactly 2 s.
+  want(gaps && gaps.min >= 0.25 && gaps.max <= 2.01, `keyframes are ${gaps ? `${gaps.min} to ${gaps.max}` : "not found"} seconds apart, more than 2 allowed`);
   // About fps x the time it streamed for: the time asked for plus the few seconds of start-up and stop.
   want(r.videoPackets >= fps * (result.seconds - 1) && r.videoPackets <= fps * (result.seconds + 4), `${r.videoPackets} pictures for ${result.seconds} s at ${fps} fps`);
   want(r.effectiveFps !== null && Math.abs(r.effectiveFps - fps) <= 1, `${r.effectiveFps} fps delivered, not ${fps}`);
