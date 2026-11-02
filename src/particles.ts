@@ -5,8 +5,7 @@ import type { BackgroundId } from './backgrounds';
 // Loaded on demand (see Backdrop), so the animation library only downloads for people who pick an
 // animated background. It draws 30 times a second: the shapes drift a pixel or so a frame, which
 // looks the same at 30 as at 120, and every frame Network links each of its 140 dots to the ones
-// near it. At 120 that took about a third of a processor core next to the game (measured in Edge);
-// at 30 it takes a quarter of that.
+// near it. Measured in Edge with the GPU on: 29–37% of a processor core at 120, 11–21% at 30.
 
 export interface Palette {
   accent: string;
