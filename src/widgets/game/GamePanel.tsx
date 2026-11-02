@@ -94,7 +94,7 @@ export function GamePanel({ state, data, def, mutatePreset }: PanelContext) {
   // Viewers never see the addon's strip: crop at least down to its bottom edge.
   const crop = stripPct > game.crop.top ? { ...game.crop, top: stripPct } : game.crop;
   // Clips get the same crop, so they never show the strip either.
-  useReplayBuffer(stream, crop, clips.enabled);
+  useReplayBuffer(stream, crop, clips);
   // Play here can't move exclusive full screen, so games Uncbox knows are switched to windowed
   // fullscreen in their own settings (only while they're closed; it takes effect next start).
   useEffect(() => {

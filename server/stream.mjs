@@ -288,9 +288,10 @@ export function createStream({
    */
   function check({ force = false } = {}) {
     if (force || (checked && !tools.ffmpeg)) checking = null;
+    // Done once the page has been told, so whoever waits on it sees the answer go out first.
     checking ??= doCheck()
       .then(() => void (checked = true))
-      .finally(() => void emit());
+      .finally(() => emit());
     return checking;
   }
 

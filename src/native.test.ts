@@ -3,17 +3,28 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 // The page's side of the shell's web view messages, against a fake window.chrome.webview. native.ts
 // reads the bridge when it loads, so each test loads a fresh copy.
 
-type Listener = (e: { data: unknown }) => void;
+type Listener = (e: unknown) => void;
 
 function fakeShell() {
   const sent: unknown[] = [];
-  const listeners = new Set<Listener>();
+  const byType = new Map<string, Set<Listener>>();
+  const on = (type: string) => byType.get(type) ?? byType.set(type, new Set()).get(type)!;
+  const released: ArrayBuffer[] = [];
   const webview = {
     postMessage: (m: unknown) => void sent.push(m),
-    addEventListener: (_: string, l: Listener) => void listeners.add(l),
-    removeEventListener: (_: string, l: Listener) => void listeners.delete(l),
+    addEventListener: (type: string, l: Listener) => void on(type).add(l),
+    removeEventListener: (type: string, l: Listener) => void on(type).delete(l),
+    releaseBuffer: (b: ArrayBuffer) => void released.push(b),
   };
-  return { sent, listeners, webview, receive: (data: unknown) => listeners.forEach((l) => l({ data })) };
+  return {
+    sent,
+    released,
+    listeners: on('message'),
+    webview,
+    receive: (data: unknown) => on('message').forEach((l) => l({ data })),
+    /** WebView2 handing over a shared buffer. */
+    receiveBuffer: (buffer: ArrayBuffer, additionalData: unknown) => on('sharedbufferreceived').forEach((l) => l({ additionalData, getBuffer: () => buffer })),
+  };
 }
 
 async function load(webview: unknown, devicePixelRatio = 1) {
@@ -72,5 +83,88 @@ describe('the web view messages', () => {
     const state = { type: 'webstate', id: 'wdg-1', url: 'https://example.com/next', title: 'Next', canGoBack: true, canGoForward: false, loading: false };
     s.receive(state);
     expect(heard).toEqual([state]);
+  });
+});
+
+describe('the sound for a clip', () => {
+  /** Three tracks of `frames` stereo frames: the game all 1s, Discord all 2s, the mic all 3s, as the app lays them out. */
+  const layout = (frames: number) => {
+    const all = new Int16Array(frames * 2 * 3);
+    all.fill(1, 0, frames * 2);
+    all.fill(2, frames * 2, frames * 4);
+    all.fill(3, frames * 4);
+    return all.buffer;
+  };
+
+  it('asks the app for the stretch and copies each track out of the shared buffer, then gives it back', async () => {
+    const s = fakeShell();
+    const { requestClipAudio } = await load(s.webview);
+    const pending = requestClipAudio(61_000, 1_000);
+    expect(s.sent).toEqual([{ type: 'clipaudioget', id: expect.any(Number), fromMs: 61_000, toMs: 1_000 }]);
+    const { id } = s.sent[0] as { id: number };
+
+    const buffer = layout(4);
+    s.receiveBuffer(buffer, { type: 'clipaudio', id, frames: 4, rate: 48000 });
+    const pcm = await pending;
+    expect(pcm.frames).toBe(4);
+    expect(pcm.rate).toBe(48000);
+    expect([...pcm.game]).toEqual(new Array(8).fill(1));
+    expect([...pcm.discord]).toEqual(new Array(8).fill(2));
+    expect([...pcm.mic]).toEqual(new Array(8).fill(3));
+    expect(s.released).toEqual([buffer]);
+    // Copies: the shared memory is the app's to take back.
+    new Int16Array(buffer).fill(9);
+    expect(pcm.game[0]).toBe(1);
+  });
+
+  it('ignores a buffer meant for another request', async () => {
+    const s = fakeShell();
+    const { requestClipAudio } = await load(s.webview);
+    const pending = requestClipAudio(5000, 0);
+    const { id } = s.sent[0] as { id: number };
+    s.receiveBuffer(layout(2), { type: 'clipaudio', id: id + 100, frames: 2, rate: 48000 });
+    expect(s.released).toEqual([]);
+    s.receiveBuffer(layout(2), { type: 'clipaudio', id, frames: 2, rate: 48000 });
+    expect((await pending).frames).toBe(2);
+  });
+
+  it('turns the app’s error into words', async () => {
+    const s = fakeShell();
+    const { requestClipAudio } = await load(s.webview);
+    const pending = requestClipAudio(5000, 0);
+    const { id } = s.sent[0] as { id: number };
+    s.receive({ type: 'clipaudio', id: id + 1, error: 'someone else’s' });
+    s.receive({ type: 'clipaudio', id, error: 'Sound isn’t being recorded.' });
+    await expect(pending).rejects.toThrow('Sound isn’t being recorded.');
+  });
+
+  it('rejects a buffer that is shorter than it says, and still gives it back', async () => {
+    const s = fakeShell();
+    const { requestClipAudio } = await load(s.webview);
+    const pending = requestClipAudio(5000, 0);
+    const { id } = s.sent[0] as { id: number };
+    const short = new Int16Array(10).buffer;
+    s.receiveBuffer(short, { type: 'clipaudio', id, frames: 100, rate: 48000 });
+    await expect(pending).rejects.toThrow('cut short');
+    expect(s.released).toEqual([short]);
+  });
+
+  it('gives up when the app never answers', async () => {
+    vi.useFakeTimers();
+    try {
+      const s = fakeShell();
+      const { requestClipAudio } = await load(s.webview);
+      const pending = requestClipAudio(5000, 0);
+      const caught = expect(pending).rejects.toThrow('didn’t send the sound');
+      await vi.advanceTimersByTimeAsync(16_000);
+      await caught;
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('needs the app', async () => {
+    const { requestClipAudio } = await load(null);
+    await expect(requestClipAudio(5000, 0)).rejects.toThrow('needs the Uncbox app');
   });
 });

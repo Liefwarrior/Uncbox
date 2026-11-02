@@ -3,13 +3,22 @@
 // can). The encoded video for the last 60 seconds stays in memory; "save" turns it into an MP4
 // and uploads it to the server, which writes it to Videos\Uncbox.
 //
+// Sound comes from the Uncbox app (ClipAudio.cs), which keeps its own last 70 seconds. The two
+// are lined up by wall-clock time: each frame is stamped with when it arrived here, so "prepare"
+// can say when the clip began and ended, the page asks the app for exactly that stretch of sound,
+// and "save" muxes it in as four tracks (see mux.ts).
+//
 // Encoded video is kept rather than frames: a minute of 1080p frames is ~30 GB, a minute of
 // encoded video is ~225 MB. A clip has to start on a keyframe, so one is made every second and
 // the buffer always reaches back to the last keyframe that's at least 60 seconds old.
 
-import { BufferTarget, EncodedPacket, EncodedVideoPacketSource, Mp4OutputFormat, Output } from 'mediabunny';
+import { EncodedPacket } from 'mediabunny';
+import type { ClipPcm } from '../native';
 import type { Crop } from '../state/model';
 import { goesBack, keepFrom } from './buffer';
+import { muxClip, pickAudioCodec } from './mux';
+import type { ClipVideo } from './mux';
+import { ArrivalClock, wallNow } from './pcm';
 
 const WIDTH = 1920;
 const HEIGHT = 1080;
@@ -23,11 +32,16 @@ const MAX_QUEUE = 6;
 export type ToWorker =
   | { type: 'start'; frames: ReadableStream<VideoFrame>; crop: Crop }
   | { type: 'crop'; crop: Crop }
-  | { type: 'save'; id: number };
+  /** Freezes what a clip would be, and says when it began and ended (wall-clock ms). */
+  | { type: 'prepare'; id: number }
+  /** Saves what `prepare` froze, with the app's sound for that stretch (null: video only). */
+  | { type: 'save'; id: number; sound: ClipPcm | null };
 
 export type FromWorker =
   | { type: 'status'; seconds: number; error: string }
-  | { type: 'saved'; id: number; name: string }
+  | { type: 'prepared'; id: number; startMs: number; endMs: number }
+  /** soundError: why the clip has no sound, when sound was given but couldn't go in. */
+  | { type: 'saved'; id: number; name: string; soundError?: string }
   | { type: 'failed'; id: number; error: string };
 
 const post = (msg: FromWorker) => postMessage(msg);
@@ -60,6 +74,10 @@ let crop: Crop = { top: 0, right: 0, bottom: 0, left: 0 };
 let packets: EncodedPacket[] = [];
 let decoderConfig: VideoDecoderConfig | null = null;
 let error = '';
+/** When each frame arrived, to turn the packets' times into wall-clock times. */
+const arrival = new ArrivalClock();
+/** The clip `prepare` froze, waiting for its sound. */
+let prepared: { id: number; video: ClipVideo } | null = null;
 
 /** Drops what no clip needs any more (see keepFrom). */
 function prune() {
@@ -102,7 +120,9 @@ async function run(frames: ReadableStream<VideoFrame>) {
     if (goesBack(lastAt, frame.timestamp)) {
       lastAt = -Infinity;
       lastKeyAt = -Infinity;
+      arrival.reset();
     }
+    arrival.add(frame.timestamp / 1e6, wallNow());
     // Captures can run faster than 60 fps or stall the encoder; skip frames rather than fall behind.
     const due = frame.timestamp - lastAt >= 1e6 / FPS - 2000;
     if (!due || encoder.state !== 'configured' || encoder.encodeQueueSize > MAX_QUEUE) {
@@ -138,27 +158,47 @@ async function run(frames: ReadableStream<VideoFrame>) {
   encoder.close();
 }
 
-async function save(id: number) {
+/** Freezes the clip (the packets as they are now) and says when it began and ended. */
+function prepare(id: number) {
   const clip = packets.slice();
-  if (!clip.length || !decoderConfig) throw new Error('Nothing recorded yet.');
-  const output = new Output({ format: new Mp4OutputFormat({ fastStart: 'in-memory' }), target: new BufferTarget() });
-  const source = new EncodedVideoPacketSource('avc');
-  // No frameRate here: it would round timestamps to 1/60 s, and captures deliver frames a little unevenly.
-  output.addVideoTrack(source);
-  await output.start();
-  const start = clip[0].timestamp;
-  for (let i = 0; i < clip.length; i++) {
-    await source.add(clip[i].clone({ timestamp: clip[i].timestamp - start }), i === 0 ? { decoderConfig } : undefined);
+  if (!clip.length || !decoderConfig || !arrival.ready) throw new Error('Nothing recorded yet.');
+  prepared = { id, video: { packets: clip, decoderConfig } };
+  const last = clip[clip.length - 1];
+  post({
+    type: 'prepared',
+    id,
+    startMs: arrival.wallMs(clip[0].timestamp),
+    endMs: arrival.wallMs(last.timestamp + (last.duration || 1 / FPS)),
+  });
+}
+
+async function save(id: number, sound: ClipPcm | null) {
+  if (prepared?.id !== id) throw new Error('Nothing recorded yet.');
+  const { video } = prepared;
+  prepared = null;
+  let file: ArrayBuffer | null = null;
+  let soundError: string | undefined;
+  if (sound) {
+    // AAC plays everywhere; Opus is the fallback where the browser can't encode it.
+    const codec = await pickAudioCodec();
+    if (!codec) soundError = 'This browser can’t encode sound.';
+    else {
+      try {
+        file = await muxClip(video, sound, codec);
+      } catch (err) {
+        soundError = err instanceof Error ? err.message : String(err);
+      }
+    }
   }
-  await output.finalize();
+  file ??= await muxClip(video, null);
   const res = await fetch('/api/clips', {
     method: 'POST',
     headers: { 'Content-Type': 'video/mp4' },
-    body: output.target.buffer!,
+    body: file,
   });
   const json = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(json.error || `Couldn’t save the clip (${res.status})`);
-  post({ type: 'saved', id, name: json.name });
+  post({ type: 'saved', id, name: json.name, soundError });
 }
 
 onmessage = (e: MessageEvent<ToWorker>) => {
@@ -170,8 +210,14 @@ onmessage = (e: MessageEvent<ToWorker>) => {
     });
   } else if (msg.type === 'crop') {
     crop = msg.crop;
+  } else if (msg.type === 'prepare') {
+    try {
+      prepare(msg.id);
+    } catch (err) {
+      post({ type: 'failed', id: msg.id, error: err instanceof Error ? err.message : String(err) });
+    }
   } else if (msg.type === 'save') {
-    save(msg.id).catch((err) => post({ type: 'failed', id: msg.id, error: err instanceof Error ? err.message : String(err) }));
+    save(msg.id, msg.sound).catch((err) => post({ type: 'failed', id: msg.id, error: err instanceof Error ? err.message : String(err) }));
   }
 };
 

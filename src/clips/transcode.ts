@@ -1,5 +1,5 @@
 import { ALL_FORMATS, BlobSource, BufferTarget, Conversion, Input, Mp4OutputFormat, Output, Quality } from 'mediabunny';
-import { DISCORD_FRAME_RATE, VERTICAL, discordBitrate, discordSize, verticalCrop } from './plan';
+import { DISCORD_AUDIO_BITRATE, DISCORD_FRAME_RATE, VERTICAL, discordBitrate, discordSize, mixOnly, verticalCrop } from './plan';
 import type { Trim } from './plan';
 import { clipUrl } from './replay';
 
@@ -7,7 +7,10 @@ import { clipUrl } from './replay';
 // graphics card when it has one) through mediabunny. Two outputs:
 //   vertical  the 9:16 slice at 1080 x 1920, 60 fps, 12 Mbps: the short that gets saved
 //   discord   a 720p-class, 30 fps copy sized by length to fit Discord's 10 MB limit
-// Neither has sound, like the clips themselves.
+// A clip made with sound has four audio tracks (Mix, Game, Discord, Mic; see mux.ts). Both outputs keep
+// only the first, the Mix, so they stay small and play everywhere. The vertical one carries it over
+// as it is; the Discord copy re-encodes it small and leaves room for it in the size it aims for.
+// Clips and downloads without sound stay without.
 
 export interface Job {
   /** The saved clip to start from. */
@@ -35,6 +38,7 @@ export async function transcode(job: Job, onProgress: (fraction: number) => void
     // A vertical short is always the slice; without a chosen spot it is the middle.
     const spot = job.frame ?? (job.target === 'vertical' ? 0.5 : null);
     const crop = spot === null ? undefined : verticalCrop(track.displayWidth, track.displayHeight, spot);
+    const sound = (await input.getPrimaryAudioTrack()) !== null;
     const start = job.trim?.start ?? 0;
     const end = job.trim?.end ?? (await input.computeDuration());
 
@@ -55,7 +59,10 @@ export async function transcode(job: Job, onProgress: (fraction: number) => void
             fit: 'fill' as const,
             frameRate: DISCORD_FRAME_RATE,
             // Constant, so the size stays close to what the length was worked out for.
-            quality: new Quality({ bitrate: Math.round(discordBitrate(end - start) * (job.squeeze ?? 1)), bitrateMode: 'constant' }),
+            quality: new Quality({
+              bitrate: Math.round(discordBitrate(end - start, sound ? DISCORD_AUDIO_BITRATE : 0) * (job.squeeze ?? 1)),
+              bitrateMode: 'constant',
+            }),
           };
 
     const output = new Output({ format: new Mp4OutputFormat({ fastStart: 'in-memory' }), target: new BufferTarget() });
@@ -63,7 +70,7 @@ export async function transcode(job: Job, onProgress: (fraction: number) => void
       input,
       output,
       trim: { start, end },
-      audio: { discard: true },
+      ...mixOnly(job.target),
       video: { ...video, codec: 'avc', hardwareAcceleration: 'prefer-hardware', keyFrameInterval: 2, forceTranscode: true },
       showWarnings: false,
     });

@@ -2,6 +2,9 @@
 // be tested: where the 9:16 frame sits, how big and how bitrate-heavy a Discord copy can be, and
 // what "Last 30 s" means. transcode.ts turns these into an actual video.
 
+import { Quality } from 'mediabunny';
+import type { ConversionOptions } from 'mediabunny';
+
 /** What a vertical short is saved as. */
 export const VERTICAL = { width: 1080, height: 1920, bitrate: 12_000_000, frameRate: 60 } as const;
 
@@ -18,6 +21,8 @@ const SOFT_BITRATE = 1_500_000;
 const DISCORD_LONG_SIDE = 1280;
 const DISCORD_SHORT_SIDE = 720;
 export const DISCORD_FRAME_RATE = 30;
+/** A Discord copy's sound (the clip's Mix track only): speech and game sound are fine at this, and it is small. */
+export const DISCORD_AUDIO_BITRATE = 64_000;
 
 export interface Crop {
   left: number;
@@ -51,9 +56,12 @@ export function discordSize(w: number, h: number): { width: number; height: numb
   return { width: even(w * scale), height: even(h * scale) };
 }
 
-/** The video bitrate (bits per second) that lets `seconds` of video fit under Discord's limit. */
-export function discordBitrate(seconds: number): number {
-  const bits = (DISCORD_TARGET_BYTES * OVERHEAD * 8) / Math.max(1, seconds);
+/**
+ * The video bitrate (bits per second) that lets `seconds` of video fit under Discord's limit,
+ * leaving room for `audioBitrate` of sound when the copy has some.
+ */
+export function discordBitrate(seconds: number, audioBitrate = 0): number {
+  const bits = (DISCORD_TARGET_BYTES * OVERHEAD * 8) / Math.max(1, seconds) - audioBitrate;
   return Math.round(Math.min(MAX_BITRATE, Math.max(MIN_BITRATE, bits)));
 }
 
@@ -80,4 +88,19 @@ export function clampTrim(trim: Trim, duration: number, moved: 'start' | 'end', 
   }
   const end = Math.min(duration, Math.max(trim.end, g));
   return { start: Math.min(Math.max(0, trim.start), end - g), end };
+}
+
+/**
+ * What a vertical short or a Discord copy does with a clip's sound: keep the primary audio track
+ * only (the Mix of a clip made with sound, never its Game, Discord and Mic tracks). The vertical
+ * one carries it over as it is; the Discord copy re-encodes it small to fit under the size limit.
+ */
+export function mixOnly(target: 'vertical' | 'discord'): Pick<ConversionOptions, 'tracks' | 'audio'> {
+  return {
+    tracks: 'primary',
+    audio:
+      target === 'discord'
+        ? { codec: 'aac', quality: new Quality({ bitrate: DISCORD_AUDIO_BITRATE }), numberOfChannels: 2, forceTranscode: true }
+        : {},
+  };
 }

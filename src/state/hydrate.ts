@@ -73,7 +73,7 @@ export function defaultState(): AppState {
     version: 2,
     preset: 'pokemon',
     twitch: { channel: '', hideBots: true },
-    clips: { enabled: true, key: DEFAULT_CLIP_KEY, driveAuto: false, driveShare: false },
+    clips: { enabled: true, key: DEFAULT_CLIP_KEY, driveAuto: false, driveShare: false, sound: true, mic: 'default' },
     stream: { with: 'obs', screen: 0, fps: 60, height: 1080, kbps: 6000, desktop: true, mic: 'default', desktopVolume: 1, micVolume: 1 },
     discord: { pinned: [] },
     camera: { enabled: false, deviceId: null, mirrored: true },
@@ -318,6 +318,9 @@ export function hydrate(saved: unknown): AppState {
   const clips = overlay(base.clips, saved.clips);
   if (!isClipKey(clips.key)) clips.key = DEFAULT_CLIP_KEY;
   const stream = hydrateStream(base.stream, saved.stream);
+  // overlay() can't keep a null (the default is text): "no mic" is saved as null, a device as its id.
+  const savedClips = isObj(saved.clips) ? saved.clips : {};
+  clips.mic = savedClips.mic === null ? null : typeof savedClips.mic === 'string' && savedClips.mic ? savedClips.mic : 'default';
   const custom = hydrateCustom(saved.custom);
   // A preset that no longer exists (deleted, or dropped above) leaves the first built-in showing.
   const shown = saved.preset;

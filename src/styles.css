@@ -2383,6 +2383,25 @@ kbd {
   gap: 6px;
   margin: 0 6px 4px;
 }
+/* Sound in clips: three small level meters, a bar each. */
+.clips__levels {
+  display: grid;
+  gap: 4px;
+  margin: 6px 6px 2px;
+}
+.clips__level {
+  display: grid;
+  grid-template-columns: 52px 1fr;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.clips__level span:last-child {
+  height: 5px;
+  border-radius: 3px;
+  background: linear-gradient(90deg, var(--accent) var(--v, 0%), var(--panel-2) var(--v, 0%));
+}
 .clips__list {
   display: grid;
   margin: 4px 0 0;

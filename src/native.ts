@@ -5,10 +5,20 @@ import type { Crop } from './state/model';
 // real window in the game panel ("Play here") instead of a capture of it. See ShellForm.cs for
 // the messages. In a browser none of this exists and the game panel works as before.
 
+/** A shared buffer the app handed over (WebView2's sharedbufferreceived event). */
+interface SharedBufferEvent {
+  additionalData?: unknown;
+  getBuffer(): ArrayBuffer;
+}
+
 interface WebViewBridge {
   postMessage(message: unknown): void;
   addEventListener(type: 'message', listener: (e: { data: unknown }) => void): void;
   removeEventListener(type: 'message', listener: (e: { data: unknown }) => void): void;
+  addEventListener(type: 'sharedbufferreceived', listener: (e: SharedBufferEvent) => void): void;
+  removeEventListener(type: 'sharedbufferreceived', listener: (e: SharedBufferEvent) => void): void;
+  /** Gives a shared buffer back to the app once it has been copied. */
+  releaseBuffer(buffer: ArrayBuffer): void;
 }
 
 declare global {
@@ -47,12 +57,31 @@ export type ShellMessage =
   | { type: 'streamaudio'; state: 'off' }
   | { type: 'streamaudio'; state: 'error'; error: string }
   /** Peak level 0..1 of each source (after its gain), about ten times a second while the sound is on. */
-  | { type: 'audiolevels'; desktop: number; mic: number };
+  | { type: 'audiolevels'; desktop: number; mic: number }
+  /**
+   * The sound kept for clips (see src/clips/audio.ts): what is being recorded, or that it stopped.
+   * `game` is 'app' for the captured game's own sound, or 'desktop' (all sound except Discord) when
+   * its window couldn't be found. An answer to `clipaudioget` also has type 'clipaudio', with an id.
+   */
+  | { type: 'clipaudio'; state: 'on'; game: 'app' | 'desktop'; gameName: string; discord: boolean; mic: boolean; micError?: string }
+  | { type: 'clipaudio'; state: 'off' }
+  | { type: 'clipaudio'; state: 'error'; error: string }
+  /** Peak level 0..1 of each clip sound source, about five times a second while it is on. */
+  | { type: 'cliplevels'; game: number; discord: number; mic: number };
 
 export interface AudioDevice {
   id: string;
   name: string;
   isDefault: boolean;
+}
+
+/** A clip's stretch of sound: 48 kHz stereo, 16-bit, interleaved, `frames` long on each of the three tracks. */
+export interface ClipPcm {
+  frames: number;
+  rate: number;
+  game: Int16Array;
+  discord: Int16Array;
+  mic: Int16Array;
 }
 
 export function send(message: { type: string; [key: string]: unknown }) {
@@ -121,6 +150,76 @@ export function useAutostart(): [boolean | null, (enabled: boolean) => void] {
   });
   useEffect(() => send({ type: 'autostart' }), []);
   return [enabled, (on) => send({ type: 'autostart', enabled: on })];
+}
+
+/** The microphones to pick from (asked for when `open` turns true); null until the app answers. */
+export function useAudioDevices(open: boolean): AudioDevice[] | null {
+  const [mics, setMics] = useState<AudioDevice[] | null>(null);
+  useShellMessages((msg) => {
+    if (msg.type === 'audiodevices') setMics(msg.mics);
+  });
+  useEffect(() => {
+    if (open) send({ type: 'audiodevices' });
+  }, [open]);
+  return mics;
+}
+
+let clipAudioId = 1;
+const CLIP_AUDIO_WAIT_MS = 15_000;
+
+/**
+ * Asks the app for the sound of a clip: the stretch that started `fromMs` ago and ended `toMs` ago
+ * (both from now, fromMs > toMs >= 0). It comes back as a WebView2 shared buffer (60 s of three
+ * tracks is about 35 MB, too much for a message), which is copied and given back right away.
+ * Rejects with plain words when the app can't (not running the sound, or no app at all).
+ */
+export function requestClipAudio(fromMs: number, toMs: number): Promise<ClipPcm> {
+  return new Promise((resolve, reject) => {
+    if (!shell) return reject(new Error('Sound in clips needs the Uncbox app.'));
+    const bridge = shell;
+    const id = clipAudioId++;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const done = () => {
+      clearTimeout(timer);
+      bridge.removeEventListener('sharedbufferreceived', onBuffer);
+      bridge.removeEventListener('message', onMessage);
+    };
+    const onBuffer = (e: SharedBufferEvent) => {
+      const info = e.additionalData as { type?: string; id?: number; frames?: number; rate?: number } | undefined;
+      if (info?.type !== 'clipaudio' || info.id !== id) return;
+      const buffer = e.getBuffer();
+      try {
+        resolve(copyClipPcm(buffer, info.frames ?? 0, info.rate ?? 48000));
+      } catch (err) {
+        reject(err);
+      } finally {
+        bridge.releaseBuffer(buffer);
+        done();
+      }
+    };
+    const onMessage = (e: { data: unknown }) => {
+      const msg = e.data as { type?: string; id?: number; error?: string } | undefined;
+      if (msg?.type !== 'clipaudio' || msg.id !== id || typeof msg.error !== 'string') return;
+      done();
+      reject(new Error(msg.error));
+    };
+    bridge.addEventListener('sharedbufferreceived', onBuffer);
+    bridge.addEventListener('message', onMessage);
+    timer = setTimeout(() => {
+      done();
+      reject(new Error('The app didn’t send the sound.'));
+    }, CLIP_AUDIO_WAIT_MS);
+    bridge.postMessage({ type: 'clipaudioget', id, fromMs, toMs });
+  });
+}
+
+/** The shared buffer's layout: the game, then Discord, then the mic, each `frames` x 2 samples. */
+export function copyClipPcm(buffer: ArrayBuffer, frames: number, rate: number): ClipPcm {
+  const samples = frames * 2;
+  if (!Number.isInteger(frames) || frames <= 0 || buffer.byteLength < samples * 3 * 2) throw new Error('The sound for that clip was cut short.');
+  const all = new Int16Array(buffer, 0, samples * 3);
+  // slice() copies, so the shared memory can go back to the app.
+  return { frames, rate, game: all.slice(0, samples), discord: all.slice(samples, samples * 2), mic: all.slice(samples * 2, samples * 3) };
 }
 
 /** The window list, asked for when the picker opens. */
