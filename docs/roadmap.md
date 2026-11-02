@@ -219,3 +219,13 @@ the way: a key file race, a double Go live starting two FFmpegs, status events a
 order, and the app serving a page older than its source. Animated backgrounds draw at 30 fps
 (Network: 29-37% of a core at 120, 11-21% at 30). Reviewed independently; AMD and Intel scaling
 untested on real hardware.
+
+### UBX-29 · A second way to launch: lighter streaming with Uncbox's own engine — Review
+The app takes `--engine=native` (also `npm run app:native`, a second Start-menu shortcut "Uncbox (lighter
+streaming)", or `UNCBOX_STREAM_ENGINE=native` by hand) and the server then streams with uncbox-stream.exe
+(UBX-27) instead of FFmpeg. One streaming feature, two engines behind it: the page sees the same tools,
+status, wording and behaviour either way, and the server falls back to FFmpeg silently (one console line)
+when the engine isn't built or its probe lists no encoder. A running server is told with
+`POST /api/stream/engine` (409 while a stream runs). Messages no longer name FFmpeg as the thing streaming.
+`npm run app:native` builds the engine when it is missing or older than its source, and starts with FFmpeg
+if cargo isn't there. Measured here, 1080p60 into a local receiver: about 4% of a core against 38%.

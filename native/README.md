@@ -24,7 +24,11 @@ that one. Starting the app again while it runs brings the running one back.
   Alt+F4 quits too.
 - Options, after `npm run app --`: `--screen=1` for another monitor, `--windowed` for a
   1280 × 720 window to try things out, an address (`http://localhost:5172/`), `--data=<folder>`
-  for the server it starts, and `--root=<folder>` if the app lives outside the Uncbox folder.
+  for the server it starts, `--root=<folder>` if the app lives outside the Uncbox folder, and
+  `--engine=native` to stream with Uncbox's own engine instead of FFmpeg (`npm run app:native`
+  builds the engine first; the installed app has a "Uncbox (lighter streaming)" Start menu entry
+  for it; see [Streaming with Uncbox](../docs/streaming-with-uncbox.md)). `npm run test:shell`
+  runs the app's unit tests.
 
 ## Play here
 
