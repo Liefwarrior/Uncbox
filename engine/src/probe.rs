@@ -8,13 +8,13 @@
 //!   "adapters": [ { "name": "NVIDIA GeForce RTX 5090 Laptop GPU", "vendor": "nvidia",
 //!                   "outputs": [ { "index": 0, "width": 2560, "height": 1440, "primary": true } ],
 //!                   "encoder": { "backend": "nvenc", "tuning": "quality", "bframes": 2 } } ],
-//!   "encoders": ["nvidia"],
+//!   "encoders": [ { "id": "nvidia", "maker": "nvidia", "tuning": "quality", "backend": "nvenc", "bframes": 2 } ],
 //!   "backend": { "nvidia": "nvenc" },
 //!   "tuning": { "nvidia": "quality" },
 //!   "primary": 0 }
 //! ```
 //!
-//! `encoders` lists the makers whose hardware H.264 encoder really encoded a few dozen tiny test
+//! `encoders` lists, one object each, the makers whose hardware H.264 encoder really encoded a few dozen tiny test
 //! pictures. `backend` is `nvenc` (the direct NVIDIA encoder) or `mediafoundation`; `tuning` is
 //! `quality` (the full FFmpeg-equivalent settings were taken) or `safe` (the card or driver refused
 //! part of them). `primary` is the number of the screen Windows calls the main one, or null.
@@ -47,14 +47,17 @@ pub struct ProbeAdapter {
 }
 
 pub fn to_json(version: &str, adapters: &[ProbeAdapter]) -> Value {
-    let mut encoders: Vec<&'static str> = Vec::new();
+    let mut encoders: Vec<Value> = Vec::new();
+    let mut seen: Vec<&'static str> = Vec::new();
     let mut backends = Map::new();
     let mut tunings = Map::new();
     for adapter in adapters {
         if let Some(check) = &adapter.check {
             // The first card of a maker decides for the maker (a second one would say the same).
-            if !encoders.contains(&adapter.vendor) {
-                encoders.push(adapter.vendor);
+            if !seen.contains(&adapter.vendor) {
+                seen.push(adapter.vendor);
+                encoders
+                    .push(json!({ "id": adapter.vendor, "maker": adapter.vendor, "tuning": check.tuning, "backend": check.backend, "bframes": check.bframes }));
                 backends.insert(adapter.vendor.to_string(), check.backend.into());
                 tunings.insert(adapter.vendor.to_string(), check.tuning.into());
             }
@@ -103,7 +106,7 @@ mod tests {
     fn reports_screens_encoders_backend_tuning_and_the_primary_screen() {
         let v = to_json("0.2.0", &[nvidia()]);
         assert_eq!(v["version"], "0.2.0");
-        assert_eq!(v["encoders"], json!(["nvidia"]));
+        assert_eq!(v["encoders"], json!([{ "id": "nvidia", "maker": "nvidia", "tuning": "quality", "backend": "nvenc", "bframes": 2 }]));
         assert_eq!(v["backend"], json!({ "nvidia": "nvenc" }));
         assert_eq!(v["tuning"], json!({ "nvidia": "quality" }));
         assert_eq!(v["primary"], 1, "the screen numbered 1 is the one Windows calls primary");
@@ -117,7 +120,9 @@ mod tests {
     #[test]
     fn an_older_card_reports_the_safe_settings_and_a_media_foundation_card_says_so() {
         let older = ProbeAdapter { check: Some(EncoderCheck { backend: "nvenc", tuning: "safe", bframes: 2 }), ..nvidia() };
-        assert_eq!(to_json("x", &[older])["tuning"]["nvidia"], "safe");
+        let v = to_json("x", &[older]);
+        assert_eq!(v["tuning"]["nvidia"], "safe");
+        assert_eq!(v["encoders"][0]["tuning"], "safe");
         let amd = ProbeAdapter {
             name: "AMD Radeon".into(),
             vendor: "amd",
@@ -125,7 +130,7 @@ mod tests {
             check: Some(EncoderCheck { backend: "mediafoundation", tuning: "safe", bframes: 0 }),
         };
         let v = to_json("x", &[amd]);
-        assert_eq!(v["encoders"], json!(["amd"]));
+        assert_eq!(v["encoders"], json!([{ "id": "amd", "maker": "amd", "tuning": "safe", "backend": "mediafoundation", "bframes": 0 }]));
         assert_eq!(v["backend"], json!({ "amd": "mediafoundation" }));
         assert_eq!(v["adapters"][0]["encoder"]["bframes"], 0);
     }
@@ -134,7 +139,7 @@ mod tests {
     fn a_card_that_wasnt_tried_or_failed_has_a_null_encoder_and_isnt_listed() {
         let intel = ProbeAdapter { name: "Intel(R) Graphics".into(), vendor: "intel", outputs: vec![], check: None };
         let v = to_json("x", &[nvidia(), intel]);
-        assert_eq!(v["encoders"], json!(["nvidia"]));
+        assert_eq!(v["encoders"], json!([{ "id": "nvidia", "maker": "nvidia", "tuning": "quality", "backend": "nvenc", "bframes": 2 }]));
         assert!(v["adapters"][1]["encoder"].is_null());
         assert_eq!(v["adapters"][1]["outputs"], json!([]));
         assert!(v["backend"].get("intel").is_none());
@@ -143,7 +148,7 @@ mod tests {
     #[test]
     fn two_cards_of_one_maker_are_listed_once() {
         let v = to_json("x", &[nvidia(), nvidia()]);
-        assert_eq!(v["encoders"], json!(["nvidia"]));
+        assert_eq!(v["encoders"], json!([{ "id": "nvidia", "maker": "nvidia", "tuning": "quality", "backend": "nvenc", "bframes": 2 }]));
         assert_eq!(v["adapters"].as_array().unwrap().len(), 2);
     }
 
@@ -159,7 +164,7 @@ mod tests {
 
     #[test]
     fn the_old_keys_are_still_there_for_the_server() {
-        // server/stream.mjs reads `encoders` and, per adapter, name, vendor and outputs (index, width, height, primary).
+        // The server reads `encoders` (objects with id/maker and tuning) and, per adapter, name, vendor and outputs (index, width, height, primary).
         let v = to_json("x", &[nvidia()]);
         for key in ["version", "adapters", "encoders"] {
             assert!(v.get(key).is_some(), "{key}");

@@ -14,7 +14,7 @@ use std::io::BufRead;
 use std::process::ExitCode;
 use std::sync::mpsc::channel;
 use uncbox_stream::redact;
-use uncbox_stream::settings::Settings;
+use uncbox_stream::settings::{Settings, Source};
 
 fn usage() -> ExitCode {
     eprintln!("Usage: uncbox-stream probe | uncbox-stream run (settings as one line of JSON on stdin)");
@@ -74,17 +74,31 @@ fn run() -> ExitCode {
         windows::Win32::Media::timeBeginPeriod(1);
     }
 
+    // Closing stdin means the server went away, which ends a stream of the screen. A test run of a video
+    // file goes on to its end (only a line "q" stops it), so it can be started with `echo {...} | uncbox-stream run`.
+    let eof_stops = settings.source == Source::Screen;
     let (tx, rx) = channel();
     std::thread::spawn(move || {
         // "q" ends the stream; so does the end of stdin (the server went away).
+        let mut stopped_by_q = false;
         for line in std::io::stdin().lock().lines() {
             match line {
-                Ok(l) if l.trim().eq_ignore_ascii_case("q") => break,
+                Ok(l) if l.trim().eq_ignore_ascii_case("q") => {
+                    stopped_by_q = true;
+                    break;
+                }
                 Ok(_) => {}
                 Err(_) => break,
             }
         }
-        let _ = tx.send(uncbox_stream::pipeline::Control::Stop);
+        if eof_stops || stopped_by_q {
+            let _ = tx.send(uncbox_stream::pipeline::Control::Stop);
+        } else {
+            // Keep the channel open (a closed one would also stop the stream) until the program ends.
+            loop {
+                std::thread::park();
+            }
+        }
     });
 
     match uncbox_stream::pipeline::run(settings, rx) {
