@@ -33,7 +33,7 @@ vi.mock('../native', async () => {
 const PIPE = '\\\\.\\pipe\\uncbox-stream-audio-1a2b3c4d';
 const fromShell = (msg: unknown) => act(() => shellMock.listeners.forEach((l) => l(msg)));
 
-const ready: StreamStatus = { ...IDLE, key: { set: true, hint: 'q9z7', source: 'pasted' }, tools: { ffmpeg: true, version: '8.1.2', nvenc: true, ddagrab: true } };
+const ready: StreamStatus = { ...IDLE, key: { set: true, hint: 'q9z7', source: 'pasted' }, tools: { ffmpeg: true, version: '8.1.2', encoder: 'nvenc', scaler: 'cuda', ddagrab: true } };
 let current: StreamStatus = ready;
 let calls: { route: string; body: unknown }[] = [];
 

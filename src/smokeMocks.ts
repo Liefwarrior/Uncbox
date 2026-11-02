@@ -42,7 +42,7 @@ export const streamStatus = (data: boolean) => ({
   stats: null,
   error: '',
   key: data ? { set: true, hint: 'q9z7', source: 'pasted' } : { set: false, hint: '', source: null },
-  tools: data ? { ffmpeg: true, version: '8.1.2-full_build', nvenc: true, ddagrab: true } : { ffmpeg: false, version: '', nvenc: null, ddagrab: null },
+  tools: data ? { ffmpeg: true, version: '8.1.2-full_build', encoder: 'nvenc', scaler: 'cuda', ddagrab: true } : { ffmpeg: false, version: '', encoder: null, scaler: null, ddagrab: null },
 });
 
 const NOW = Date.now();

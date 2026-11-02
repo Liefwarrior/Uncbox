@@ -61,14 +61,16 @@ describe('the status line', () => {
 });
 
 describe('what the check found', () => {
-  const tools = { ffmpeg: true, version: '8.1.2', nvenc: true, ddagrab: true };
+  const tools = { ffmpeg: true, version: '8.1.2', encoder: 'nvenc', scaler: 'cuda', ddagrab: true } as const;
 
   it('waits for the answer before saying anything is missing', () => {
     expect(toolsLine(IDLE.tools, false).state).toBe('checking');
   });
 
-  it('is ready with NVENC and ddagrab', () => {
-    expect(toolsLine(tools, true)).toEqual({ state: 'ready', text: 'Ready: NVENC on your graphics card' });
+  it('is ready, naming the encoder it found', () => {
+    expect(toolsLine(tools, true)).toEqual({ state: 'ready', text: 'Ready: NVIDIA NVENC on your graphics card' });
+    expect(toolsLine({ ...tools, encoder: 'amf', scaler: 'amf' }, true).text).toBe('Ready: AMD AMF on your graphics card');
+    expect(toolsLine({ ...tools, encoder: 'qsv', scaler: 'qsv' }, true).text).toBe('Ready: Intel Quick Sync on your graphics card');
   });
 
   it('points at the Downloads widget when FFmpeg is missing', () => {
@@ -77,7 +79,7 @@ describe('what the check found', () => {
 
   it('says when it cannot capture or encode', () => {
     expect(toolsLine({ ...tools, ddagrab: false }, true).state).toBe('unsupported');
-    expect(toolsLine({ ...tools, nvenc: false }, true).text).toMatch(/NVENC/);
+    expect(toolsLine({ ...tools, encoder: '', scaler: null }, true)).toMatchObject({ state: 'unsupported', text: expect.stringMatching(/NVIDIA, AMD or Intel/) });
   });
 });
 

@@ -1,7 +1,10 @@
 import { bitrateText } from '../obs';
 import type { ControllerState } from './controller';
 import { RETRY_DELAYS_MS } from './retry';
-import type { StreamStatus, StreamTools } from './status';
+import type { StreamEncoder, StreamStatus, StreamTools } from './status';
+
+/** Each encoder by the name on the box. */
+const ENCODER_NAMES: Record<StreamEncoder, string> = { nvenc: 'NVIDIA NVENC', amf: 'AMD AMF', qsv: 'Intel Quick Sync' };
 
 /** "5:12" under an hour, "1:02:33" from then on. */
 export function elapsedText(ms: number): string {
@@ -35,6 +38,6 @@ export function toolsLine(tools: StreamTools, checked: boolean): { state: 'check
   if (!checked) return { state: 'checking', text: 'Checking this PC…' };
   if (!tools.ffmpeg) return { state: 'missing', text: 'FFmpeg isn’t installed: install it from the Downloads widget.' };
   if (tools.ddagrab === false) return { state: 'unsupported', text: 'This FFmpeg can’t capture the screen. Update it from the Downloads widget.' };
-  if (tools.nvenc === false) return { state: 'unsupported', text: 'This PC can’t use NVENC, which needs an NVIDIA graphics card, so Uncbox can’t stream from it.' };
-  return { state: 'ready', text: 'Ready: NVENC on your graphics card' };
+  if (tools.encoder === '') return { state: 'unsupported', text: 'Uncbox streams with the encoder on your graphics card (NVIDIA, AMD or Intel), and this PC can’t start one. Update your graphics driver.' };
+  return { state: 'ready', text: tools.encoder ? `Ready: ${ENCODER_NAMES[tools.encoder]} on your graphics card` : 'Ready' };
 }

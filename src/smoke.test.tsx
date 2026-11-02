@@ -694,7 +694,7 @@ describe('streaming from Uncbox', () => {
     expect(text).toContain('Stream key set ····q9z7');
     expect(screen.getByLabelText('Screen')).toHaveProperty('value', '0');
     expect(screen.getByLabelText('Quality')).toHaveProperty('value', '1080p60');
-    expect(text).toContain('Ready: NVENC on your graphics card');
+    expect(text).toContain('Ready: NVIDIA NVENC on your graphics card');
     // A browser has no app to make the sound.
     expect(text).toContain('Sound needs the Uncbox app.');
     expect(screen.getByRole('button', { name: 'Replace key' })).toBeTruthy();
