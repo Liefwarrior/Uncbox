@@ -6,7 +6,8 @@ namespace UncboxShell;
 /// <summary>
 /// Makes sure the Uncbox server is running, so the app is one double-click. If something already
 /// answers at the address (npm start in a terminal, say) it's used as is. Otherwise the server is
-/// started from the Uncbox folder, after a build if dist/ is missing, and stopped with the app.
+/// started from the Uncbox folder, after a build if dist/ is missing or older than the source, and
+/// stopped with the app.
 /// The server sits in a job object, so it goes away even if the app crashes.
 ///
 /// A packaged copy (npm run package) carries its own Node in node\ and the server and page in
@@ -66,6 +67,24 @@ internal sealed class ServerHost : IDisposable
         }
     }
 
+    /// <summary>
+    /// Whether a source checkout's built page (dist\) is older than its source, as after a git pull.
+    /// Without this the app kept serving the old page: a feature that had landed (the Streaming
+    /// section) was simply missing until someone thought to run npm run build.
+    /// </summary>
+    internal static bool PageIsOlderThanSource(string root)
+    {
+        string page = Path.Combine(root, "dist", "index.html");
+        if (!File.Exists(page)) return true;
+        DateTime built = File.GetLastWriteTimeUtc(page);
+        IEnumerable<string> files = new[] { "index.html", "package.json", "vite.config.ts", "tsconfig.json" }
+            .Select(f => Path.Combine(root, f))
+            .Where(File.Exists);
+        foreach (string dir in new[] { "src", "public" }.Select(d => Path.Combine(root, d)).Where(Directory.Exists))
+            files = files.Concat(Directory.EnumerateFiles(dir, "*", SearchOption.AllDirectories));
+        return files.Any(f => File.GetLastWriteTimeUtc(f) > built);
+    }
+
     /// <summary>Starts the server if nothing answers at url. False, with Error set, if it can't.</summary>
     public async Task<bool> EnsureRunning(Uri url, string? root, string? dataDir, IProgress<string> status)
     {
@@ -76,15 +95,16 @@ internal sealed class ServerHost : IDisposable
             return false;
         }
         string? bundledNode = BundledNode;
-        if (!File.Exists(Path.Combine(root, "dist", "index.html")))
+        bool missing = !File.Exists(Path.Combine(root, "dist", "index.html"));
+        // A packaged copy has no npm or source to build from, so a missing page means a damaged download.
+        if (missing && bundledNode is not null)
         {
-            // A packaged copy has no npm or source to build from, so a missing page means a damaged download.
-            if (bundledNode is not null)
-            {
-                Error = "Uncbox's page files are missing (the app\\dist folder). Unzip the download again.";
-                return false;
-            }
-            status.Report("Building Uncbox (first run only)…");
+            Error = "Uncbox's page files are missing (the app\\dist folder). Unzip the download again.";
+            return false;
+        }
+        if (bundledNode is null && (missing || PageIsOlderThanSource(root)))
+        {
+            status.Report(missing ? "Building Uncbox (first run only)…" : "Building Uncbox (it was updated)…");
             var build = Start(root, "cmd.exe", "/d /c npm run build");
             if (build is null) return false;
             await build.WaitForExitAsync();
