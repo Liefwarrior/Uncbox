@@ -4,7 +4,7 @@ internal static class Program
 {
     /// <summary>
     /// Uncbox.exe [url] [--screen=N] [--windowed] [--tray] [--root=folder] [--data=folder]
-    ///            [--no-install] | --uninstall
+    ///            [--engine=native|ffmpeg] [--no-install] | --uninstall
     ///
     /// Opens http://localhost:5170 unless given another address, starting the Uncbox server first
     /// if nothing answers there (from --root, or the Uncbox folder the app sits in). --screen picks
@@ -14,6 +14,11 @@ internal static class Program
     /// just brings the running one back. --tray starts it in the tray. A packaged copy run from
     /// somewhere other than its install folder offers to install first (--no-install skips that);
     /// --uninstall removes an installed copy. See Installer.cs.
+    ///
+    /// --engine=native is the second way to launch: the stream goes out through Uncbox's own engine
+    /// (uncbox-stream.exe), which is lighter on the processor, instead of FFmpeg. Nothing in the app
+    /// looks different. If the engine isn't there the server streams with FFmpeg by itself. See
+    /// StreamEngine.cs.
     /// </summary>
     [STAThread]
     private static void Main(string[] args)
@@ -48,6 +53,7 @@ internal static class Program
             Root = url.Host is "localhost" or "127.0.0.1" ? ServerHost.FindRoot(Arg(args, "--root=")) : null,
             CanStartServer = url.Host is "localhost" or "127.0.0.1",
             DataDir = Arg(args, "--data="),
+            Engine = StreamEngine.Choose(args, Environment.GetEnvironmentVariable(StreamEngine.EnvironmentVariable)),
             Wake = wake,
         };
         Application.Run(new ShellForm(options));
@@ -67,5 +73,7 @@ internal sealed class ShellOptions
     public string? Root { get; init; }
     public bool CanStartServer { get; init; }
     public string? DataDir { get; init; }
+    /// <summary>Who streams: StreamEngine.Native or StreamEngine.FFmpeg (the default).</summary>
+    public string Engine { get; init; } = StreamEngine.FFmpeg;
     public required EventWaitHandle Wake { get; init; }
 }

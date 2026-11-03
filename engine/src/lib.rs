@@ -1,0 +1,45 @@
+//! Uncbox's own streaming engine: capture a screen, encode it on the graphics card, and send it
+//! (with the app's sound) to Twitch over RTMP. `src/main.rs` is the program; this is its parts.
+//!
+//! The parts that are only data (settings, the stream key filter, FLV, H.264 NAL units, AMF0, the
+//! RTMP chunking, the packet line, the encoder settings, the NVENC structures, Y4M files) don't
+//! touch Windows and are tested on their own. The parts that talk to the graphics card, Media
+//! Foundation and the sound pipe are Windows-only.
+
+pub mod amf0;
+pub mod error;
+pub mod flv;
+pub mod h264;
+pub mod log;
+pub mod net;
+pub mod nvapi;
+pub mod orient;
+pub mod probe;
+pub mod progress;
+pub mod queue;
+pub mod redact;
+pub mod reorder;
+pub mod rtmp;
+pub mod settings;
+pub mod sink;
+pub mod tuning;
+pub mod y4m;
+
+#[cfg(windows)]
+pub mod audio;
+#[cfg(windows)]
+pub mod capture;
+#[cfg(windows)]
+pub mod convert;
+#[cfg(windows)]
+pub mod encoder;
+#[cfg(windows)]
+pub mod gpu;
+#[cfg(windows)]
+pub mod mf;
+#[cfg(windows)]
+pub mod nvenc;
+#[cfg(windows)]
+pub mod pipeline;
+#[cfg(windows)]
+pub mod source;

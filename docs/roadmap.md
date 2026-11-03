@@ -219,3 +219,29 @@ the way: a key file race, a double Go live starting two FFmpegs, status events a
 order, and the app serving a page older than its source. Animated backgrounds draw at 30 fps
 (Network: 29-37% of a core at 120, 11-21% at 30). Reviewed independently; AMD and Intel scaling
 untested on real hardware.
+
+### UBX-27 · Uncbox's own streaming engine, in Rust — Review
+uncbox-stream.exe (engine/) captures a screen with Desktop Duplication, turns and scales it in the
+graphics card's video processor and encodes it there, so pictures never touch the processor. It sends
+FLV over its own RTMP client (rtmps through Windows' SChannel), takes the app's sound pipe, and speaks
+FFmpeg's progress format so the server reads it the same way. The stream key arrives on stdin, never on
+the command line.
+
+### UBX-28 · The engine matches FFmpeg's picture — Review
+Direct NVENC (nvEncodeAPI64.dll, zero-copy D3D11 input) with exactly FFmpeg's quality settings: P6/HQ,
+CBR, quarter-size first pass, temporal AQ, look-ahead 20, two B-frames as references, with the same
+safe fallback for older cards. VMAF on two SMITE clips equals FFmpeg's (93.27 and 92.64; on one clip the
+bytes match). HDR screens stream like ddagrab's (Windows hands over SDR), turned screens go out upright,
+and a size change mid-stream keeps the stream going. Media Foundation stays for AMD and Intel (untested
+on those cards). Measured live: 4-10% of a core against FFmpeg's 35-83%. Test-only: a Y4M file source
+and FLV file output, for comparing pictures.
+
+### UBX-29 · A second way to launch: lighter streaming with Uncbox's own engine — Review
+The app takes `--engine=native` (also `npm run app:native`, a second Start-menu shortcut "Uncbox (lighter
+streaming)", or `UNCBOX_STREAM_ENGINE=native` by hand) and the server then streams with uncbox-stream.exe
+(UBX-27) instead of FFmpeg. One streaming feature, two engines behind it: the page sees the same tools,
+status, wording and behaviour either way, and the server falls back to FFmpeg silently (one console line)
+when the engine isn't built or its probe lists no encoder. A running server is told with
+`POST /api/stream/engine` (409 while a stream runs). Messages no longer name FFmpeg as the thing streaming.
+`npm run app:native` builds the engine when it is missing or older than its source, and starts with FFmpeg
+if cargo isn't there. Measured here, 1080p60 into a local receiver: about 4% of a core against 38%.

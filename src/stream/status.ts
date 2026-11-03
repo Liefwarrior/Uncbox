@@ -30,6 +30,8 @@ export interface StreamTools {
   tuning: 'quality' | 'safe' | null;
   scaler: StreamScaler | null;
   ddagrab: boolean | null;
+  /** Who streams, 'native' (Uncbox's own engine) or 'ffmpeg'. For diagnosis only: nothing on the page depends on it, and `ffmpeg` and `ddagrab` already say what the page needs. */
+  engine?: 'native' | 'ffmpeg';
 }
 
 export interface StreamStatus {

@@ -17,6 +17,9 @@
     "setup-domain": "node scripts/setup-domain.mjs",
     "remove-domain": "node scripts/setup-domain.mjs --remove",
     "app": "node scripts/app.mjs",
+    "app:native": "node scripts/app.mjs --engine=native",
+    "engine": "cd engine && cargo build --release",
+    "test:shell": "dotnet test native/UncboxShell.Tests -nologo",
     "package": "node scripts/package.mjs"
   },
   "engines": {

@@ -81,6 +81,39 @@ which adds about a quarter of a second to the few seconds viewers are behind any
 any of that, the check finds out and Uncbox streams with plainer settings instead. AMD and Intel
 cards use the same approach but haven't been measured yet.
 
+## Lighter streaming (optional)
+
+Uncbox has a second way to launch that streams with Uncbox's own small streaming program instead
+of FFmpeg. Nothing looks different and everything above works the same: the same Streaming section,
+buttons, settings and messages. What changes is the load on your PC. On the RTX 5090 laptop
+(2560×1440 screen, `1080p60 · 6000`, a local test receiver) the processor time went from about
+38% of one core to about 4%, and it needs no FFmpeg install. See `engine/README.md` for the measurements.
+
+Start it one of these ways:
+
+- **From a checkout:** `npm run app:native` instead of `npm run app`. The first run builds the
+  program (it needs Rust and the LLVM-MinGW compiler, which install per user without admin rights:
+  see `engine/README.md`, "Building"), and rebuilds it when its source changes.
+- **Installed:** the Start menu has a second entry, **Uncbox (lighter streaming)**, beside **Uncbox**
+  (copies that include the program only).
+- **In a browser:** start the server with `UNCBOX_STREAM_ENGINE=native npm start`.
+
+If Uncbox is already running, launching it again just brings the running one back, so quit it first
+(tray icon, **Quit Uncbox**) to switch. You can't switch while a stream is going.
+
+It falls back to FFmpeg by itself. If the program isn't built, or can't start an encoder on this PC,
+Uncbox streams with FFmpeg exactly as before, and the only sign is one line in the server's console.
+(`npm run app:native` without Rust installed says how to get it and starts normally.)
+
+Viewers can't tell them apart. On NVIDIA the program drives NVENC directly with the same settings
+FFmpeg uses (B-frames, 20 frames of look-ahead, a quarter-size first pass), and scored the same VMAF
+as FFmpeg on two SMITE clips (92.6-93.3). What you get is the processor time back: measured on an
+RTX 5090 laptop at 1080p60, 4-10% of one core against FFmpeg's 35-83%, and it stops in a fifth of
+a second. It also streams HDR screens and turned (portrait) screens upright, and keeps going when a
+screen changes size mid-stream. On AMD and Intel cards the lighter launch streams with FFmpeg: the
+program could only use Windows' own encoders there, whose picture is visibly plainer, so FFmpeg's
+AMF and Quick Sync encoders do it instead and the stream looks the same either way.
+
 ## What viewers see
 
 The screen you picked, as it is: one picture, with no scenes, overlays or camera layout. Anything
@@ -93,5 +126,5 @@ with only the game. Need scenes and overlays? Use OBS, as before.
 - **FFmpeg isn't installed.** Use **Install FFmpeg**, then **Check again**.
 - **No encoder.** Uncbox needs the video encoder on an NVIDIA, AMD or Intel graphics card. Update
   the graphics driver.
-- **Dropped right away.** The line under the button shows the last thing FFmpeg said, with the
-  key blanked out. Twitch refusing the key is the usual cause: copy it again.
+- **Dropped right away.** The line under the button shows the last thing the stream program said,
+  with the key blanked out. Twitch refusing the key is the usual cause: copy it again.

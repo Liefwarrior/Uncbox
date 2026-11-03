@@ -1,14 +1,18 @@
 // Streaming from Uncbox: the FFmpeg arguments, the progress parser, the key handling and the
-// stream's life (starting, live, dropped, stopping). FFmpeg is never run and nothing touches the
-// network: spawn is replaced by a fake, and the key file goes in a temp folder.
+// stream's life (starting, live, dropped, stopping), with FFmpeg or with Uncbox's own engine
+// (uncbox-stream.exe) behind it. Neither is ever run and nothing touches the network: spawn is
+// replaced by fakes, and the key file goes in a temp folder.
 
 import { EventEmitter } from 'node:events';
+import { readFileSync } from 'node:fs';
 import { mkdtemp, readFile, rm, stat } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { toolsLine } from '../src/stream/format';
 import {
   amfScale,
+  buildEngineConfig,
   buildFfmpegArgs,
   clampSettings,
   cpuScale,
@@ -17,14 +21,20 @@ import {
   cudaScale,
   encoderArgs,
   ENCODERS,
+  findEngine,
   gpuScale,
   ingestUrl,
   qsvScale,
   listsName,
+  parseProbe,
   parseProgress,
   parseScreenSize,
   PIPE_SHAPE,
   redact,
+  TWITCH_INGEST,
+  wantedEngine,
+  plainReason,
+  testIngest,
 } from './stream.mjs';
 
 const KEY = 'live_123456789_AbCdEfGhIjKlMnOpQrSt';
@@ -57,6 +67,202 @@ describe('ingestUrl', () => {
 
   it('marks a test stream as a bandwidth test', () => {
     expect(ingestUrl(KEY, true)).toBe(`rtmps://live.twitch.tv:443/app/${KEY}?bandwidthtest=true`);
+  });
+
+  describe('UNCBOX_STREAM_INGEST (for testing only)', () => {
+    it('replaces the Twitch address with another rtmp or rtmps one', () => {
+      expect(ingestUrl(KEY, false, { UNCBOX_STREAM_INGEST: 'rtmp://127.0.0.1:19350/live' })).toBe(`rtmp://127.0.0.1:19350/live/${KEY}`);
+      expect(ingestUrl(KEY, true, { UNCBOX_STREAM_INGEST: ' rtmps://localhost/app/ ' })).toBe(`rtmps://localhost/app/${KEY}?bandwidthtest=true`);
+    });
+
+    it('only ever points at this PC: the address carries the stream key', () => {
+      for (const here of ['rtmp://127.0.0.1:19350/live', 'rtmp://localhost/app', 'rtmps://LOCALHOST/app', 'rtmp://[::1]:1935/app']) {
+        expect(testIngest({ UNCBOX_STREAM_INGEST: here }), here).toBe(here);
+      }
+      for (const away of ['rtmp://evil.example/app', 'rtmps://live.twitch.tv:443/app', 'rtmp://127.0.0.1.evil.example/app', 'rtmp://localhost.evil.example/app', 'rtmp://10.0.0.5/app']) {
+        expect(testIngest({ UNCBOX_STREAM_INGEST: away }), away).toBe('');
+        expect(ingestUrl(KEY, false, { UNCBOX_STREAM_INGEST: away }), away).toBe(`${TWITCH_INGEST}/${KEY}`);
+      }
+    });
+
+    it('is ignored unless it is an rtmp(s) address', () => {
+      for (const bad of ['', '   ', 'http://127.0.0.1/live', 'file:///c:/x', '127.0.0.1:1935', 'rtmp://', 'rtmp://host/app?x=1', '-f flv x', 'rtmp://a b/c']) {
+        expect(ingestUrl(KEY, false, { UNCBOX_STREAM_INGEST: bad }), bad).toBe(`${TWITCH_INGEST}/${KEY}`);
+      }
+      expect(ingestUrl(KEY, false, {})).toBe(`${TWITCH_INGEST}/${KEY}`);
+    });
+
+    it('reaches both programs', () => {
+      const env = { UNCBOX_STREAM_INGEST: 'rtmp://127.0.0.1:19350/live' };
+      expect(buildFfmpegArgs({ settings: {}, key: KEY, env }).at(-1)).toBe(`rtmp://127.0.0.1:19350/live/${KEY}`);
+      expect(buildEngineConfig({ settings: {}, key: KEY, env }).url).toBe(`rtmp://127.0.0.1:19350/live/${KEY}`);
+    });
+  });
+});
+
+describe('plainReason', () => {
+  it('gives FFmpeg’s numbered network errors the engine’s own sentences, so both say the same', () => {
+    expect(plainReason('Error opening output files: Error number -138 occurred', 'live.twitch.tv')).toBe('The server live.twitch.tv refused the connection.');
+    expect(plainReason('[out#0/flv @ 000001] Error closing file: Error number -10054 occurred', 'live.twitch.tv')).toBe('The connection to the server was lost.');
+    expect(plainReason('[tcp @ 0x1] Connection to tcp://live.twitch.tv:443 failed: Connection timed out', 'live.twitch.tv')).toBe("The server live.twitch.tv didn't answer.");
+    expect(plainReason('[tcp @ 0x1] Failed to resolve hostname live.twitch.tv: Unknown host', 'live.twitch.tv')).toBe("Couldn't find the server live.twitch.tv. Check the internet connection.");
+    // The engine's sentences pass through as they are.
+    for (const own of ['The server 127.0.0.1 refused the connection.', 'The connection to the server was lost.', 'The Uncbox app stopped sending sound.']) expect(plainReason(own, '127.0.0.1')).toBe(own);
+  });
+
+  it('is nothing for a line that isn’t a reason to stop', () => {
+    for (const line of ['', '   ', '[debug] Streaming with NVENC', '[aist#0:0/pcm_f32le @ 0x1] Guessed Channel Layout: stereo', '[in#0/f32le @ 0x1] Estimating duration from bitrate, this may be inaccurate']) {
+      expect(plainReason(line), line).toBe('');
+    }
+  });
+});
+
+describe('the engine’s NVENC settings', () => {
+  // The engine sets NVENC up itself (engine/src/tuning.rs) and must ask for what FFmpeg is asked
+  // for here, or the picture differs by which program streams. This reads the Rust source, so a
+  // change on one side without the other fails here.
+  const rust = readFileSync(new URL('../engine/src/tuning.rs', import.meta.url), 'utf8');
+  const pick = (re) => {
+    const m = re.exec(rust);
+    if (!m) throw new Error(`tuning.rs no longer has ${re}`);
+    return m;
+  };
+  const quality = encoderArgs('nvenc', 6000, 60, 'quality');
+  const safe = encoderArgs('nvenc', 6000, 60, 'safe');
+
+  it('are FFmpeg’s, for the quality set and the safe set', () => {
+    const [, qPreset, sPreset] = pick(/preset: if quality \{ Preset::P(\d) \} else \{ Preset::P(\d) \}/);
+    expect(`p${qPreset}`).toBe(valueAfter(quality, '-preset'));
+    expect(`p${sPreset}`).toBe(valueAfter(safe, '-preset'));
+    expect(pick(/lookahead: if quality \{ (\d+) \}/)[1]).toBe(valueAfter(quality, '-rc-lookahead'));
+    expect(safe).not.toContain('-rc-lookahead');
+    pick(/multipass: if quality \{ Multipass::QuarterResolution \} else \{ Multipass::Disabled \}/);
+    expect(valueAfter(quality, '-multipass')).toBe('qres');
+    expect(safe).not.toContain('-multipass');
+    pick(/temporal_aq: quality,/);
+    expect(valueAfter(quality, '-temporal-aq')).toBe('1');
+    pick(/spatial_aq: false,/);
+    expect(quality).not.toContain('-spatial-aq');
+    pick(/b_frame_ref: if quality && bframes >= 2 \{ BFrameRef::Middle \}/);
+    expect(valueAfter(quality, '-b_ref_mode')).toBe('middle');
+    expect(valueAfter(quality, '-bf')).toBe('2');
+    pick(/vbv_buffer: bitrate\.saturating_mul\(2\)/);
+    expect(valueAfter(quality, '-bufsize')).toBe('12000k');
+    pick(/max_bitrate: bitrate,/);
+    expect(valueAfter(quality, '-maxrate')).toBe('6000k');
+    expect(valueAfter(quality, '-rc')).toBe('cbr');
+    expect(valueAfter(quality, '-tune')).toBe('hq');
+  });
+});
+
+describe('buildEngineConfig', () => {
+  it('is the settings, the address with the key, the sound pipe, an automatic card and direct NVENC', () => {
+    expect(buildEngineConfig({ settings: { screen: 1, fps: 30, height: 720, kbps: 4500 }, key: KEY, test: false, audioPipe: PIPE, env: {} })).toEqual({
+      url: `rtmps://live.twitch.tv:443/app/${KEY}`,
+      screen: 1,
+      fps: 30,
+      height: 720,
+      kbps: 4500,
+      audioPipe: PIPE,
+      encoder: 'auto',
+      backend: 'nvenc',
+    });
+  });
+
+  it('leaves out the pipe when there is none, and clamps what came from outside', () => {
+    const config = buildEngineConfig({ settings: { screen: 40, fps: 240, height: 7, kbps: 1 }, key: KEY, test: true, env: {} });
+    expect(config).toEqual({ url: `rtmps://live.twitch.tv:443/app/${KEY}?bandwidthtest=true`, screen: 7, fps: 60, height: 1080, kbps: 2500, encoder: 'auto', backend: 'nvenc' });
+    expect('audioPipe' in config).toBe(false);
+  });
+});
+
+describe('wantedEngine', () => {
+  it('is native only when asked for by name', () => {
+    for (const yes of ['native', 'NATIVE', ' Native ']) expect(wantedEngine(yes), yes).toBe('native');
+    for (const no of ['ffmpeg', '', undefined, null, 'turbo', 'native2', 5]) expect(wantedEngine(no), String(no)).toBe('ffmpeg');
+  });
+});
+
+describe('parseProbe', () => {
+  const probe = (extra) => JSON.stringify({ version: '0.1.0', adapters: [{ name: 'GPU', vendor: 'nvidia', outputs: [{ index: 0, width: 2560, height: 1440, primary: true }] }], encoders: ['nvidia'], ...extra });
+
+  it('reads the version, the cards and the encoders under the names the page knows', () => {
+    const p = parseProbe(`${probe({ encoders: ['nvidia', 'amd', 'intel'] })}\n`);
+    expect(p.version).toBe('0.1.0');
+    expect(p.adapters).toHaveLength(1);
+    expect(p.encoders).toEqual([
+      { id: 'nvenc', tuning: 'quality', backend: null },
+      { id: 'amf', tuning: 'quality', backend: null },
+      { id: 'qsv', tuning: 'quality', backend: null },
+    ]);
+  });
+
+  it('leaves out makers it does not know and repeats', () => {
+    expect(parseProbe(probe({ encoders: ['other', 7, null, 'intel', 'intel'] })).encoders).toEqual([{ id: 'qsv', tuning: 'quality', backend: null }]);
+    expect(parseProbe(probe({ encoders: [] })).encoders).toEqual([]);
+  });
+
+  it('takes a tuning when the probe gives one: on the encoder, per maker or for all', () => {
+    expect(parseProbe(probe({ encoders: [{ id: 'nvidia', tuning: 'safe' }, { name: 'amd' }] })).encoders).toEqual([
+      { id: 'nvenc', tuning: 'safe', backend: null },
+      { id: 'amf', tuning: 'quality', backend: null },
+    ]);
+    expect(parseProbe(probe({ encoders: ['nvidia', 'amd'], tuning: { amd: 'safe' } })).encoders).toEqual([
+      { id: 'nvenc', tuning: 'quality', backend: null },
+      { id: 'amf', tuning: 'safe', backend: null },
+    ]);
+    expect(parseProbe(probe({ tuning: 'safe' })).encoders).toEqual([{ id: 'nvenc', tuning: 'safe', backend: null }]);
+  });
+
+  it('says how the engine drives each encoder, on the encoder or per maker', () => {
+    expect(parseProbe(probe({ encoders: [{ id: 'nvidia', backend: 'nvenc' }, { id: 'amd', backend: 'mediafoundation' }] })).encoders).toEqual([
+      { id: 'nvenc', tuning: 'quality', backend: 'nvenc' },
+      { id: 'amf', tuning: 'quality', backend: 'mediafoundation' },
+    ]);
+    expect(parseProbe(probe({ encoders: ['nvidia'], backend: { nvidia: 'nvenc' } })).encoders).toEqual([{ id: 'nvenc', tuning: 'quality', backend: 'nvenc' }]);
+    expect(parseProbe(probe({ tuning: 'fast' })).encoders).toEqual([{ id: 'nvenc', tuning: 'quality', backend: null }]);
+  });
+
+  it('is null for anything that is not a probe', () => {
+    for (const junk of ['', 'garbage', '{"version":"1"}', '{"encoders":"nvidia"}', 'null', '[]', '<html>', '{"encoders":["nvidia"]']) {
+      expect(parseProbe(junk), junk).toBeNull();
+    }
+  });
+});
+
+describe('findEngine', () => {
+  const SERVER = 'C:\\Apps\\Uncbox\\app\\server';
+  const packaged = `${SERVER}\\uncbox-stream.exe`;
+  const above = 'C:\\Apps\\Uncbox\\app\\uncbox-stream.exe';
+  const built = 'C:\\Apps\\Uncbox\\app\\engine\\target\\release\\uncbox-stream.exe';
+  /** A file system with only these files (and the folders named in `dirs`). */
+  const fsWith = (files, dirs = []) => ({
+    stat: vi.fn(async (p) => {
+      if (files.includes(p)) return { isFile: () => true };
+      if (dirs.includes(p)) return { isFile: () => false };
+      throw new Error('ENOENT');
+    }),
+  });
+
+  it('looks beside the server first (a packaged copy), then above it, then where npm run engine builds it', async () => {
+    expect(await findEngine({ serverDir: SERVER, platform: 'win32', fs: fsWith([packaged, above, built]) })).toBe(packaged);
+    expect(await findEngine({ serverDir: SERVER, platform: 'win32', fs: fsWith([above, built]) })).toBe(above);
+    expect(await findEngine({ serverDir: SERVER, platform: 'win32', fs: fsWith([built]) })).toBe(built);
+    const fs = fsWith([]);
+    expect(await findEngine({ serverDir: SERVER, platform: 'win32', fs })).toBe('');
+    expect(fs.stat.mock.calls.map(([p]) => p)).toEqual([packaged, above, built]);
+  });
+
+  it('does not count a folder with that name, and says nothing is there off Windows', async () => {
+    expect(await findEngine({ serverDir: SERVER, platform: 'win32', fs: fsWith([built], [packaged]) })).toBe(built);
+    expect(await findEngine({ serverDir: SERVER, platform: 'linux', fs: fsWith([packaged]) })).toBe('');
+  });
+
+  it('finds the engine of this checkout when it is built', async () => {
+    // The real file system: a result is either nothing or a file called uncbox-stream.exe.
+    const found = await findEngine();
+    if (process.platform === 'win32' && found) expect(found.toLowerCase()).toMatch(/uncbox-stream\.exe$/);
+    else expect(found).toBe('');
   });
 });
 
@@ -118,7 +324,7 @@ describe('buildFfmpegArgs', () => {
   it('reads the sound from the pipe as the contract says', () => {
     const args = buildFfmpegArgs(base);
     const at = args.lastIndexOf('-thread_queue_size');
-    expect(args.slice(at, at + 10)).toEqual(['-thread_queue_size', '1024', '-f', 'f32le', '-ar', '48000', '-ac', '2', '-i', PIPE]);
+    expect(args.slice(at, at + 10)).toEqual(['-thread_queue_size', '1024', '-f', 'f32le', '-ar', '48000', '-ch_layout', 'stereo', '-i', PIPE]);
     expect(args.join(' ')).not.toContain('anullsrc');
   });
 
@@ -360,6 +566,46 @@ function fakeFfmpeg({ built = ['nvenc', 'amf', 'qsv'], cards = ['nvenc'], safeOn
   return { spawn, runs, streams, last: () => streams.at(-1) };
 }
 
+const NATIVE_EXE = 'C:\\Uncbox\\engine\\target\\release\\uncbox-stream.exe';
+const PROBE = {
+  version: '0.1.0',
+  adapters: [{ name: 'NVIDIA GeForce RTX', vendor: 'nvidia', outputs: [{ index: 0, width: 2560, height: 1440, primary: true }] }],
+  encoders: [{ id: 'nvidia', maker: 'nvidia', tuning: 'quality', backend: 'nvenc', bframes: 2 }],
+};
+
+/**
+ * Uncbox's own engine, as the contract in engine/README.md has it: `probe` prints one line of JSON
+ * (`probe`, or `probeText` for something that isn't, ending with `probeCode`) and `run` reads its
+ * settings from stdin. `hold` keeps the probe from answering until release().
+ */
+function fakeNative({ probe = PROBE, probeText, probeCode = 0, hold = false } = {}) {
+  const runs = [];
+  const streams = [];
+  const held = [];
+  const spawn = vi.fn((file, args) => {
+    const proc = new EventEmitter();
+    proc.pid = 8765;
+    proc.stdout = new EventEmitter();
+    proc.stderr = new EventEmitter();
+    proc.stdin = Object.assign(new EventEmitter(), { written: [], write: (text) => void proc.stdin.written.push(text) });
+    proc.kill = vi.fn(() => queueMicrotask(() => proc.emit('close', null)));
+    runs.push({ file, args, kind: args[0] });
+    if (args[0] === 'run') {
+      streams.push(proc);
+      return proc;
+    }
+    const answer = () => {
+      const text = probeText ?? (probe ? `${JSON.stringify(probe)}\n` : '');
+      if (text) proc.stdout.emit('data', text);
+      proc.emit('close', probeCode);
+    };
+    if (hold) held.push(answer);
+    else queueMicrotask(answer);
+    return proc;
+  });
+  return { spawn, runs, streams, last: () => streams.at(-1), release: () => held.splice(0).forEach((answer) => answer()) };
+}
+
 const PROGRESS = (frame) => `frame=${frame}\nfps=59.9\nbitrate=5876.3kbits/s\ndrop_frames=1\nspeed=1.0x\nprogress=continue\n`;
 const tick = () => new Promise((resolve) => setImmediate(resolve));
 /** Waits (two seconds at most) for something that happens without being awaited, like a file being written. */
@@ -376,8 +622,10 @@ describe('the stream', () => {
   let clock;
   let timers;
   let ffmpeg;
+  let native;
   let twitch;
   let priority;
+  let consoleLines;
 
   beforeEach(async () => {
     dir = await mkdtemp(path.join(os.tmpdir(), 'uncbox-stream-'));
@@ -385,6 +633,8 @@ describe('the stream', () => {
     clock = 1_000_000;
     timers = [];
     ffmpeg = fakeFfmpeg();
+    native = fakeNative();
+    consoleLines = [];
     // Not signed in to Twitch unless a test says so.
     twitch = { streamKey: vi.fn(async () => Promise.reject(Object.assign(new Error('Sign in to Twitch first.'), { status: 401, code: 'not-signed-in' }))) };
     priority = [];
@@ -401,8 +651,13 @@ describe('the stream', () => {
       readJson: async () => from.body ?? {},
       dataDir: dir,
       twitch,
-      spawn: ffmpeg.spawn,
+      // One spawn for both programs, as the real one is: which one it is is told by the file.
+      spawn: (file, args, options) => (file === NATIVE_EXE ? native.spawn(file, args, options) : ffmpeg.spawn(file, args, options)),
       findFfmpeg: async () => 'C:\\Tools\\ffmpeg.exe',
+      findNative: async () => NATIVE_EXE,
+      // FFmpeg unless a test asks for the engine.
+      env: {},
+      log: (line) => consoleLines.push(line),
       raisePriority: (pid) => priority.push(pid),
       now: () => clock,
       setTimer: (fn, ms) => {
@@ -436,7 +691,7 @@ describe('the stream', () => {
       stats: null,
       error: '',
       key: { set: false, hint: '', source: null },
-      tools: { ffmpeg: false, version: '', encoder: null, tuning: null, scaler: null, ddagrab: null },
+      tools: { ffmpeg: false, version: '', encoder: null, tuning: null, scaler: null, ddagrab: null, engine: 'ffmpeg' },
     });
   });
 
@@ -562,7 +817,7 @@ describe('the stream', () => {
     it('finds FFmpeg, NVENC and ddagrab, and scales on the processor when nothing quicker works', async () => {
       const stream = make();
       const res = await call(stream, 'POST', '/api/stream/check');
-      expect(res.body.tools).toEqual({ ffmpeg: true, version: '8.1.2-full_build', encoder: 'nvenc', tuning: 'quality', scaler: 'cpu', ddagrab: true });
+      expect(res.body.tools).toEqual({ ffmpeg: true, version: '8.1.2-full_build', encoder: 'nvenc', tuning: 'quality', scaler: 'cpu', ddagrab: true, engine: 'ffmpeg' });
       // The one-frame NVENC probe from the ticket, then a few frames with the stream's own settings.
       const probes = ffmpeg.runs.filter((r) => r.args.join(' ').includes('color=black')).map((r) => r.args.join(' '));
       expect(probes[0]).toBe('-hide_banner -f lavfi -i color=black:s=256x256:r=30 -frames:v 1 -c:v h264_nvenc -f null -');
@@ -608,7 +863,7 @@ describe('the stream', () => {
     it('says when FFmpeg is missing, and looks again next time', async () => {
       let path = '';
       const stream = make({ findFfmpeg: async () => path });
-      expect((await call(stream, 'POST', '/api/stream/check')).body.tools).toEqual({ ffmpeg: false, version: '', encoder: null, tuning: null, scaler: null, ddagrab: null });
+      expect((await call(stream, 'POST', '/api/stream/check')).body.tools).toEqual({ ffmpeg: false, version: '', encoder: null, tuning: null, scaler: null, ddagrab: null, engine: 'ffmpeg' });
       path = 'C:\\Tools\\ffmpeg.exe';
       expect((await call(stream, 'POST', '/api/stream/check')).body.tools.ffmpeg).toBe(true);
     });
@@ -649,7 +904,8 @@ describe('the stream', () => {
     await call(stream, 'POST', '/api/stream/key', { key: KEY });
     const res = await call(stream, 'POST', '/api/stream/start', { settings: { screen: 0, fps: 60, height: 1080, kbps: 6000 }, ...body });
     expect(res.status).toBe(200);
-    ffmpeg.last().stdout.emit('data', PROGRESS(30));
+    // The first frames, from whichever program is streaming.
+    ((await stream.snapshot()).tools.engine === 'native' ? native : ffmpeg).last().stdout.emit('data', PROGRESS(30));
     await tick();
     return stream;
   }
@@ -796,7 +1052,7 @@ describe('the stream', () => {
       await call(stream, 'POST', '/api/stream/start', {});
       ffmpeg.last().emit('error', new Error('spawn ENOENT'));
       await tick();
-      expect(await stream.snapshot()).toMatchObject({ state: 'error', error: 'Couldn’t start FFmpeg.' });
+      expect(await stream.snapshot()).toMatchObject({ state: 'error', error: 'Couldn’t start the stream.' });
     });
   });
 
@@ -831,7 +1087,7 @@ describe('the stream', () => {
       ffmpeg.last().stderr.emit('data', 'Warning: something\nConnection reset by peer\n');
       ffmpeg.last().emit('close', 1);
       await tick();
-      expect(await stream.snapshot()).toMatchObject({ state: 'dropped', error: 'Connection reset by peer' });
+      expect(await stream.snapshot()).toMatchObject({ state: 'dropped', error: 'The connection to the server was lost.' });
       expect(last().state).toBe('dropped');
     });
 
@@ -841,7 +1097,7 @@ describe('the stream', () => {
       await call(stream, 'POST', '/api/stream/start', {});
       ffmpeg.last().emit('close', 3);
       await tick();
-      expect((await stream.snapshot()).error).toBe('FFmpeg stopped (code 3).');
+      expect((await stream.snapshot()).error).toBe('The stream stopped (code 3).');
     });
 
     it('drops while still starting, too', async () => {
@@ -945,6 +1201,594 @@ describe('the stream', () => {
     });
   });
 
+  // ---- the same feature with either program behind it ----
+
+  /** Who is asked for, as the server's own environment says (the shell's launch and `npm run app:native` set this). */
+  const asking = (engine, over = {}) => make({ env: { UNCBOX_STREAM_ENGINE: engine }, ...over });
+  const fakes = () => ({ ffmpeg, native });
+  const toolKeys = ['ddagrab', 'encoder', 'engine', 'ffmpeg', 'scaler', 'tuning', 'version'];
+
+  describe('choosing who streams', () => {
+    it('is FFmpeg unless the engine is asked for, and then never even looks for the engine', async () => {
+      const findNative = vi.fn(async () => NATIVE_EXE);
+      const res = await call(make({ findNative }), 'POST', '/api/stream/check');
+      expect(res.body.tools).toMatchObject({ engine: 'ffmpeg', ffmpeg: true, version: '8.1.2-full_build' });
+      expect(findNative).not.toHaveBeenCalled();
+      expect(native.spawn).not.toHaveBeenCalled();
+      // Nonsense in the environment is no request for the engine.
+      expect((await call(asking('turbo'), 'POST', '/api/stream/check')).body.tools.engine).toBe('ffmpeg');
+      expect((await call(asking('ffmpeg'), 'POST', '/api/stream/check')).body.tools.engine).toBe('ffmpeg');
+      expect(native.spawn).not.toHaveBeenCalled();
+    });
+
+    it('uses the engine when UNCBOX_STREAM_ENGINE=native and it is built and has an encoder, without looking for FFmpeg at all', async () => {
+      const findFfmpeg = vi.fn(async () => 'C:\\Tools\\ffmpeg.exe');
+      const res = await call(asking('native', { findFfmpeg }), 'POST', '/api/stream/check');
+      expect(res.body.tools).toEqual({ ffmpeg: true, version: '0.1.0', encoder: 'nvenc', tuning: 'quality', scaler: 'd3d11', ddagrab: true, engine: 'native' });
+      expect(findFfmpeg).not.toHaveBeenCalled();
+      expect(ffmpeg.spawn).not.toHaveBeenCalled();
+      expect(native.runs).toEqual([{ file: NATIVE_EXE, args: ['probe'], kind: 'probe' }]);
+      expect(consoleLines).toEqual([]);
+    });
+
+    it('takes the tuning from the probe, and the encoder it drives directly even when another is listed first', async () => {
+      native = fakeNative({ probe: { ...PROBE, encoders: [{ id: 'nvidia', tuning: 'safe', backend: 'nvenc' }] } });
+      expect((await call(asking('native'), 'POST', '/api/stream/check')).body.tools).toMatchObject({ engine: 'native', encoder: 'nvenc', tuning: 'safe' });
+      native = fakeNative({ probe: { ...PROBE, encoders: [{ id: 'intel', backend: 'mediafoundation' }, { id: 'nvidia', backend: 'nvenc' }] } });
+      expect((await call(asking('native'), 'POST', '/api/stream/check')).body.tools).toMatchObject({ engine: 'native', encoder: 'nvenc' });
+    });
+
+    it('streams with FFmpeg where the engine would only have Windows’ plainer encoder (AMD, Intel), so the picture is the same', async () => {
+      native = fakeNative({ probe: { ...PROBE, encoders: [{ id: 'amd', tuning: 'quality', backend: 'mediafoundation' }] } });
+      ffmpeg = fakeFfmpeg({ cards: ['amf'] });
+      const tools = (await call(asking('native'), 'POST', '/api/stream/check')).body.tools;
+      expect(tools).toMatchObject({ engine: 'ffmpeg', encoder: 'amf' });
+      expect(consoleLines.join('\n')).toMatch(/plainer encoder.*streaming with FFmpeg/);
+    });
+
+    it('says in the console when the test address is in use, for either engine', async () => {
+      for (const engine of ['ffmpeg', 'native']) {
+        consoleLines.length = 0;
+        const stream = make({ env: { UNCBOX_STREAM_ENGINE: engine, UNCBOX_STREAM_INGEST: 'rtmp://127.0.0.1:19350/app' } });
+        await call(stream, 'POST', '/api/stream/key', { key: KEY });
+        expect((await call(stream, 'POST', '/api/stream/start', {})).status, engine).toBe(200);
+        expect(consoleLines.join('\n'), engine).toMatch(/UNCBOX_STREAM_INGEST is set.*127\.0\.0\.1.*not to Twitch/);
+        expect(consoleLines.join('\n'), engine).not.toContain(KEY);
+      }
+    });
+
+    it('streams with FFmpeg when the probe doesn’t say it drives NVENC directly (an older engine)', async () => {
+      native = fakeNative({ probe: { version: '0.0.9', adapters: [], encoders: ['nvidia'] } });
+      expect((await call(asking('native'), 'POST', '/api/stream/check')).body.tools).toMatchObject({ engine: 'ffmpeg', encoder: 'nvenc' });
+    });
+
+    it('can be told by the shell which to use, and checks again', async () => {
+      const stream = make();
+      await call(stream, 'POST', '/api/stream/check');
+      expect(last().tools.engine).toBe('ffmpeg');
+      const res = await call(stream, 'POST', '/api/stream/engine', { engine: 'native' });
+      expect(res.status).toBe(200);
+      // The answer is the whole status, like every other route's.
+      expect(res.body).toMatchObject({ state: 'off', tools: { engine: 'native', encoder: 'nvenc', ffmpeg: true } });
+      expect(last().tools.engine).toBe('native');
+      expect((await call(stream, 'POST', '/api/stream/engine', { engine: 'ffmpeg' })).body.tools).toMatchObject({ engine: 'ffmpeg', version: '8.1.2-full_build' });
+      expect(last().tools.engine).toBe('ffmpeg');
+    });
+
+    it('does nothing at all when it is told what is already asked for', async () => {
+      const stream = asking('native');
+      await call(stream, 'POST', '/api/stream/check');
+      const before = native.spawn.mock.calls.length;
+      expect((await call(stream, 'POST', '/api/stream/engine', { engine: 'native' })).status).toBe(200);
+      expect(native.spawn.mock.calls.length).toBe(before);
+    });
+
+    it('turns away anything but native and ffmpeg', async () => {
+      const stream = make();
+      for (const body of [{}, { engine: 'turbo' }, { engine: '' }, { engine: 5 }, { engine: 'NATIVE' }, undefined]) {
+        const res = await call(stream, 'POST', '/api/stream/engine', body);
+        expect(res.status, JSON.stringify(body)).toBe(400);
+        expect(res.body.error).toMatch(/native.*ffmpeg/);
+      }
+      expect(native.spawn).not.toHaveBeenCalled();
+    });
+
+    it('is refused while a stream runs, and the stream and the choice are left alone', async () => {
+      const stream = await liveStream();
+      const proc = ffmpeg.last();
+      const res = await call(stream, 'POST', '/api/stream/engine', { engine: 'native' });
+      expect(res.status).toBe(409);
+      expect(res.body.error).toMatch(/End the stream/);
+      expect(native.spawn).not.toHaveBeenCalled();
+      expect(proc.kill).not.toHaveBeenCalled();
+      expect(await stream.snapshot()).toMatchObject({ state: 'live', tools: { engine: 'ffmpeg' } });
+      // After the stream ends, it is accepted.
+      await call(stream, 'POST', '/api/stream/stop');
+      proc.emit('close', 0);
+      await tick();
+      expect((await call(stream, 'POST', '/api/stream/engine', { engine: 'native' })).body.tools.engine).toBe('native');
+    });
+
+    it('is refused while a stream is starting, too (waiting for the key from Twitch)', async () => {
+      let answer;
+      twitch.streamKey.mockImplementation(() => new Promise((resolve) => (answer = resolve)));
+      const stream = make();
+      const start = call(stream, 'POST', '/api/stream/start', {});
+      await until(() => answer);
+      await expect(stream.setEngine('native')).rejects.toMatchObject({ status: 409 });
+      answer(KEY);
+      await start;
+    });
+
+    it('is accepted for a stream that dropped, as no program is running', async () => {
+      const stream = await liveStream();
+      ffmpeg.last().emit('close', 1);
+      await tick();
+      // Nothing is running any more (the page starts it again by itself), so this is no hindrance.
+      expect((await call(stream, 'POST', '/api/stream/engine', { engine: 'native' })).status).toBe(200);
+    });
+
+    it('streams with the engine that was asked for after the change', async () => {
+      const stream = make();
+      await call(stream, 'POST', '/api/stream/key', { key: KEY });
+      await call(stream, 'POST', '/api/stream/engine', { engine: 'native' });
+      await call(stream, 'POST', '/api/stream/start', {});
+      expect(ffmpeg.streams).toHaveLength(0);
+      expect(native.streams).toHaveLength(1);
+    });
+
+    it('lets the newest answer win when the engine is changed during a check', async () => {
+      native = fakeNative({ hold: true });
+      const stream = asking('native');
+      const first = stream.check();
+      await until(() => native.runs.length > 0);
+      await call(stream, 'POST', '/api/stream/engine', { engine: 'ffmpeg' });
+      native.release();
+      await first;
+      expect((await stream.snapshot()).tools).toMatchObject({ engine: 'ffmpeg', version: '8.1.2-full_build' });
+    });
+
+    describe('falling back to FFmpeg, silently for the page and with one line in the console', () => {
+      const falls = async (stream) => {
+        const res = await call(stream, 'POST', '/api/stream/check');
+        expect(res.body.tools).toMatchObject({ engine: 'ffmpeg', ffmpeg: true, version: '8.1.2-full_build', encoder: 'nvenc', ddagrab: true });
+        expect(consoleLines).toHaveLength(1);
+        expect(consoleLines[0]).toMatch(/FFmpeg/);
+        // Nothing for the page: no error, no state.
+        expect(res.body).toMatchObject({ state: 'off', error: '' });
+        return res;
+      };
+
+      it('when the engine is not built', async () => {
+        await falls(asking('native', { findNative: async () => '' }));
+        expect(consoleLines[0]).toMatch(/isn’t built/);
+        expect(native.spawn).not.toHaveBeenCalled();
+      });
+
+      it('when looking for it goes wrong', async () => {
+        await falls(
+          asking('native', {
+            findNative: async () => {
+              throw new Error('EPERM');
+            },
+          }),
+        );
+      });
+
+      it('when it will not run', async () => {
+        native = fakeNative({ probeCode: 1, probe: null });
+        await falls(asking('native'));
+        native = fakeNative({ probeCode: 3 });
+        consoleLines.length = 0;
+        await falls(asking('native'));
+      });
+
+      it('when its answer is garbage', async () => {
+        for (const text of ['garbage', '<html>nope</html>', '{"version":"0.1.0"}', '']) {
+          consoleLines.length = 0;
+          native = fakeNative({ probeText: text });
+          await falls(asking('native'));
+        }
+      });
+
+      it('when it finds no encoder that works', async () => {
+        native = fakeNative({ probe: { ...PROBE, encoders: [] } });
+        await falls(asking('native'));
+        consoleLines.length = 0;
+        native = fakeNative({ probe: { ...PROBE, encoders: ['someone-else'] } });
+        await falls(asking('native'));
+      });
+
+      it('when it takes too long to answer', async () => {
+        native = fakeNative({ hold: true });
+        const stream = asking('native');
+        const checking = stream.check();
+        await until(() => pendingTimer(15_000));
+        pendingTimer(15_000).fn();
+        await checking;
+        expect(native.runs[0].args).toEqual(['probe']);
+        expect(consoleLines).toHaveLength(1);
+        expect((await stream.snapshot()).tools.engine).toBe('ffmpeg');
+      });
+
+      it('and then FFmpeg is what a start needs, with FFmpeg’s own words when it is missing too', async () => {
+        const stream = asking('native', { findNative: async () => '', findFfmpeg: async () => '' });
+        await call(stream, 'POST', '/api/stream/key', { key: KEY });
+        const res = await call(stream, 'POST', '/api/stream/start', {});
+        expect(res.status).toBe(400);
+        expect(res.body.error).toMatch(/FFmpeg isn’t installed.*Downloads widget/);
+      });
+
+      it('and a stream still works, through FFmpeg', async () => {
+        const stream = await liveStream({}, () => asking('native', { findNative: async () => '' }));
+        expect(ffmpeg.streams).toHaveLength(1);
+        expect(native.streams).toHaveLength(0);
+        expect((await stream.snapshot()).state).toBe('live');
+      });
+    });
+
+    it('never says FFmpeg is missing when the engine will stream, even with no FFmpeg on the PC', async () => {
+      const stream = asking('native', { findFfmpeg: async () => '' });
+      const { tools } = (await call(stream, 'POST', '/api/stream/check')).body;
+      expect(tools).toMatchObject({ ffmpeg: true, ddagrab: true, engine: 'native' });
+      expect(toolsLine(tools, true).state).toBe('ready');
+      await call(stream, 'POST', '/api/stream/key', { key: KEY });
+      expect((await call(stream, 'POST', '/api/stream/start', {})).status).toBe(200);
+      expect(native.streams).toHaveLength(1);
+    });
+  });
+
+  describe('looking the same to the page', () => {
+    it('gives the same tools, with the same fields and meanings, whoever streams', async () => {
+      const viaFfmpeg = (await call(make(), 'POST', '/api/stream/check')).body;
+      const viaNative = (await call(asking('native'), 'POST', '/api/stream/check')).body;
+      expect(Object.keys(viaFfmpeg.tools).sort()).toEqual(toolKeys);
+      expect(Object.keys(viaNative.tools).sort()).toEqual(toolKeys);
+      expect(Object.keys(viaNative).sort()).toEqual(Object.keys(viaFfmpeg).sort());
+      for (const field of toolKeys.filter((f) => f !== 'engine' && f !== 'version' && f !== 'scaler')) {
+        expect(typeof viaNative.tools[field], field).toBe(typeof viaFfmpeg.tools[field]);
+      }
+      expect(viaNative.tools).toMatchObject({ ffmpeg: true, ddagrab: true, encoder: 'nvenc', tuning: 'quality', scaler: 'd3d11' });
+      expect(typeof viaNative.tools.version).toBe('string');
+    });
+
+    it('has the same snapshot before anything is checked', async () => {
+      const a = await make().snapshot();
+      const b = await asking('native').snapshot();
+      expect(b).toEqual(a);
+    });
+
+    it('says the same thing in the readiness line, and never asks for an FFmpeg install', async () => {
+      const viaFfmpeg = (await call(make(), 'POST', '/api/stream/check')).body.tools;
+      const viaNative = (await call(asking('native'), 'POST', '/api/stream/check')).body.tools;
+      expect(toolsLine(viaNative, true)).toEqual(toolsLine(viaFfmpeg, true));
+      expect(toolsLine(viaNative, true)).toEqual({ state: 'ready', text: 'Ready: NVIDIA NVENC on your graphics card' });
+      native = fakeNative({ probe: { ...PROBE, encoders: ['amd'] } });
+      ffmpeg = fakeFfmpeg({ cards: ['amf'] });
+      const amdNative = (await call(asking('native'), 'POST', '/api/stream/check')).body.tools;
+      const amdFfmpeg = (await call(make(), 'POST', '/api/stream/check')).body.tools;
+      expect(toolsLine(amdNative, true)).toEqual(toolsLine(amdFfmpeg, true));
+      expect(toolsLine(amdNative, true).text).toBe('Ready: AMD AMF on your graphics card');
+    });
+
+    it('pushes the same events', async () => {
+      await call(asking('native'), 'POST', '/api/stream/check');
+      expect(events.every(([name]) => name === 'stream')).toBe(true);
+      expect(Object.keys(last()).sort()).toEqual(['error', 'key', 'startedAt', 'state', 'stats', 'test', 'tools']);
+      expect(last().tools.engine).toBe('native');
+    });
+  });
+
+  describe('streaming with the engine', () => {
+    const live = (body, over) => liveStream(body, () => asking('native', over));
+    const lastRun = () => native.runs.findLast((r) => r.kind === 'run');
+
+    it('runs the engine with just "run", and tells it the settings, the sound and the address on stdin', async () => {
+      const stream = asking('native');
+      await call(stream, 'POST', '/api/stream/key', { key: KEY });
+      const res = await call(stream, 'POST', '/api/stream/start', { audioPipe: PIPE, settings: { screen: 1, fps: 30, height: 720, kbps: 4500 } });
+      expect(res.body.state).toBe('starting');
+      const run = lastRun();
+      expect(run.file).toBe(NATIVE_EXE);
+      expect(run.args).toEqual(['run']);
+      const proc = native.last();
+      // One line of JSON, ending in a newline, with exactly what the contract has.
+      expect(proc.stdin.written).toHaveLength(1);
+      expect(proc.stdin.written[0].endsWith('\n')).toBe(true);
+      expect(JSON.parse(proc.stdin.written[0])).toEqual({
+        url: `rtmps://live.twitch.tv:443/app/${KEY}`,
+        screen: 1,
+        fps: 30,
+        height: 720,
+        kbps: 4500,
+        audioPipe: PIPE,
+        encoder: 'auto',
+        backend: 'nvenc',
+      });
+      expect(proc.stdin.written[0].trim().split('\n')).toHaveLength(1);
+      // FFmpeg was only ever asked about the screen's size when it was the one streaming.
+      expect(ffmpeg.runs).toEqual([]);
+    });
+
+    it('never puts the key in the arguments or the environment, only on stdin', async () => {
+      await live({ audioPipe: PIPE });
+      const [call_] = native.spawn.mock.calls.filter(([, args]) => args[0] === 'run');
+      expect(JSON.stringify(call_)).not.toContain(KEY);
+      expect(JSON.stringify(call_)).not.toContain('live_');
+      expect(native.last().stdin.written[0]).toContain(KEY);
+    });
+
+    it('sends the defaults, clamped, with no sound pipe when there is none', async () => {
+      await live({ settings: { screen: 99, fps: 144, height: 900, kbps: 99_999 } });
+      expect(JSON.parse(native.last().stdin.written[0])).toEqual({ url: ingestUrl(KEY), screen: 7, fps: 60, height: 1080, kbps: 8000, encoder: 'auto', backend: 'nvenc' });
+    });
+
+    it('makes a test stream the bandwidth test address, and a normal one not', async () => {
+      const stream = await live({ test: true });
+      expect((await stream.snapshot()).test).toBe(true);
+      expect(JSON.parse(native.last().stdin.written[0]).url).toBe(`rtmps://live.twitch.tv:443/app/${KEY}?bandwidthtest=true`);
+      await live({ test: false });
+      expect(JSON.parse(native.last().stdin.written[0]).url).toBe(`rtmps://live.twitch.tv:443/app/${KEY}`);
+    });
+
+    it('streams to UNCBOX_STREAM_INGEST when that is set (for testing against a listener on this PC)', async () => {
+      await live({}, { env: { UNCBOX_STREAM_ENGINE: 'native', UNCBOX_STREAM_INGEST: 'rtmp://127.0.0.1:19350/test' } });
+      expect(JSON.parse(native.last().stdin.written[0]).url).toBe(`rtmp://127.0.0.1:19350/test/${KEY}`);
+      await liveStream({}, () => make({ env: { UNCBOX_STREAM_INGEST: 'rtmp://127.0.0.1:19350/test' } }));
+      expect(ffmpeg.runs.findLast((r) => r.kind === 'stream').args.at(-1)).toBe(`rtmp://127.0.0.1:19350/test/${KEY}`);
+    });
+
+    it('goes live on the first frames, with the stats, as FFmpeg does', async () => {
+      const stream = await live();
+      expect(await stream.snapshot()).toMatchObject({ state: 'live', test: false, startedAt: clock, stats: { fps: 59.9, kbps: 5876, dropped: 1, frames: 30, speed: 1 }, error: '' });
+    });
+
+    it('reads the engine’s progress when it comes in pieces, and stays "starting" at 0 frames', async () => {
+      const stream = asking('native');
+      await call(stream, 'POST', '/api/stream/key', { key: KEY });
+      await call(stream, 'POST', '/api/stream/start', {});
+      native.last().stdout.emit('data', 'frame=0\nfps=0.00\nbitrate=N/A\ndrop_frames=0\nspeed=N/A\nprogress=continue\n');
+      await tick();
+      expect((await stream.snapshot()).state).toBe('starting');
+      const text = PROGRESS(60);
+      native.last().stdout.emit('data', text.slice(0, 11));
+      native.last().stdout.emit('data', text.slice(11));
+      await tick();
+      expect(await stream.snapshot()).toMatchObject({ state: 'live', stats: { frames: 60 } });
+    });
+
+    it('counts the engine’s dropped pictures as FFmpeg’s', async () => {
+      const stream = await live();
+      native.last().stdout.emit('data', 'frame=900\nfps=60.0\nbitrate=5000.0kbits/s\ndrop_frames=7\nspeed=1.00x\nprogress=continue\n');
+      clock += 2000;
+      await tick();
+      expect((await stream.snapshot()).stats).toMatchObject({ dropped: 7, frames: 900 });
+    });
+
+    it('does not start without a key, and says so in the same words', async () => {
+      const res = await call(asking('native'), 'POST', '/api/stream/start', {});
+      expect(res.status).toBe(400);
+      expect(res.body.error).toMatch(/stream key/);
+      expect(native.streams).toHaveLength(0);
+    });
+
+    it('refuses an audio pipe that is not one of Uncbox’s, before anything is run', async () => {
+      const stream = asking('native');
+      await call(stream, 'POST', '/api/stream/key', { key: KEY });
+      expect((await call(stream, 'POST', '/api/stream/start', { audioPipe: '\\\\.\\pipe\\something-else' })).status).toBe(400);
+      expect(native.streams).toHaveLength(0);
+    });
+  });
+
+  // What has to be true whichever program is behind the stream.
+  describe.each([['ffmpeg'], ['native']])('with %s: the life of a stream', (engine) => {
+    const fake = () => fakes()[engine];
+    const start = async (body = {}) => {
+      const stream = asking(engine);
+      await call(stream, 'POST', '/api/stream/key', { key: KEY });
+      const res = await call(stream, 'POST', '/api/stream/start', body);
+      return { stream, res };
+    };
+    const live = (body, over) => liveStream(body, () => asking(engine, over));
+    /** What was sent to the program on stdin, the config line (native only) excluded. */
+    const sent = () => fake().last().stdin.written.filter((text) => !text.startsWith('{'));
+
+    it('starts, and is "starting" until frames arrive', async () => {
+      const { res } = await start();
+      expect(res.body).toMatchObject({ state: 'starting', error: '', tools: { engine } });
+      expect(fake().streams).toHaveLength(1);
+    });
+
+    it('runs above normal priority, and still streams when that is not allowed', async () => {
+      await live();
+      expect(priority).toEqual([engine === 'native' ? 8765 : 4321]);
+      const stream = await live({}, {
+        raisePriority: () => {
+          throw new Error('EACCES');
+        },
+      });
+      expect((await stream.snapshot()).state).toBe('live');
+    });
+
+    it('does not start twice', async () => {
+      const stream = await live();
+      const again = await call(stream, 'POST', '/api/stream/start', {});
+      expect(again.status).toBe(409);
+      expect(fake().streams).toHaveLength(1);
+    });
+
+    it('does not start twice while the first Go live waits for the key from Twitch', async () => {
+      let answer;
+      twitch.streamKey.mockImplementation(() => new Promise((resolve) => (answer = resolve)));
+      const stream = asking(engine);
+      const first = call(stream, 'POST', '/api/stream/start', {});
+      await until(() => answer);
+      await expect(stream.start({})).rejects.toMatchObject({ status: 409 });
+      answer(KEY);
+      expect((await first).status).toBe(200);
+      expect(fake().streams).toHaveLength(1);
+    });
+
+    it('takes the key from the Twitch sign-in by itself, and stays forgotten after Forget', async () => {
+      twitch.streamKey.mockResolvedValue(KEY);
+      const stream = asking(engine);
+      const res = await call(stream, 'POST', '/api/stream/start', {});
+      expect(res.status).toBe(200);
+      expect(res.body.key).toEqual({ set: true, hint: KEY.slice(-4), source: 'twitch' });
+      expect(engine === 'native' ? JSON.parse(native.last().stdin.written[0]).url : ffmpeg.runs.findLast((r) => r.kind === 'stream').args.at(-1)).toBe(ingestUrl(KEY, false, {}));
+      // End it, forget the key: the sign-in doesn't hand it straight back.
+      await call(stream, 'POST', '/api/stream/stop');
+      fake().last().emit('close', 0);
+      await tick();
+      expect((await call(stream, 'POST', '/api/stream/key', { key: '' })).body.key).toEqual({ set: false, hint: '', source: null });
+      twitch.streamKey.mockClear();
+      const again = await call(stream, 'POST', '/api/stream/start', {});
+      expect(again.status).toBe(400);
+      expect(again.body.error).toMatch(/stream key/);
+      expect(fake().streams).toHaveLength(1);
+    });
+
+    it('asks for the end with q, and is off once the program has ended', async () => {
+      const stream = await live();
+      const proc = fake().last();
+      const res = await call(stream, 'POST', '/api/stream/stop');
+      expect(res.body.state).toBe('stopping');
+      expect(sent()).toEqual(['q\n']);
+      expect(proc.kill).not.toHaveBeenCalled();
+      proc.emit('close', 0);
+      await tick();
+      expect(await stream.snapshot()).toMatchObject({ state: 'off', startedAt: null, stats: null, error: '' });
+      expect(pendingTimer(5000)).toBeUndefined();
+    });
+
+    it('kills it after the grace period if it will not end', async () => {
+      const stream = await live();
+      const proc = fake().last();
+      await call(stream, 'POST', '/api/stream/stop');
+      expect(pendingTimer(5000)).toBeDefined();
+      pendingTimer(5000).fn();
+      expect(proc.kill).toHaveBeenCalled();
+      await tick();
+      expect((await stream.snapshot()).state).toBe('off');
+    });
+
+    it('can start again right after a stop', async () => {
+      const stream = await live();
+      await call(stream, 'POST', '/api/stream/stop');
+      fake().last().emit('close', 0);
+      await tick();
+      expect((await call(stream, 'POST', '/api/stream/start', {})).status).toBe(200);
+      expect(fake().streams).toHaveLength(2);
+    });
+
+    it('kills it when the server shuts down, without announcing it', async () => {
+      const stream = await live();
+      const proc = fake().last();
+      const before = events.length;
+      stream.close();
+      expect(proc.kill).toHaveBeenCalled();
+      await tick();
+      expect(events.length).toBe(before);
+    });
+
+    it('is "dropped" with the last line it printed when it ends by itself', async () => {
+      const stream = await live();
+      fake().last().stderr.emit('data', 'Warning: something\nConnection reset by peer\n');
+      fake().last().emit('close', 1);
+      await tick();
+      expect(await stream.snapshot()).toMatchObject({ state: 'dropped', error: 'The connection to the server was lost.' });
+      expect(last().state).toBe('dropped');
+    });
+
+    it('can be started again after a drop, as the page does', async () => {
+      const stream = await live();
+      fake().last().emit('close', 1);
+      await tick();
+      const res = await call(stream, 'POST', '/api/stream/start', { audioPipe: PIPE });
+      expect(res.status).toBe(200);
+      expect(fake().streams).toHaveLength(2);
+      expect(res.body).toMatchObject({ state: 'starting', error: '' });
+    });
+
+    it('says what happened in words that name neither program', async () => {
+      const { stream } = await start();
+      fake().last().emit('close', 3);
+      await tick();
+      expect(await stream.snapshot()).toMatchObject({ state: 'dropped', error: 'The stream stopped (code 3).' });
+      // And when it cannot be run at all.
+      const second = await live();
+      await call(second, 'POST', '/api/stream/stop');
+      fake().last().emit('close', 0);
+      await tick();
+      await call(second, 'POST', '/api/stream/start', {});
+      fake().last().emit('error', new Error('spawn ENOENT'));
+      await tick();
+      expect(await second.snapshot()).toMatchObject({ state: 'error', error: 'Couldn’t start the stream.' });
+      expect(events.map(([, status]) => status.error).join(' ')).not.toMatch(/ffmpeg/i);
+    });
+
+    it('is cleared by a stop after an error or a drop', async () => {
+      const stream = await live();
+      fake().last().emit('close', 1);
+      await tick();
+      expect((await call(stream, 'POST', '/api/stream/stop')).body).toMatchObject({ state: 'off', error: '' });
+    });
+
+    it('blanks the key in whatever it prints, whatever the chunking, and in everything pushed', async () => {
+      const stream = await live();
+      const proc = fake().last();
+      proc.stderr.emit('data', `[tls @ 0x1] Connection to rtmps://live.twitch.tv:443/app/${KEY.slice(0, 20)}`);
+      proc.stderr.emit('data', `${KEY.slice(20)} failed\nConnection to ${KEY} reset by peer\n`);
+      await tick();
+      expect((await stream.snapshot()).error).toBe('Connection to **** reset by peer');
+      proc.stderr.emit('data', `Error opening output rtmps://live.twitch.tv:443/app/${KEY}\n`);
+      proc.emit('close', 1);
+      await tick();
+      const snap = await stream.snapshot();
+      expect(snap).toMatchObject({ state: 'dropped', error: 'Error opening output rtmps://live.twitch.tv:443/app/****' });
+      expect(JSON.stringify(snap)).not.toContain(KEY);
+      expect(JSON.stringify(events)).not.toContain(KEY);
+    });
+
+    it('blanks a key in any other shape the program might print', async () => {
+      await live();
+      fake().last().stderr.emit('data', 'The server refused live_987654321_zzzzzzzzzzzz\n');
+      fake().last().emit('close', 1);
+      await tick();
+      expect(last().error).toBe('The server refused live_****');
+    });
+
+    it('pushes every change of state, but progress at most once a second', async () => {
+      const stream = asking(engine);
+      await call(stream, 'POST', '/api/stream/key', { key: KEY });
+      await call(stream, 'POST', '/api/stream/start', {});
+      const proc = fake().last();
+      proc.stdout.emit('data', PROGRESS(30));
+      await tick();
+      const afterLive = events.length;
+      expect(last().state).toBe('live');
+      clock += 300;
+      proc.stdout.emit('data', PROGRESS(60));
+      clock += 300;
+      proc.stdout.emit('data', PROGRESS(90));
+      await tick();
+      expect(events.length).toBe(afterLive);
+      clock += 500;
+      proc.stdout.emit('data', PROGRESS(120));
+      await tick();
+      expect(events.length).toBe(afterLive + 1);
+      expect(last().stats.frames).toBe(120);
+    });
+
+    it('never has the word FFmpeg in anything the page is told while streaming', async () => {
+      const stream = await live();
+      fake().last().emit('close', 2);
+      await tick();
+      await call(stream, 'POST', '/api/stream/stop');
+      expect(events.map(([, status]) => status.error).join(' ')).not.toMatch(/ffmpeg|engine/i);
+    });
+  });
+
   describe('the routes', () => {
     it('answers the status to anyone, and everything else only to this PC', async () => {
       const stream = make();
@@ -953,12 +1797,14 @@ describe('the stream', () => {
         ['POST', '/api/stream/key'],
         ['POST', '/api/stream/key/twitch'],
         ['POST', '/api/stream/check'],
+        ['POST', '/api/stream/engine'],
         ['POST', '/api/stream/start'],
         ['POST', '/api/stream/stop'],
       ]) {
         expect((await call(stream, method, route, { key: KEY }, false)).status, route).toBe(403);
       }
       expect(ffmpeg.spawn).not.toHaveBeenCalled();
+      expect(native.spawn).not.toHaveBeenCalled();
       expect((await stream.snapshot()).key.set).toBe(false);
     });
 

@@ -85,8 +85,29 @@ internal sealed class ServerHost : IDisposable
         return files.Any(f => File.GetLastWriteTimeUtc(f) > built);
     }
 
+    /// <summary>
+    /// Tells a running server who should stream (POST /api/stream/engine). It's needed because the
+    /// server may have been up before this app started (npm start in a terminal), so the
+    /// environment it was started with isn't ours. Best effort: an older server has no such route,
+    /// and a server that is streaming right now answers 409 and keeps its program; neither matters
+    /// to the app. Returns whether the server took it.
+    /// </summary>
+    public static async Task<bool> TellEngine(Uri url, string engine)
+    {
+        try
+        {
+            using var body = new StringContent(StreamEngine.RequestBody(engine), System.Text.Encoding.UTF8, "application/json");
+            using var res = await Http.PostAsync(new Uri(url, "/api/stream/engine"), body);
+            return res.IsSuccessStatusCode;
+        }
+        catch (Exception e) when (e is HttpRequestException or TaskCanceledException)
+        {
+            return false;
+        }
+    }
+
     /// <summary>Starts the server if nothing answers at url. False, with Error set, if it can't.</summary>
-    public async Task<bool> EnsureRunning(Uri url, string? root, string? dataDir, IProgress<string> status)
+    public async Task<bool> EnsureRunning(Uri url, string? root, string? dataDir, IProgress<string> status, string engine = StreamEngine.FFmpeg)
     {
         if (await IsUp(url)) return true;
         if (root is null)
@@ -105,7 +126,7 @@ internal sealed class ServerHost : IDisposable
         if (bundledNode is null && (missing || PageIsOlderThanSource(root)))
         {
             status.Report(missing ? "Building Uncbox (first run only)…" : "Building Uncbox (it was updated)…");
-            var build = Start(root, "cmd.exe", "/d /c npm run build");
+            var build = Start(root, "cmd.exe", "/d /c npm run build", engine);
             if (build is null) return false;
             await build.WaitForExitAsync();
             if (build.ExitCode != 0)
@@ -119,7 +140,7 @@ internal sealed class ServerHost : IDisposable
         string args = $"server/index.mjs --port={url.Port} --exit-with-stdin";
         dataDir ??= bundledNode is not null ? PackagedDataDir : null;
         if (dataDir is not null) args += $" \"--data={Path.GetFullPath(dataDir)}\"";
-        _server = Start(root, bundledNode ?? "node", args);
+        _server = Start(root, bundledNode ?? "node", args, engine);
         if (_server is null) return false;
         for (int i = 0; i < 60; i++)
         {
@@ -131,17 +152,29 @@ internal sealed class ServerHost : IDisposable
         return false;
     }
 
-    private Process? Start(string root, string file, string args)
+    /// <summary>
+    /// How a child (the server, or the build before it) is started: in the Uncbox folder, with no
+    /// window, and with UNCBOX_STREAM_ENGINE set to who streams, so a server started here knows
+    /// from the first moment (a server that was already running is told by TellEngine).
+    /// </summary>
+    internal static ProcessStartInfo StartInfo(string root, string file, string args, string engine)
+    {
+        var info = new ProcessStartInfo(file, args)
+        {
+            WorkingDirectory = root,
+            UseShellExecute = false,
+            CreateNoWindow = true,
+            RedirectStandardInput = true,
+        };
+        info.Environment[StreamEngine.EnvironmentVariable] = engine;
+        return info;
+    }
+
+    private Process? Start(string root, string file, string args, string engine)
     {
         try
         {
-            var p = Process.Start(new ProcessStartInfo(file, args)
-            {
-                WorkingDirectory = root,
-                UseShellExecute = false,
-                CreateNoWindow = true,
-                RedirectStandardInput = true,
-            })!;
+            var p = Process.Start(StartInfo(root, file, args, engine))!;
             AssignProcessToJobObject(_job, p.Handle);
             return p;
         }
