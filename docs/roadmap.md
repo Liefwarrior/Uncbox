@@ -245,3 +245,13 @@ when the engine isn't built or its probe lists no encoder. A running server is t
 `POST /api/stream/engine` (409 while a stream runs). Messages no longer name FFmpeg as the thing streaming.
 `npm run app:native` builds the engine when it is missing or older than its source, and starts with FFmpeg
 if cargo isn't there. Measured here, 1080p60 into a local receiver: about 4% of a core against 38%.
+
+## WoW Forever launch (2026-11-04)
+
+### UBX-31 · WoW Forever: gilded frames and a lighter addon link — Review
+The WoW Forever preset gets its own gilded look: filigree corners and rivets on every panel, gold titles
+over a diamond rule, a heavier double frame around the game, beveled level and XP bars and a warmer glow.
+All static, painted once, so it costs nothing while streaming. The addon strip reader moved off the page's
+main thread into a worker that copies only the strip's few rows of each frame (VideoFrame.copyTo with a
+rectangle): measured in Chromium at 2560 × 1440 over 8 s, 2.6 to 3.9 ms of main-thread time instead of
+about 3 s, with the same messages decoded.

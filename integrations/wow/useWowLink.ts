@@ -4,9 +4,12 @@ import type { MutatePreset } from '../../src/state/useAppState';
 import { Assembler, COLS, fromBlocks, KIND_CHARACTER, KIND_GUILD, KIND_PARTY, KIND_QUESTS, locate, readBlocks, ROWS, type StripSpot } from './codec';
 import { markWowSeen, sendWowLive } from '../../src/wow';
 import { parseCharacter, parseParty, parseQuests, partySlots } from './parse';
+import type { FromWorker, ToWorker } from './strip.worker';
 
 // The addon shows each page for 50 ms, and only for a moment after something changes, so every
-// captured frame is looked at, up to this many a second.
+// captured frame is looked at, up to this many a second. Where the browser can, that happens in a
+// worker (strip.worker.ts), copying only the strip's few rows of each frame, so the page's main
+// thread, which draws the dashboard viewers see, does none of it; what is below is the fallback.
 const MAX_FPS = 60;
 // Room for the strip at the biggest block size locate() tries, below a title bar and border.
 const REGION_W = 60 + COLS * 4;
@@ -23,6 +26,14 @@ const SEARCH_EVERY = 6;
  * up again. Otherwise its first appearance after a reload could reach viewers for a frame.
  */
 const LAST_CROP_KEY = 'uncbox.wowStripPct';
+
+/**
+ * Whether the strip can be read in a worker of its own (see strip.worker.ts): the frames are handed
+ * over as a stream, which needs a track processor and streams that can be transferred.
+ */
+function workerReads(): boolean {
+  return typeof Worker === 'function' && typeof MediaStreamTrackProcessor === 'function' && typeof ReadableStream === 'function';
+}
 
 function lastCrop(): number {
   try {
@@ -58,6 +69,15 @@ export function useWowLink(stream: MediaStream | null, data: PresetData | null, 
     let spot: StripSpot | null = null;
     let misses = 0;
     let searches = 0;
+
+    const strip = (pct: number) => {
+      setStripPct(pct);
+      try {
+        localStorage.setItem(LAST_CROP_KEY, String(pct));
+      } catch {
+        // Private window: the crop just isn't remembered.
+      }
+    };
 
     const apply = (kind: number, text: string) => {
       const d = latest.current;
@@ -127,13 +147,7 @@ export function useWowLink(stream: MediaStream | null, data: PresetData | null, 
         const found = { ...local, x: local.x + x0 };
         spot = found;
         // One pixel more, so a blurred edge never peeks through.
-        const pct = ((found.y + ROWS * found.block + 1) / vh) * 100;
-        setStripPct(pct);
-        try {
-          localStorage.setItem(LAST_CROP_KEY, String(pct));
-        } catch {
-          // Private window: the crop just isn't remembered.
-        }
+        strip(((found.y + ROWS * found.block + 1) / vh) * 100);
       }
       misses = 0;
       const text = assembler.push(page);
@@ -142,7 +156,33 @@ export function useWowLink(stream: MediaStream | null, data: PresetData | null, 
 
     let stopped = false;
     let stop: () => void;
-    if (typeof MediaStreamTrackProcessor === 'function') {
+    let worker: Worker | null = null;
+    if (workerReads()) {
+      try {
+        // The frames go to the worker as they arrive; the page only hears whole messages.
+        const own = track.clone();
+        const frames = new MediaStreamTrackProcessor({ track: own }).readable;
+        worker = new Worker(new URL('./strip.worker.ts', import.meta.url), { type: 'module' });
+        worker.onmessage = (e: MessageEvent<FromWorker>) => {
+          if (stopped) return;
+          if (e.data.type === 'strip') strip(e.data.pct);
+          else if (e.data.type === 'text') apply(e.data.kind, e.data.text);
+        };
+        worker.postMessage({ type: 'start', frames, corner } satisfies ToWorker, [frames as unknown as Transferable]);
+        const running = worker;
+        stop = () => {
+          running.postMessage({ type: 'stop' } satisfies ToWorker);
+          own.stop();
+          running.terminate();
+        };
+      } catch {
+        worker?.terminate();
+        worker = null;
+      }
+    }
+    if (worker) {
+      // Started above.
+    } else if (typeof MediaStreamTrackProcessor === 'function') {
       // Frames arrive as the game draws them, even while this window is in the background, where
       // timers slow to once a second and would miss the addon's short bursts.
       const own = track.clone();

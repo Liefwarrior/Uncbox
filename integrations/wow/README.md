@@ -97,6 +97,8 @@ mode (F8) officer notes never show, public notes only with "Show notes on stream
 - The Party panel lists you and up to four others (your raid group, in a raid).
 - Quests under a collapsed header in your quest log may be skipped.
 - It works through a capture card too, as long as the picture isn't scaled down too far.
+- In the Uncbox app's stealth mode, WoW is played full screen, so you'll see the strip flicker at the
+  top of your own screen when it shows. Viewers still never see it: the stream leaves it out.
 
 ## What's in here
 
@@ -104,7 +106,8 @@ mode (F8) officer notes never show, public notes only with "Show notes on stream
 | --- | --- |
 | `addon/Uncbox/` | The addon: `Codec.lua` (text to blocks), `Util.lua`, `Outbox.lua` (news queue), `Sync.lua` (roster full syncs and changes), `Guild.lua`, `Raid.lua`, `Uncbox.lua` (collects the basics and draws), `UncboxConfig.lua` (settings Uncbox writes). |
 | `codec.ts`, `parse.ts`, `messages.mjs` | The same codec in TypeScript, and the readers for the addon's texts (`messages.mjs` is shared with the server). |
-| `useWowLink.ts` | Reads every frame of the game video (up to 60 a second), updates the dashboard and passes guild and raid news to the server. |
+| `useWowLink.ts` | Hands every frame of the game video (up to 60 a second) to `strip.worker.ts`, updates the dashboard from what it reads and passes guild and raid news to the server. Reads on the page itself only where a browser can't run the worker. |
+| `strip.worker.ts`, `region.ts` | The reader, in a worker of its own: only the strip's few rows are copied out of each frame (`VideoFrame.copyTo` with a rectangle), so the page's main thread, which draws the dashboard viewers see, does none of it. Measured in Chromium on a 2560 × 1440 stream for 8 seconds: 2.6 to 3.9 ms of the main thread instead of about 3 s, with the same messages read. |
 | `install.mjs` | Finds WoW; installs, updates and removes every addon under `addon/`; writes the settings file. |
 | `savedvars.mjs` | Reads SavedVariables and writes Lua data files. |
 | `addon.test.ts`, `addonWorld.ts`, `wowmock.lua` | Runs the addon's real Lua in fengari against a pretend game. |
