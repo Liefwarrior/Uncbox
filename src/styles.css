@@ -7887,3 +7887,121 @@ select option {
     transition: none;
   }
 }
+
+/* ---------- stealth mode (the Uncbox app) ----------
+   The sidebar's button into it, and the manager window's page: a preview of what viewers see (the
+   app draws it over .manager__preview), the stream's controls in one row and the presets as scenes. */
+
+.stealth-btn {
+  justify-content: center;
+  margin-top: 6px;
+  border: 1px solid color-mix(in srgb, var(--accent-2) 55%, var(--border));
+  color: var(--accent-2);
+  font-weight: 600;
+}
+.stealth-btn:hover {
+  background: color-mix(in srgb, var(--accent-2) 12%, transparent);
+}
+
+.manager {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+  height: 100%;
+  padding: 16px 18px;
+  overflow: hidden;
+}
+.manager__bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.manager__mode {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 4px 11px;
+  border: 1px solid color-mix(in srgb, var(--accent-2) 60%, var(--border));
+  border-radius: 999px;
+  color: var(--accent-2);
+  font-size: 13px;
+  font-weight: 650;
+}
+.manager__label {
+  color: var(--muted);
+  font-size: 13px;
+  letter-spacing: 0.04em;
+}
+.manager__preview {
+  display: grid;
+  flex: 1;
+  place-items: center;
+  min-height: 180px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: #000;
+}
+.manager__preview-wait {
+  color: var(--muted);
+  font-size: 13px;
+}
+.manager__deck {
+  display: grid;
+  gap: 8px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--panel);
+  box-shadow: var(--panel-shadow);
+}
+.manager__status {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.manager__status.is-live {
+  color: var(--text);
+}
+.manager__dot {
+  flex: none;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--muted);
+}
+.manager__status.is-live .manager__dot {
+  background: var(--bad);
+  box-shadow: 0 0 8px var(--bad);
+}
+.manager__stats {
+  margin-left: auto;
+  color: var(--muted);
+  font-size: 13px;
+}
+.manager__error {
+  margin: 0;
+}
+.manager__buttons {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.manager__buttons .btn.is-armed {
+  border-color: var(--bad);
+  background: var(--bad);
+  color: var(--on-status);
+}
+.manager__scenes {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+.manager__hint {
+  margin: 0;
+}

@@ -38,6 +38,8 @@ namespace UncboxShell;
 ///                    keep the last minute of the game's, Discord's and the mic's sound for clips (see
 ///                    ClipAudio.cs); title is the captured window's label, mic a device id, "default" or null
 ///               { type: "clipaudioget", id, fromMs, toMs }   the sound of a clip's stretch of time
+///               { type: "stealth", on } | { type: "stealth" }   go into or out of stealth mode / ask whether it's on
+///               { type: "relay", message }                the stream controller's state, for the manager's page
 ///   app → page  { type: "windows", windows: [{ id, title, process }] }
 ///               { type: "attached", id, title, process, followed } | { type: "detached" }
 ///                    followed: the app took it by itself (see follow), so it isn't the saved game
@@ -51,9 +53,20 @@ namespace UncboxShell;
 ///               { type: "audiolevels", desktop, mic }     peak 0..1 of each source, about 10 times a second
 ///               { type: "clipaudio", state: "on", game, gameName, discord, mic, micError } | { state: "off" } | { state: "error", error }
 ///               { type: "cliplevels", game, discord, mic }   peak levels 0..1, about five times a second
+///               { type: "stealth", on }                   stealth mode came on or went off
+///               { type: "scene", scene }                  what the stream shows in stealth mode (see StealthLayout.Scene), or null
+///               { type: "streamcommand", action }        from the manager: "start", "test", "end" or "state"
+///               { type: "clipsave" }                      from the manager: save a clip
 ///               and, for clipaudioget, a WebView2 shared buffer (game, then Discord, then mic: each
 ///               frames x 2 interleaved s16le samples) with { type: "clipaudio", id, frames, rate } or, as
 ///               JSON, { type: "clipaudio", id, error }
+///
+/// Stealth mode is the OBS way of playing: the game goes full screen in front and is played as it
+/// is, the dashboard keeps running at its own size behind it (out of the taskbar and Alt+Tab, never
+/// taking focus), and a small manager window (StealthForm.cs) runs Uncbox. The stream shows the
+/// dashboard with the game drawn over its panel, made by Uncbox's own streaming engine from two
+/// window captures (engine/src/scene.rs); the page passes the scene this window describes on to the
+/// server. The manager's page talks to this window too, through a short list of its own messages.
 /// </summary>
 internal sealed class ShellForm : Form
 {
@@ -79,6 +92,7 @@ internal sealed class ShellForm : Form
     };
     private readonly NotifyIcon _tray = new() { Text = "Uncbox" };
     private readonly ToolStripMenuItem _fullMenu = new("Give the game the whole screen") { Enabled = false };
+    private readonly ToolStripMenuItem _stealthMenu = new("Stealth mode");
     private readonly ToolStripMenuItem _screenMenu = new("Monitor");
     private readonly System.Windows.Forms.Timer _keepPlaced = new() { Interval = 250 };
     private readonly ServerHost _server = new();
@@ -107,6 +121,17 @@ internal sealed class ShellForm : Form
     private Native.RECT? _hole;
     private Native.RECT? _gameRect;
     private Native.RECT? _applied;
+    /// <summary>The game panel as the page measured it (device pixels from the dashboard's top left), with its crop and fit.</summary>
+    private GamePanel? _panel;
+
+    /// <summary>
+    /// Stealth mode: the game full screen in front, the dashboard running behind it for the stream,
+    /// and the manager window to run Uncbox from.
+    /// </summary>
+    private bool _stealth;
+    private StealthForm? _manager;
+    /// <summary>The scene last told to the page, so only changes are sent.</summary>
+    private string _sceneSent = "";
     /// <summary>The game fills the screen and Uncbox is out of the way, until Ctrl+Shift+F12.</summary>
     private bool _gameFullScreen;
 
@@ -153,12 +178,20 @@ internal sealed class ShellForm : Form
         menu.Items.Add("Open Uncbox", null, (_, _) => RestoreFromTray());
         _fullMenu.Click += (_, _) => GameFullScreen();
         menu.Items.Add(_fullMenu);
+        _stealthMenu.Click += (_, _) =>
+        {
+            if (_stealth) LeaveStealth();
+            else EnterStealth();
+        };
+        menu.Items.Add(_stealthMenu);
         menu.Items.Add(_screenMenu);
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add("Quit Uncbox", null, (_, _) => Close());
         menu.Opening += (_, _) =>
         {
-            _fullMenu.Enabled = _game is { Alive: true };
+            _fullMenu.Enabled = _game is { Alive: true } && !_stealth;
+            _stealthMenu.Checked = _stealth;
+            _stealthMenu.Enabled = _env is not null;
             _screenMenu.DropDownItems.Clear();
             var screens = Screen.AllScreens;
             for (int i = 0; i < screens.Length; i++)
@@ -205,7 +238,12 @@ internal sealed class ShellForm : Form
         CoreWebView2Environment env;
         try
         {
-            env = await CoreWebView2Environment.CreateAsync(userDataFolder: data);
+            // Stealth mode streams the dashboard while the game covers it, so the page has to keep drawing
+            // when covered (Chromium would otherwise stop, as it does for a hidden tab). Outside stealth
+            // mode the dashboard is topmost and nothing covers it, and hidden (the tray, full screen) it
+            // still stops drawing as before.
+            var options = new CoreWebView2EnvironmentOptions { AdditionalBrowserArguments = "--disable-features=CalculateNativeWinOcclusion" };
+            env = await CoreWebView2Environment.CreateAsync(null, data, options);
             await _web.EnsureCoreWebView2Async(env);
         }
         catch (Exception err) when (err is COMException or WebView2RuntimeNotFoundException)
@@ -224,6 +262,8 @@ internal sealed class ShellForm : Form
         {
             _webViews.CloseAll();
             StopClipAudio();
+            // The new page asks for stealth mode's state and is told the scene again.
+            _sceneSent = "";
         };
         core.Settings.IsStatusBarEnabled = false;
         core.Settings.IsZoomControlEnabled = false;
@@ -299,7 +339,9 @@ internal sealed class ShellForm : Form
     {
         if (m.Msg == WM_HOTKEY && m.WParam == HOTKEY_ID)
         {
-            if (_gameFullScreen) LeaveGameFullScreen();
+            // In stealth mode it swaps between the game and the manager, the way you'd click OBS and back.
+            if (_stealth) ToggleManager();
+            else if (_gameFullScreen) LeaveGameFullScreen();
             else if (Visible && WindowState != FormWindowState.Minimized) ToTray();
             else RestoreFromTray();
         }
@@ -309,12 +351,31 @@ internal sealed class ShellForm : Form
     protected override void OnResize(EventArgs e)
     {
         base.OnResize(e);
+        if (WindowState != FormWindowState.Minimized) return;
+        // In stealth mode the dashboard is what viewers see, and a minimized window draws nothing: it stays up, behind.
+        if (_stealth)
+        {
+            BeginInvoke(() =>
+            {
+                WindowState = FormWindowState.Normal;
+                FitToScreen();
+                SendBehind();
+            });
+            return;
+        }
         // Minimizing (Win+Down, the taskbar, the page's button) sends Uncbox to the tray.
-        if (WindowState == FormWindowState.Minimized) ToTray();
+        ToTray();
     }
 
     private void ToTray()
     {
+        // In stealth mode "to the tray" is the manager getting out of the way; the dashboard keeps running.
+        if (_stealth)
+        {
+            _manager?.Minimize();
+            FocusGame();
+            return;
+        }
         Hide();
         if (_trayHinted) return;
         _trayHinted = true;
@@ -323,6 +384,11 @@ internal sealed class ShellForm : Form
 
     private void RestoreFromTray()
     {
+        if (_stealth)
+        {
+            _manager?.Bring();
+            return;
+        }
         if (_gameFullScreen)
         {
             LeaveGameFullScreen();
@@ -351,6 +417,8 @@ internal sealed class ShellForm : Form
         _wakeWait?.Unregister(null);
         foreach (var hook in _hooks) Native.UnhookWinEvent(hook);
         _hooks.Clear();
+        _manager?.CloseFromApp();
+        _manager = null;
         _game?.Restore();
         _webViews?.Dispose();
         _streamAudio?.Dispose();
@@ -362,6 +430,14 @@ internal sealed class ShellForm : Form
     }
 
     private void Send(object message) => _web.CoreWebView2?.PostWebMessageAsJson(JsonSerializer.Serialize(message));
+
+    /// <summary>Whether stealth mode is on, to the dashboard's page and the manager's.</summary>
+    private void SendStealthState()
+    {
+        var state = new { type = "stealth", on = _stealth };
+        Send(state);
+        _manager?.Send(state);
+    }
 
     private void OnMessage(string json)
     {
@@ -430,7 +506,218 @@ internal sealed class ShellForm : Form
             case "clipaudioget" when msg is not null:
                 SendClipAudio((int?)msg["id"] ?? 0, (int?)msg["fromMs"] ?? 0, (int?)msg["toMs"] ?? 0);
                 break;
+            case "stealth" when msg is not null:
+                StealthMessage(msg);
+                break;
+            // The dashboard's stream controller, for the manager's page to show (it runs no controller of its own).
+            case "relay" when msg is not null && msg["message"] is JsonObject relayed && KindOf(relayed) == "streamstate":
+                _manager?.SendJson(relayed.ToJsonString());
+                break;
         }
+    }
+
+    /// <summary>A message's type, or null when it has none.</summary>
+    private static string? KindOf(JsonNode message) => message["type"] is JsonValue v && v.TryGetValue(out string? kind) ? kind : null;
+
+    /// <summary>{ type: "stealth", on } from either page; without on, a page asking (it just loaded).</summary>
+    private void StealthMessage(JsonNode msg)
+    {
+        bool? on = (bool?)msg["on"];
+        if (on == true) EnterStealth();
+        else if (on == false) LeaveStealth();
+        else
+        {
+            SendStealthState();
+            _sceneSent = "";
+            SendScene();
+        }
+    }
+
+    /// <summary>
+    /// What the manager's page may ask for. It is the same Uncbox page, but it isn't the dashboard: it
+    /// can't move the game or open web views, only run stealth mode and hand things to the dashboard.
+    /// </summary>
+    private void OnManagerMessage(string json)
+    {
+        JsonNode? msg;
+        try
+        {
+            msg = JsonNode.Parse(json);
+        }
+        catch (JsonException)
+        {
+            return;
+        }
+        if (msg is null || _manager is not { } manager) return;
+        switch ((string?)msg["type"])
+        {
+            case "stealth":
+                if ((bool?)msg["on"] == false) LeaveStealth();
+                else manager.Send(new { type = "stealth", on = _stealth });
+                break;
+            case "previewrect":
+                manager.SetPreviewBox(msg);
+                UpdatePreview();
+                break;
+            // Going live, ending, a clip: the dashboard's page does those (it has the controller and the replay buffer).
+            case "relay" when msg["message"] is JsonObject relayed && KindOf(relayed) is "streamcommand" or "clipsave":
+                _web.CoreWebView2?.PostWebMessageAsJson(relayed.ToJsonString());
+                break;
+            case "play":
+                FocusGame();
+                break;
+            case "minimize":
+                manager.Minimize();
+                FocusGame();
+                break;
+            case "streamaudiovolume":
+                _streamAudio?.SetVolumes((double?)msg["desktopVolume"] ?? 1, (double?)msg["micVolume"] ?? 1);
+                break;
+            case "audiodevices":
+                Task.Run(() =>
+                {
+                    var mics = AudioKit.ListMics();
+                    try
+                    {
+                        if (!IsDisposed) BeginInvoke(() => _manager?.Send(mics));
+                    }
+                    catch (InvalidOperationException)
+                    {
+                        // Closed in between.
+                    }
+                });
+                break;
+            case "autostart":
+                manager.Send(new { type = "autostartstate", enabled = Autostart.Handle(msg) });
+                break;
+        }
+    }
+
+    // ---- stealth mode ----
+
+    /// <summary>
+    /// The game goes full screen in front, as you'd play it with OBS; the dashboard stays up behind it
+    /// at its own size (the stream shows it), out of the taskbar and Alt+Tab; the manager opens.
+    /// </summary>
+    private void EnterStealth()
+    {
+        if (_env is null) return;
+        if (_stealth)
+        {
+            _manager?.Bring();
+            return;
+        }
+        _stealth = true;
+        _gameFullScreen = false;
+        // The stream draws the game from its own capture, so the dashboard needs no picture of it.
+        StopPicture();
+        Opacity = 1;
+        if (!Visible) Show();
+        WindowState = FormWindowState.Normal;
+        TopMost = false;
+        FitToScreen();
+        SetStealthStyles(true);
+        // No hole in stealth mode: the game isn't behind the panel any more. (FitToScreen forgets which
+        // region is applied, so ApplyRegion alone wouldn't take the old one away.)
+        Native.SetWindowRgn(Handle, IntPtr.Zero, true);
+        _applied = null;
+        SendBehind();
+
+        var bounds = StealthLayout.ManagerBounds(_screen.Bounds, Screen.AllScreens.Select(s => s.WorkingArea).ToList());
+        var url = new UriBuilder(_options.Url);
+        url.Query = url.Query.TrimStart('?') + "&view=manager";
+        var manager = new StealthForm(_env, url.Uri, Icon, bounds, OnManagerMessage, LeaveStealth);
+        manager.FormClosed += (_, _) =>
+        {
+            if (_manager == manager) _manager = null;
+        };
+        _manager = manager;
+        manager.Show();
+
+        KeepPlaced();
+        SendStealthState();
+        SendScene();
+        // Into the game: that's what stealth mode is for. The manager is a click (or Ctrl+Shift+F12) away.
+        if (_game is { Alive: true }) FocusGame();
+    }
+
+    /// <summary>Back to the full dashboard, the game back in its panel.</summary>
+    private void LeaveStealth()
+    {
+        if (!_stealth) return;
+        _stealth = false;
+        var manager = _manager;
+        _manager = null;
+        manager?.CloseFromApp();
+        SetStealthStyles(false);
+        TopMost = !_options.Windowed || _windowedFull;
+        Show();
+        WindowState = FormWindowState.Normal;
+        FitToScreen();
+        Activate();
+        KeepPlaced();
+        SendStealthState();
+        SendScene();
+        if (_game is { Alive: true }) FocusGame();
+    }
+
+    /// <summary>Ctrl+Shift+F12 in stealth mode: the manager up, or out of the way and back into the game.</summary>
+    private void ToggleManager()
+    {
+        if (_manager is not { } manager) return;
+        if (manager.IsActive)
+        {
+            manager.Minimize();
+            FocusGame();
+        }
+        else manager.Bring();
+    }
+
+    private void FocusGame()
+    {
+        if (_game is { Alive: true }) Native.SetForegroundWindow(_game.Handle);
+    }
+
+    /// <summary>
+    /// In stealth mode the dashboard is a tool window that never takes focus: not in the taskbar or
+    /// Alt+Tab (the manager is), and a stray click on it doesn't bring it over the game. The taskbar only
+    /// reads the style when a window is shown, so the window is hidden and shown again around the change
+    /// (without handing it focus). Its handle stays the same, which the stream's capture of it relies on.
+    /// </summary>
+    private void SetStealthStyles(bool on)
+    {
+        long ex = Native.GetWindowLongPtr(Handle, Native.GWL_EXSTYLE);
+        long want = on ? (ex | Native.WS_EX_TOOLWINDOW | Native.WS_EX_NOACTIVATE) & ~Native.WS_EX_APPWINDOW : ex & ~(Native.WS_EX_TOOLWINDOW | Native.WS_EX_NOACTIVATE);
+        if (want == ex) return;
+        Native.ShowWindow(Handle, Native.SW_HIDE);
+        Native.SetWindowLongPtr(Handle, Native.GWL_EXSTYLE, want);
+        Native.ShowWindow(Handle, on ? Native.SW_SHOWNOACTIVATE : Native.SW_RESTORE);
+    }
+
+    /// <summary>The dashboard under every other window, where the game (or anything else) covers it.</summary>
+    private void SendBehind() =>
+        Native.SetWindowPos(Handle, Native.HWND_BOTTOM, 0, 0, 0, 0, Native.SWP_NOMOVE | Native.SWP_NOSIZE | Native.SWP_NOACTIVATE);
+
+    /// <summary>
+    /// Tells the page what the stream shows in stealth mode: this window, with the game's window over
+    /// its panel (when there is a game in it), or null outside stealth mode. Only changes are sent.
+    /// </summary>
+    private void SendScene()
+    {
+        if (_web.CoreWebView2 is null) return;
+        var scene = _stealth ? StealthLayout.Scene(Handle, ClientSize.Width, ClientSize.Height, true, _game is { Alive: true } g ? g.Handle : IntPtr.Zero, _panel) : null;
+        string json = scene?.ToJsonString() ?? "null";
+        if (json == _sceneSent) return;
+        _sceneSent = json;
+        _web.CoreWebView2.PostWebMessageAsJson(new JsonObject { ["type"] = "scene", ["scene"] = scene }.ToJsonString());
+    }
+
+    /// <summary>The manager's preview: this window, with the game over its panel, as viewers see it.</summary>
+    private void UpdatePreview()
+    {
+        if (_manager is not { } manager) return;
+        var game = _game is { Alive: true } g ? g.Handle : IntPtr.Zero;
+        manager.UpdatePreview(Handle, ClientSize, game, game != IntPtr.Zero ? _panel : null);
     }
 
     /// <summary>
@@ -640,6 +927,8 @@ internal sealed class ShellForm : Form
         _gameFollowed = followed;
         KeepPlaced();
         Send(new { type = "attached", id = hwnd.ToString(), title = _game.Title, process = Native.ProcessNameOf(hwnd), followed });
+        SendScene();
+        if (_stealth) FocusGame();
     }
 
     private void Detach()
@@ -654,11 +943,13 @@ internal sealed class ShellForm : Form
         _gameFollowed = false;
         ApplyRegion();
         Send(new { type = "detached" });
+        SendScene();
     }
 
     private void GameFullScreen()
     {
-        if (_game is not { Alive: true }) return;
+        // Stealth mode already has the game full screen, with the dashboard still drawing behind it.
+        if (_game is not { Alive: true } || _stealth) return;
         // With nothing on top of it, Windows lets the game present straight to the screen
         // (independent flip): its full frame rate, native resolution, no added delay.
         _gameFullScreen = true;
@@ -686,20 +977,26 @@ internal sealed class ShellForm : Form
         if (msg["w"] is null)
         {
             _hole = _gameRect = null;
+            _panel = null;
             KeepPlaced();
+            SendScene();
             return;
         }
         var origin = _web.PointToScreen(Point.Empty);
-        double x = origin.X + (double)msg["x"]!, y = origin.Y + (double)msg["y"]!;
+        double px = (double)msg["x"]!, py = (double)msg["y"]!;
+        double x = origin.X + px, y = origin.Y + py;
         double w = (double)msg["w"]!, h = (double)msg["h"]!;
         _hole = Rect(x, y, w, h);
 
         double Pct(string edge) => Math.Clamp((double?)msg["crop"]?[edge] ?? 0, 0, 45) / 100;
         double l = Pct("left"), r = Pct("right"), t = Pct("top"), b = Pct("bottom");
-        double strip = (double?)msg["stripPx"] ?? 0;
+        double strip = Math.Max((double?)msg["stripPx"] ?? 0, 0);
         double gw = w / (1 - l - r), gh = h / (1 - t - b);
         _gameRect = Rect(x - l * gw, y - t * gh - strip, gw, gh + strip);
+        // The web view fills this window, so the page's box is the panel in the window's own pixels.
+        _panel = new GamePanel(new Box(px, py, w, h), l, t, r, b, strip, (string?)msg["fit"] ?? "contain");
         KeepPlaced();
+        SendScene();
     }
 
     private static Native.RECT Rect(double x, double y, double w, double h)
@@ -729,11 +1026,17 @@ internal sealed class ShellForm : Form
                 return;
             }
             Send(new { type = "detached" });
+            SendScene();
             if (_gameFullScreen)
             {
                 _gameFullScreen = false;
                 Show();
             }
+        }
+        if (_stealth)
+        {
+            KeepStealth();
+            return;
         }
         if (_game is not null && _gameFullScreen)
         {
@@ -756,6 +1059,24 @@ internal sealed class ShellForm : Form
             }
         }
         ApplyRegion();
+    }
+
+    /// <summary>
+    /// Stealth mode, a few times a second: the game full screen on its monitor, the dashboard kept
+    /// behind (should something have brought it forward), the manager's preview and the scene current.
+    /// </summary>
+    private void KeepStealth()
+    {
+        if (_game is { Alive: true, Shown: true } game)
+        {
+            if (game.HasFrame) game.MakeBorderless();
+            var s = Screen.FromHandle(game.Handle).Bounds;
+            game.Place(new Native.RECT { Left = s.Left, Top = s.Top, Right = s.Right, Bottom = s.Bottom });
+        }
+        if (Native.GetForegroundWindow() == Handle) SendBehind();
+        ApplyRegion();
+        UpdatePreview();
+        SendScene();
     }
 
     private void StartPicture()
@@ -798,8 +1119,9 @@ internal sealed class ShellForm : Form
     /// <summary>Cuts the hole the game shows through, or fills it back in with no game.</summary>
     private void ApplyRegion()
     {
-        // A game shown as a picture stays behind Uncbox: no hole.
-        Native.RECT? want = _game is not null && _picture == IntPtr.Zero && _hole is { Width: > 0, Height: > 0 } ? _hole : null;
+        // A game shown as a picture stays behind Uncbox: no hole. Nor in stealth mode, where the game is
+        // in front, full screen, and the stream draws it over the panel from its own capture.
+        Native.RECT? want = _game is not null && !_stealth && _picture == IntPtr.Zero && _hole is { Width: > 0, Height: > 0 } ? _hole : null;
         if (Nullable.Equals(want, _applied)) return;
         _applied = want;
         if (want is not { } hole)

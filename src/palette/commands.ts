@@ -73,6 +73,8 @@ export interface PaletteActions {
   downloadVideo: (url: string) => void;
   /** Asks a Guild roster widget to show a member (it does as soon as it is on screen). */
   showMember: (widgetId: Widget['id'], name: string) => void;
+  /** Into stealth mode, or back to the dashboard (the Uncbox app only). */
+  stealth?: (on: boolean) => void;
 }
 
 export interface PaletteContext {
@@ -92,6 +94,8 @@ export interface PaletteContext {
   stream: { active: boolean; ready: boolean };
   /** The guild's member names, once known (only asked for on the WoW preset). */
   wow: { members: string[] } | null;
+  /** Stealth mode: whether this is the Uncbox app (which has it) and whether it is on. */
+  stealth?: { available: boolean; on: boolean };
   actions: PaletteActions;
   now: number;
 }
@@ -198,7 +202,7 @@ const clipCommands: Provider = ({ state, clips, actions }) => {
   ];
 };
 
-const streamCommands: Provider = ({ actions }) => [
+const streamCommands: Provider = ({ actions, stealth }) => [
   {
     id: 'stream:toggle',
     title: 'Toggle stream mode',
@@ -207,7 +211,19 @@ const streamCommands: Provider = ({ actions }) => [
     shortcut: 'F8',
     detail: 'Full screen, edit controls hidden',
     keywords: 'fullscreen hide sidebar',
+    enabled: !stealth?.on,
     run: actions.toggleStream,
+  },
+  {
+    id: 'stream:stealth',
+    title: stealth?.on ? 'Leave stealth mode' : 'Stealth mode',
+    group: 'Stream',
+    icon: stealth?.on ? 'layout' : 'eyeOff',
+    shortcut: stealth?.on ? 'Ctrl Shift F12' : undefined,
+    detail: stealth?.on ? 'Back to the full dashboard, the game in its panel' : 'Play full screen; viewers still see the dashboard',
+    keywords: 'obs minimize manager hide game fullscreen play',
+    enabled: Boolean(stealth?.available && actions.stealth),
+    run: () => actions.stealth?.(!stealth?.on),
   },
 ];
 

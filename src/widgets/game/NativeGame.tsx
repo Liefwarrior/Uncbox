@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { type HostWindow, send, shell, useCovered, useHole, useHostWindows, useShellMessages } from '../../native';
-import type { Crop, GameSettings } from '../../state/model';
+import type { Crop, GameSettings, VideoFit } from '../../state/model';
 
 /** How often to look for the saved game's window while it isn't there yet (still starting up). */
 const LOOK_EVERY_MS = 2000;
@@ -94,13 +94,15 @@ interface Props {
   editing: boolean;
   crop: Crop;
   stripPx: number;
+  /** How the game fills the panel in stealth mode, where it is played full screen and the stream fits it in. */
+  fit?: VideoFit;
 }
 
-export function NativeGame({ game, editing, crop, stripPx }: Props) {
+export function NativeGame({ game, editing, crop, stripPx, fit = 'contain' }: Props) {
   const [hole, setHole] = useState<HTMLDivElement | null>(null);
   const covered = useCovered();
   const showing = Boolean(game.attached) && !game.picking;
-  useHole(showing && !covered ? hole : null, crop, stripPx);
+  useHole(showing && !covered ? hole : null, crop, stripPx, fit);
 
   if (!shell) {
     return editing ? (

@@ -14,6 +14,7 @@ import {
   amfScale,
   buildEngineConfig,
   buildFfmpegArgs,
+  clampScene,
   clampSettings,
   cpuScale,
   createProgressParser,
@@ -34,6 +35,7 @@ import {
   TWITCH_INGEST,
   wantedEngine,
   plainReason,
+  STEALTH,
   testIngest,
 } from './stream.mjs';
 
@@ -169,10 +171,59 @@ describe('buildEngineConfig', () => {
     });
   });
 
+  it('puts stealth mode’s scene in as the source, checked, and can let the engine pick its backend', () => {
+    const scene = { window: 11, game: { window: 22, rect: { x: 0, y: 0, w: 640, h: 360 } } };
+    const config = buildEngineConfig({ settings: {}, key: KEY, scene, backend: 'auto' });
+    expect(config.source).toEqual({ scene: clampScene(scene) });
+    expect(config.backend).toBe('auto');
+    // Nonsense is no scene and no backend.
+    expect(buildEngineConfig({ settings: {}, key: KEY, scene: { window: 0 }, backend: 'cuda' })).not.toHaveProperty('source');
+    expect(buildEngineConfig({ settings: {}, key: KEY, backend: 'cuda' }).backend).toBe('nvenc');
+  });
+
   it('leaves out the pipe when there is none, and clamps what came from outside', () => {
     const config = buildEngineConfig({ settings: { screen: 40, fps: 240, height: 7, kbps: 1 }, key: KEY, test: true, env: {} });
     expect(config).toEqual({ url: `rtmps://live.twitch.tv:443/app/${KEY}?bandwidthtest=true`, screen: 7, fps: 60, height: 1080, kbps: 2500, encoder: 'auto', backend: 'nvenc' });
     expect('audioPipe' in config).toBe(false);
+  });
+});
+
+describe('clampScene', () => {
+  const game = { window: '5678', rect: { x: 0, y: 0, w: 1707, h: 900 } };
+
+  it('keeps a scene the app describes, as the engine takes it', () => {
+    expect(clampScene({ window: 1234, cursor: true, size: { w: 2560.4, h: 1440 }, game: { ...game, crop: { top: 5, left: 2.5 }, stripPx: 5.4, fit: 'cover' } })).toEqual({
+      window: '1234',
+      cursor: true,
+      size: { w: 2560, h: 1440 },
+      game: { window: '5678', rect: { x: 0, y: 0, w: 1707, h: 900 }, crop: { top: 5, right: 0, bottom: 0, left: 2.5 }, stripPx: 5, fit: 'cover' },
+    });
+  });
+
+  it('holds everything to what the engine takes', () => {
+    const s = clampScene({ window: ' 42 ', cursor: 'yes', size: { w: 99_999, h: -5 }, game: { ...game, crop: { top: 90, right: -1, bottom: 'x' }, stripPx: 9999, fit: 'zoom' } });
+    expect(s).toMatchObject({ window: '42', cursor: false, size: { w: 16384, h: 0 } });
+    expect(s.game).toMatchObject({ crop: { top: 45, right: 0, bottom: 0, left: 0 }, stripPx: 256, fit: 'contain' });
+  });
+
+  it('is null without a real dashboard window', () => {
+    for (const junk of [null, undefined, 'x', 5, [], {}, { window: 0 }, { window: -1 }, { window: '12a' }, { window: 1.5 }, { window: '1e5' }, { window: 2 ** 49 }, { window: '1234567890123456' }]) {
+      expect(clampScene(junk), JSON.stringify(junk)).toBeNull();
+    }
+  });
+
+  it('leaves out a game that is not described well enough, and keeps the dashboard', () => {
+    for (const bad of [
+      { rect: game.rect },
+      { window: '9' },
+      { window: '9', rect: { x: 0, y: 0, w: 1, h: 100 } },
+      { window: '9', rect: { x: 0, y: 0, w: 100, h: 20_000 } },
+      { window: '9', rect: { x: 1e9, y: 0, w: 100, h: 100 } },
+      { window: '9', rect: { x: '0', y: 0, w: 100, h: 100 } },
+      { window: 'nope', rect: game.rect },
+    ]) {
+      expect(clampScene({ window: 7, game: bad }), JSON.stringify(bad)).toEqual({ window: '7', cursor: false });
+    }
   });
 });
 
@@ -221,6 +272,12 @@ describe('parseProbe', () => {
     ]);
     expect(parseProbe(probe({ encoders: ['nvidia'], backend: { nvidia: 'nvenc' } })).encoders).toEqual([{ id: 'nvenc', tuning: 'quality', backend: 'nvenc' }]);
     expect(parseProbe(probe({ tuning: 'fast' })).encoders).toEqual([{ id: 'nvenc', tuning: 'quality', backend: null }]);
+  });
+
+  it('says whether the engine can capture windows for stealth mode (an engine from before scenes does not)', () => {
+    expect(parseProbe(probe({ windowCapture: true })).windowCapture).toBe(true);
+    expect(parseProbe(probe({ windowCapture: 'yes' })).windowCapture).toBe(false);
+    expect(parseProbe(probe()).windowCapture).toBe(false);
   });
 
   it('is null for anything that is not a probe', () => {
@@ -1789,6 +1846,134 @@ describe('the stream', () => {
     });
   });
 
+  describe('stealth mode', () => {
+    const SCENE = { window: '1001', cursor: false, size: { w: 2560, h: 1440 }, game: { window: '2002', rect: { x: 0, y: 0, w: 1707, h: 900 }, crop: { top: 0, right: 0, bottom: 0, left: 0 }, stripPx: 5, fit: 'contain' } };
+    const SCENE_PROBE = { ...PROBE, windowCapture: true };
+    const runs = () => native.runs.filter((r) => r.kind === 'run');
+
+    async function stealthLive(over = {}, body = {}) {
+      const stream = make(over);
+      await call(stream, 'POST', '/api/stream/key', { key: KEY });
+      const res = await call(stream, 'POST', '/api/stream/start', { audioPipe: PIPE, settings: { screen: 0, fps: 60, height: 1080, kbps: 6000 }, scene: SCENE, ...body });
+      expect(res.status, res.body.error).toBe(200);
+      native.last().stdout.emit('data', PROGRESS(30));
+      await tick();
+      return stream;
+    }
+
+    it('streams the scene with Uncbox’s own engine even in a launch that uses FFmpeg, which isn’t needed for it', async () => {
+      native = fakeNative({ probe: SCENE_PROBE });
+      const stream = await stealthLive({ findFfmpeg: async () => '' });
+      expect(runs()).toHaveLength(1);
+      expect(runs()[0]).toMatchObject({ file: NATIVE_EXE, args: ['run'] });
+      expect(JSON.parse(native.last().stdin.written[0])).toEqual({
+        url: ingestUrl(KEY),
+        screen: 0,
+        fps: 60,
+        height: 1080,
+        kbps: 6000,
+        audioPipe: PIPE,
+        encoder: 'auto',
+        backend: 'nvenc',
+        source: { scene: SCENE },
+      });
+      expect(ffmpeg.runs).toEqual([]);
+      expect((await stream.snapshot()).state).toBe('live');
+    });
+
+    it('streams through Windows’ encoder on AMD and Intel rather than not at all', async () => {
+      native = fakeNative({ probe: { ...SCENE_PROBE, encoders: [{ id: 'amd', backend: 'mediafoundation' }] } });
+      await stealthLive();
+      expect(JSON.parse(native.last().stdin.written[0]).backend).toBe('auto');
+    });
+
+    it('says in plain words what is missing, and looks again next time', async () => {
+      const tryStart = async (over) => {
+        const stream = make(over);
+        await call(stream, 'POST', '/api/stream/key', { key: KEY });
+        return call(stream, 'POST', '/api/stream/start', { scene: SCENE });
+      };
+      let res = await tryStart({ findNative: async () => '' });
+      expect([res.status, res.body.error]).toEqual([400, STEALTH.noEngine]);
+      native = fakeNative({ probe: PROBE });
+      res = await tryStart();
+      expect([res.status, res.body.error]).toEqual([400, STEALTH.noWindowCapture]);
+      native = fakeNative({ probeText: 'garbage', probeCode: 1 });
+      res = await tryStart();
+      expect([res.status, res.body.error]).toEqual([400, STEALTH.noAnswer]);
+      native = fakeNative({ probe: { ...SCENE_PROBE, encoders: [] } });
+      res = await tryStart();
+      expect(res.status).toBe(400);
+      expect(res.body.error).toMatch(/encoder on your graphics card/);
+      expect(runs()).toHaveLength(0);
+
+      // Built since: the same server finds it now.
+      let built = false;
+      const stream = make({ findNative: async () => (built ? NATIVE_EXE : '') });
+      await call(stream, 'POST', '/api/stream/key', { key: KEY });
+      native = fakeNative({ probe: SCENE_PROBE });
+      expect((await call(stream, 'POST', '/api/stream/start', { scene: SCENE })).status).toBe(400);
+      built = true;
+      expect((await call(stream, 'POST', '/api/stream/start', { scene: SCENE })).status).toBe(200);
+    });
+
+    it('turns away a scene that isn’t one, starting nothing', async () => {
+      native = fakeNative({ probe: SCENE_PROBE });
+      const stream = make();
+      await call(stream, 'POST', '/api/stream/key', { key: KEY });
+      const res = await call(stream, 'POST', '/api/stream/start', { scene: { window: 'x' } });
+      expect([res.status, res.body.error]).toEqual([400, STEALTH.badScene]);
+      expect(native.spawn).not.toHaveBeenCalled();
+      expect(ffmpeg.spawn).not.toHaveBeenCalled();
+    });
+
+    it('hands the running engine each change as one line on stdin, and null to go back to the screen', async () => {
+      native = fakeNative({ probe: SCENE_PROBE });
+      const stream = await stealthLive();
+      const proc = native.last();
+      const moved = { ...SCENE, game: { ...SCENE.game, rect: { x: 10, y: 20, w: 800, h: 450 } } };
+      const res = await call(stream, 'POST', '/api/stream/scene', { scene: moved });
+      expect(res.status).toBe(200);
+      expect(res.body).toMatchObject({ state: 'live', sceneApplied: true });
+      expect(JSON.parse(proc.stdin.written[1])).toEqual({ scene: moved });
+      expect(proc.stdin.written[1].endsWith('\n')).toBe(true);
+      await call(stream, 'POST', '/api/stream/scene', { scene: null });
+      expect(JSON.parse(proc.stdin.written[2])).toEqual({ scene: null });
+      // Junk is refused and the engine never hears of it.
+      expect((await call(stream, 'POST', '/api/stream/scene', { scene: { window: -1 } })).status).toBe(400);
+      expect(proc.stdin.written).toHaveLength(3);
+      // The key never travels with a scene change.
+      expect(proc.stdin.written.slice(1).join('')).not.toContain('live_');
+    });
+
+    it('takes a scene into a stream the engine started on the screen (the lighter launch)', async () => {
+      const stream = await liveStream({}, () => make({ env: { UNCBOX_STREAM_ENGINE: 'native' } }));
+      const res = await call(stream, 'POST', '/api/stream/scene', { scene: SCENE });
+      expect(res.body.sceneApplied).toBe(true);
+      expect(JSON.parse(native.last().stdin.written.at(-1))).toEqual({ scene: SCENE });
+    });
+
+    it('says FFmpeg can’t take a scene (the page starts that stream again, on the engine), and when nothing streams', async () => {
+      const idle = make();
+      expect((await call(idle, 'POST', '/api/stream/scene', { scene: SCENE })).body.sceneApplied).toBe(false);
+      const stream = await liveStream();
+      const res = await call(stream, 'POST', '/api/stream/scene', { scene: SCENE });
+      expect(res.body).toMatchObject({ state: 'live', sceneApplied: false });
+      expect(ffmpeg.last().stdin.written).toEqual([]);
+    });
+
+    it('starts a dropped stealth stream again with its scene, on the engine', async () => {
+      native = fakeNative({ probe: SCENE_PROBE });
+      const stream = await stealthLive();
+      native.last().emit('close', 1);
+      await tick();
+      expect((await stream.snapshot()).state).toBe('dropped');
+      expect((await call(stream, 'POST', '/api/stream/start', { audioPipe: PIPE, settings: {}, scene: SCENE })).status).toBe(200);
+      expect(runs()).toHaveLength(2);
+      expect(JSON.parse(native.last().stdin.written[0]).source).toEqual({ scene: SCENE });
+    });
+  });
+
   describe('the routes', () => {
     it('answers the status to anyone, and everything else only to this PC', async () => {
       const stream = make();
@@ -1798,6 +1983,7 @@ describe('the stream', () => {
         ['POST', '/api/stream/key/twitch'],
         ['POST', '/api/stream/check'],
         ['POST', '/api/stream/engine'],
+        ['POST', '/api/stream/scene'],
         ['POST', '/api/stream/start'],
         ['POST', '/api/stream/stop'],
       ]) {

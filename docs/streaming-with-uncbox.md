@@ -114,11 +114,85 @@ screen changes size mid-stream. On AMD and Intel cards the lighter launch stream
 program could only use Windows' own encoders there, whose picture is visibly plainer, so FFmpeg's
 AMF and Quick Sync encoders do it instead and the stream looks the same either way.
 
+## Stealth mode (the Uncbox app)
+
+Stealth mode is the OBS way of playing: your game goes full screen and you play it exactly as you
+normally would, while viewers keep seeing your Uncbox dashboard with the game in its panel. Uncbox
+shrinks to a small manager window, like OBS's, that you can minimize while you play.
+
+Turn it on with **Stealth mode** in the sidebar (under Stream mode), Ctrl+K "Stealth mode", or the
+tray icon's menu. Then:
+
+- **The game** (in Play here) goes full screen on its monitor, in front, at its own resolution and
+  frame rate. Mouse, keyboard and controller are simply the game's.
+- **The dashboard** keeps running behind it at its own size, in stream mode. It leaves the taskbar
+  and Alt+Tab and never takes focus, so it can't come up over your game.
+- **The manager** opens, on your second screen if you have one: a live preview of exactly what
+  viewers see, Go live / Test stream / End stream with the stream's numbers, Save clip, your presets
+  as one-click scenes, and the whole sidebar (widgets, clips, streaming, automations, the WoW addon).
+  Everything you change there changes the dashboard too.
+- **Ctrl+Shift+F12** swaps between the game and the manager. Minimizing the manager is like minimizing
+  OBS: the stream goes on. Closing it (or **Full dashboard**) leaves stealth mode, and the game goes
+  back into its panel. The stream goes on through that too.
+
+The manager never shows on stream, in clips or in a screen share, even on the screen being captured:
+Windows leaves it out of every capture.
+
+### What the stream shows
+
+In stealth mode the stream doesn't capture a screen. Uncbox's own engine captures two windows with
+Windows' compositor (the dashboard, and the game) and puts the game over its panel on the graphics
+card, with the panel's crop, its Fit setting and the WoW addon's strip left out, exactly where the
+dashboard has it. That is an OBS scene (a window capture with a browser overlay), made without a
+scene renderer: the graphics card's video processor draws the game into the panel in the same pass
+that turns the picture into what the encoder takes, so the picture never touches the processor and
+there is no extra full-size copy. Move a panel, change presets or swap the game and the stream follows
+in about a tenth of a second.
+
+Stealth mode always streams with Uncbox's own engine, whichever way Uncbox was launched: FFmpeg can't
+put two windows together. A stream that FFmpeg is already running when stealth mode comes on is
+started again on the engine (a few seconds); one the engine runs just switches. On an installed Uncbox
+the engine is included; from a checkout, build it once with `npm run engine` (see `engine/README.md`).
+On AMD and Intel cards it streams through Windows' own encoder, whose picture is plainer than FFmpeg's
+there; on NVIDIA it drives NVENC with the same settings as always.
+
+### Why it's lighter than OBS
+
+Where OBS spends its time with a setup like this, and what stealth mode does instead:
+
+| | OBS (window capture + browser source overlay) | Uncbox stealth mode |
+|---|---|---|
+| Overlay | A browser source rendered off screen every frame, then copied into OBS | The dashboard draws only what changes; static frames (the WoW gilding included) are painted once |
+| Scene | OBS's own renderer composites every source every frame | Two window captures go straight into the video processor's pass, which the stream needs anyway |
+| Preview | OBS renders a preview of the scene in its window | Windows' compositor draws the preview (thumbnails); minimized, it costs nothing |
+| Capture rate | Every frame the game presents | No more often than the stream sends (Windows 11 24H2 and later), even at 240 fps |
+| Encoder | NVENC through OBS | NVENC driven directly, with the settings above |
+
+The engine's own numbers above (4-10% of one core against FFmpeg's 35-83%) were measured streaming a
+screen; the scene adds one small pass on the graphics card and a second window capture, and hasn't been
+measured on its own yet. Nor has OBS been measured with this setup on the test PC, so there's no OBS
+figure here: compare on your own PC with Task Manager's Details tab (CPU and GPU of `obs64.exe` and its
+browser helpers against `uncbox-stream.exe`, `Uncbox.exe` and `msedgewebview2.exe`) while both stream
+the same game.
+
+### Good to know
+
+- Run the game **windowed or borderless**, as for Play here. Exclusive full screen can't be captured as
+  a window.
+- **Windows 10** draws a yellow border around a window being captured (Windows 11 lets Uncbox turn it
+  off), so you'll see one around the game while you stream in stealth mode there.
+- With the manager on the game's own screen and its preview showing, Windows composes the game with it
+  (a few milliseconds more delay). Put the manager on another screen or minimize it for the game's
+  lowest delay.
+- **WoW:** the addon's strip shows at the top-left of your own screen while you play full screen
+  (viewers never see it). Clips and the WoW link keep working from their own capture of the game.
+
 ## What viewers see
 
-The screen you picked, as it is: one picture, with no scenes, overlays or camera layout. Anything
-on that screen is on stream, including Uncbox itself, so use stream mode (F8) or capture a screen
-with only the game. Need scenes and overlays? Use OBS, as before.
+Outside stealth mode: the screen you picked, as it is, one picture. Anything on that screen is on
+stream, including Uncbox itself, so use stream mode (F8) or capture a screen with only the game. In
+stealth mode: the dashboard with the game in it, as above. Need other scenes and overlays? Use OBS, as
+before.
 
 ## If it won't start
 
@@ -128,3 +202,6 @@ with only the game. Need scenes and overlays? Use OBS, as before.
   the graphics driver.
 - **Dropped right away.** The line under the button shows the last thing the stream program said,
   with the key blanked out. Twitch refusing the key is the usual cause: copy it again.
+- **In stealth mode: "needs Uncbox's own streaming engine".** Run `npm run engine` once from a
+  checkout (an installed Uncbox has it), then Go live again. "Windows 10 version 1903 or later" means
+  Windows can't capture windows here, or the engine was built before stealth mode: rebuild it.

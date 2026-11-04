@@ -7,6 +7,7 @@ import { openGallery } from '../gallery';
 import { useCover } from '../native';
 import { obsAction, useObs } from '../obs';
 import { controller, endStream, goLive, useStreamController } from '../stream/live';
+import { setStealth, stealthAvailable, useStealth } from '../stealth/stealth';
 import { toolsLine } from '../stream/format';
 import { isStreaming, useStream, useToolsChecked } from '../stream/status';
 import { usePrivate } from '../privacy';
@@ -159,9 +160,11 @@ function Dialog({ state, mutate, mutatePreset, onToggleStream, onClose }: Props 
       addAutomation: openAutomationEditor,
       downloadVideo: (url) => void downloadFromHere(url),
       showMember: requestMember,
+      stealth: setStealth,
     }),
     [onToggleStream, state.stream],
   );
+  const stealthOn = useStealth();
 
   const ctx: PaletteContext = {
     state,
@@ -175,6 +178,7 @@ function Dialog({ state, mutate, mutatePreset, onToggleStream, onClose }: Props 
     obs,
     stream,
     wow,
+    stealth: { available: stealthAvailable(), on: stealthOn },
     actions,
     now: Date.now(),
   };

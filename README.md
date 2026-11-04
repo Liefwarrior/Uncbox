@@ -87,6 +87,18 @@ window moves into the panel, so you play it right inside the dashboard with mous
 controller, at its full frame rate. It needs the [.NET 10 SDK](https://dotnet.microsoft.com/download)
 to build. See [native/README.md](native/README.md).
 
+### Stealth mode
+
+Want to play full screen, the way you would with OBS minimized? Press **Stealth mode** in the
+sidebar (or Ctrl+K, "Stealth mode"). Your game goes full screen in front and you play it normally;
+your stream keeps showing the whole Uncbox dashboard with the game in its panel. Uncbox becomes a
+small OBS-style manager window with a live preview of what viewers see, Go live and End stream, Save
+clip, your presets as one-click scenes and the whole sidebar. It never shows on stream, even on the
+screen being captured. **Ctrl+Shift+F12** swaps between the game and the manager, and **Full
+dashboard** comes back. It streams with Uncbox's own engine, which puts the game into the dashboard
+on the graphics card (`npm run engine` once from a checkout). See
+[Stealth mode](docs/streaming-with-uncbox.md#stealth-mode-the-uncbox-app).
+
 ## Going live with OBS
 
 1. Open Uncbox in its own window. In Edge: `start msedge --app=http://localhost:5170`
@@ -104,7 +116,8 @@ Uncbox reads your stream key from the sign-in, captures one screen, encodes it o
 card (NVIDIA, AMD or Intel, whichever you have) and sends it to Twitch, with your desktop sound and mic when you run the Uncbox app. See
 [Streaming with Uncbox](docs/streaming-with-uncbox.md). To stream with a fraction of the processor
 load, launch with `npm run app:native` (or the "Uncbox (lighter streaming)" Start menu entry): the
-same streaming, done by Uncbox's own engine, with FFmpeg as the fallback.
+same streaming, done by Uncbox's own engine, with FFmpeg as the fallback. In the app, **Stealth mode**
+lets you play full screen while viewers still see the dashboard (see [Stealth mode](#stealth-mode)).
 
 ## Guide
 
@@ -363,6 +376,8 @@ src/clips/                 instant replay: the encoder worker, its store, the cl
 src/events.ts              the page's one live connection to /api/events
 native/UncboxShell/        the Windows app, where the game can be played in its panel
                            (see native/README.md); src/native.ts is the page's side
+src/stealth/               stealth mode's page side: the manager window's page, the scene kept
+                           in step with the stream, the stand-in controller the manager uses
 src/widgets/               the widget library: everything that can sit on the board, one folder
                            each; registry.ts lists them all (see src/widgets/README.md)
 src/presets.ts             presets: titles, default layouts, starting data

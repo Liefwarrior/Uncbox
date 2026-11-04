@@ -1,5 +1,5 @@
 import type { StreamSettings } from '../state/model';
-import type { ShellMessage } from '../native';
+import type { ShellMessage, StealthScene } from '../native';
 import type { StartBody } from './api';
 import { retryDelayMs, triesAfterDrop } from './retry';
 import type { StreamStatus } from './status';
@@ -47,6 +47,8 @@ export interface ControllerDeps {
   send: (message: { type: string; [key: string]: unknown }) => void;
   api: { start: (body: StartBody) => Promise<string>; stop: () => Promise<unknown> };
   settings: () => StreamSettings;
+  /** Stealth mode's scene when it is on, which every start (and start again) takes along. */
+  scene?: () => StealthScene | null;
   setTimer?: (fn: () => void, ms: number) => unknown;
   clearTimer?: (timer: unknown) => void;
   now?: () => number;
@@ -56,7 +58,16 @@ type Shell = Extract<ShellMessage, { type: 'streamaudio' }>;
 
 export type StreamController = ReturnType<typeof createStreamController>;
 
-export function createStreamController({ hasShell, send, api, settings, setTimer = (fn, ms) => setTimeout(fn, ms), clearTimer = (t) => clearTimeout(t as number), now = Date.now }: ControllerDeps) {
+export function createStreamController({
+  hasShell,
+  send,
+  api,
+  settings,
+  scene = () => null,
+  setTimer = (fn, ms) => setTimeout(fn, ms),
+  clearTimer = (t) => clearTimeout(t as number),
+  now = Date.now,
+}: ControllerDeps) {
   let state: ControllerState = START;
   const listeners = new Set<() => void>();
   /** Bumped by every end, so work that was in flight when it happened knows to stand down. */
@@ -112,7 +123,8 @@ export function createStreamController({ hasShell, send, api, settings, setTimer
       }
       audioPipe = opened.pipe;
     }
-    const problem = await api.start({ audioPipe, test, settings: { screen: s.screen, fps: s.fps, height: s.height, kbps: s.kbps } });
+    const shown = scene();
+    const problem = await api.start({ audioPipe, test, settings: { screen: s.screen, fps: s.fps, height: s.height, kbps: s.kbps }, ...(shown ? { scene: shown } : {}) });
     if (mine !== epoch) {
       // Ended while it started: don't leave it going.
       if (!problem) void api.stop();
@@ -146,6 +158,18 @@ export function createStreamController({ hasShell, send, api, settings, setTimer
 
   /** Ends the stream, whatever its state. */
   const end = () => finish('');
+
+  /**
+   * Ends a stream that is going and starts it again, test or not as it was: stealth mode came on
+   * while FFmpeg streams, and only Uncbox's own engine can show its scene. A stream that is starting,
+   * or waiting to try again, takes the scene on its next start anyway.
+   */
+  async function restart() {
+    if (state.phase !== 'running' || state.retryIn !== null) return;
+    const test = state.test;
+    await finish('');
+    await start(test);
+  }
 
   /** The stream can't go on (the app's sound failed, FFmpeg couldn't run): stop it and say why. */
   const fail = (why: string) => finish(why);
@@ -235,6 +259,7 @@ export function createStreamController({ hasShell, send, api, settings, setTimer
     },
     start,
     end,
+    restart,
     onStatus,
     onShell,
   };

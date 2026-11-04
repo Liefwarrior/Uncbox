@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { defaultState } from '../state/hydrate';
 import type { StreamSettings } from '../state/model';
+import type { StealthScene } from '../native';
 import type { StartBody } from './api';
 import { createStreamController, NO_SOUND_NOTE, READY_TIMEOUT_MS, SOUND_OFF_GRACE_MS, type StreamController } from './controller';
 import { retryDelayMs, STEADY_MS, triesAfterDrop } from './retry';
@@ -23,7 +24,7 @@ describe('the retry timing', () => {
 });
 
 /** The controller with its outside world played by the test: the app's messages, the server, a clock. */
-function setup({ shell = true, settings = {} as Partial<StreamSettings> } = {}) {
+function setup({ shell = true, settings = {} as Partial<StreamSettings>, scene = () => null as StealthScene | null } = {}) {
   const sent: { type: string; [key: string]: unknown }[] = [];
   const timers: { fn: () => void; ms: number; live: boolean }[] = [];
   const startCalls: StartBody[] = [];
@@ -42,6 +43,7 @@ function setup({ shell = true, settings = {} as Partial<StreamSettings> } = {}) 
       stop,
     },
     settings: () => config,
+    scene,
     setTimer: (fn, ms) => {
       const t = { fn, ms, live: true };
       timers.push(t);
@@ -388,3 +390,57 @@ describe('what the server says', () => {
 });
 
 beforeEach(() => vi.clearAllMocks());
+
+describe('stealth mode', () => {
+  const SCENE: StealthScene = { window: '1001', cursor: false, size: { w: 2560, h: 1440 } };
+
+  it('takes stealth mode’s scene along on every start, and none outside it', async () => {
+    let shown: StealthScene | null = SCENE;
+    const t = setup({ scene: () => shown });
+    await t.goLive();
+    expect(t.startCalls.at(-1)).toMatchObject({ audioPipe: PIPE, test: false, scene: SCENE });
+    shown = null;
+    await t.c.end();
+    await t.goLive();
+    expect(t.startCalls.at(-1)).not.toHaveProperty('scene');
+  });
+
+  it('a dropped stealth stream starts again with the scene as it is then', async () => {
+    let shown: StealthScene | null = SCENE;
+    const t = setup({ scene: () => shown });
+    await t.goLive();
+    t.c.onStatus(t.status({ state: 'dropped', error: 'Connection reset by peer' }));
+    shown = { ...SCENE, window: '2002' };
+    t.timer(2000)!.fn();
+    await t.flush();
+    t.c.onShell({ type: 'streamaudio', state: 'ready', pipe: PIPE, rate: 48000, channels: 2, format: 'f32le' });
+    await t.flush();
+    expect(t.startCalls.at(-1)!.scene).toEqual({ ...SCENE, window: '2002' });
+  });
+
+  it('starts a going stream again, test or not as it was, with a new pipe (FFmpeg can’t take a scene)', async () => {
+    const t = setup({ scene: () => SCENE });
+    await t.goLive(true);
+    const restarted = t.c.restart();
+    await t.flush();
+    expect(t.stop).toHaveBeenCalledTimes(1);
+    t.c.onShell({ type: 'streamaudio', state: 'ready', pipe: PIPE, rate: 48000, channels: 2, format: 'f32le' });
+    await restarted;
+    expect(t.startCalls).toHaveLength(2);
+    expect(t.startCalls[1]).toMatchObject({ test: true, scene: SCENE });
+    expect(t.audio().filter((m) => m.on === true)).toHaveLength(2);
+    expect(t.c.getState()).toMatchObject({ phase: 'running', test: true, error: '' });
+  });
+
+  it('does not start again what isn’t going, or is waiting to try again (that try takes the scene anyway)', async () => {
+    const idle = setup();
+    await idle.c.restart();
+    expect(idle.startCalls).toHaveLength(0);
+    const t = setup();
+    await t.goLive();
+    t.c.onStatus(t.status({ state: 'dropped', error: 'x' }));
+    await t.c.restart();
+    expect(t.stop).not.toHaveBeenCalled();
+    expect(t.startCalls).toHaveLength(1);
+  });
+});

@@ -248,6 +248,20 @@ if cargo isn't there. Measured here, 1080p60 into a local receiver: about 4% of 
 
 ## WoW Forever launch (2026-11-04)
 
+### UBX-30 · Stealth mode: play full screen, stream the dashboard — Review
+The OBS way of playing, in the Uncbox app: the game goes full screen in front and is played as it is,
+while the stream keeps showing the dashboard with the game in its panel. The dashboard runs behind the
+game at its own size (a tool window that never takes focus), and Uncbox shrinks to an OBS-style manager
+window: a live preview drawn by Windows' compositor, Go live / Test / End with the stream's numbers, Save
+clip, presets as one-click scenes and the whole sidebar, all reaching the dashboard through the shared
+state, and kept out of every capture. Ctrl+Shift+F12 swaps between the game and the manager. The stream
+is a scene made by Uncbox's own engine: both windows captured with Windows.Graphics.Capture (no more often
+than the stream sends), the game drawn into the panel by a second pass of the video processor into the
+NV12 picture, so there is no scene renderer and no extra full-size copy. The scene follows the panel live
+over the engine's stdin and switches screen ⇄ scene mid-stream; a stream FFmpeg runs is started again on
+the engine. Built and unit tested (engine, server, app arithmetic, both pages); not yet run on Windows
+hardware, and not yet measured against OBS.
+
 ### UBX-31 · WoW Forever: gilded frames and a lighter addon link — Review
 The WoW Forever preset gets its own gilded look: filigree corners and rivets on every panel, gold titles
 over a diamond rule, a heavier double frame around the game, beveled level and XP bars and a warmer glow.

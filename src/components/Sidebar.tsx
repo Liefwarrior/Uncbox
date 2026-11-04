@@ -9,6 +9,7 @@ import type { Mutate, MutatePreset, SyncStatus } from '../state/useAppState';
 import { useArmed } from '../useArmed';
 import { send, shell } from '../native';
 import { PaletteHint } from '../palette/Palette';
+import { setStealth, stealthAvailable } from '../stealth/stealth';
 import { AutomationsSection } from './Automations';
 import { BackgroundPicker } from './BackgroundPicker';
 import { ClipsSection } from './Clips';
@@ -36,6 +37,8 @@ interface Props {
   mutatePreset: MutatePreset;
   status: SyncStatus;
   onStreamMode: () => void;
+  /** The dashboard's sidebar, or stealth mode's manager window's (which has no board and runs the stream from its own controls). */
+  view?: 'dashboard' | 'manager';
 }
 
 /** Whether the page is in stream mode (the app root carries `is-stream`), without the app having to say so. */
@@ -53,7 +56,8 @@ function useInStream(from: RefObject<HTMLElement | null>) {
   return on;
 }
 
-export function Sidebar({ state, mutate, mutatePreset, status, onStreamMode }: Props) {
+export function Sidebar({ state, mutate, mutatePreset, status, onStreamMode, view = 'dashboard' }: Props) {
+  const manager = view === 'manager';
   const active = activePreset(state);
   const { base, def, data } = active;
   const { armed, trigger } = useArmed();
@@ -91,11 +95,30 @@ export function Sidebar({ state, mutate, mutatePreset, status, onStreamMode }: P
 
           <PresetPicker state={state} mutate={mutate} />
 
-          <button className="stream-btn" onClick={onStreamMode}>
-            <Icon name="cast" /> Stream mode
-          </button>
-          <p className="hint">Full screen, edit controls hidden. Esc to come back.</p>
-          <GoLive settings={state.stream} />
+          {manager ? (
+            <>
+              <button className="stream-btn" onClick={onStreamMode}>
+                <Icon name="layout" /> Full dashboard
+              </button>
+              <p className="hint">Leaves stealth mode: the game goes back into its panel. The stream goes on.</p>
+            </>
+          ) : (
+            <>
+              <button className="stream-btn" onClick={onStreamMode}>
+                <Icon name="cast" /> Stream mode
+              </button>
+              <p className="hint">Full screen, edit controls hidden. Esc to come back.</p>
+              {stealthAvailable() && (
+                <>
+                  <button className="side-link stealth-btn" onClick={() => setStealth(true)}>
+                    <Icon name="eyeOff" /> Stealth mode
+                  </button>
+                  <p className="hint">Play full screen like you would with OBS. Viewers still see this dashboard; you get a small window to run it.</p>
+                </>
+              )}
+              <GoLive settings={state.stream} />
+            </>
+          )}
           <OnAirToggle />
 
           <SetupList state={state} mutatePreset={mutatePreset} />
@@ -129,7 +152,7 @@ export function Sidebar({ state, mutate, mutatePreset, status, onStreamMode }: P
             {shell && (
               <Section id="app" title="App">
                 <button className="side-link side-link--quiet" onClick={() => send({ type: 'minimize' })}>
-                  <Icon name="minus" /> Minimize to the tray
+                  <Icon name="minus" /> {manager ? 'Minimize (the stream goes on)' : 'Minimize to the tray'}
                 </button>
                 <StartWithWindows />
               </Section>

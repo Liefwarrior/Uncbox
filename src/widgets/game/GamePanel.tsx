@@ -140,7 +140,7 @@ export function GamePanel({ state, data, def, mutatePreset }: PanelContext) {
       style={game.source === 'chroma' ? { background: game.chroma } : undefined}
     >
       {game.source === 'native' ? (
-        <NativeGame game={native} editing={editing} crop={crop} stripPx={stripPx} />
+        <NativeGame game={native} editing={editing} crop={crop} stripPx={stripPx} fit={game.fit} />
       ) : stream ? (
         <CroppedVideo
           stream={stream}

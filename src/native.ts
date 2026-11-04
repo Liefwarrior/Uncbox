@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
-import type { Crop } from './state/model';
+import type { ControllerState } from './stream/controller';
+import type { Crop, VideoFit } from './state/model';
 
 // The page's side of the native shell (native/UncboxShell). Inside it the page can put a game's
 // real window in the game panel ("Play here") instead of a capture of it. See ShellForm.cs for
@@ -67,7 +68,34 @@ export type ShellMessage =
   | { type: 'clipaudio'; state: 'off' }
   | { type: 'clipaudio'; state: 'error'; error: string }
   /** Peak level 0..1 of each clip sound source, about five times a second while it is on. */
-  | { type: 'cliplevels'; game: number; discord: number; mic: number };
+  | { type: 'cliplevels'; game: number; discord: number; mic: number }
+  /** Stealth mode came on or went off (also the answer to `{ type: 'stealth' }`), to both pages. */
+  | { type: 'stealth'; on: boolean }
+  /** What the stream shows in stealth mode (see src/stealth), or null outside it. Dashboard only. */
+  | { type: 'scene'; scene: StealthScene | null }
+  /** From the manager's page, handed on by the app: go live, a test stream, end it, or say how it is going. */
+  | { type: 'streamcommand'; action: 'start' | 'test' | 'end' | 'state' }
+  /** From the manager's page: save a clip (the dashboard keeps the replay buffer). */
+  | { type: 'clipsave' }
+  /** The dashboard's stream controller, for the manager's page (which runs none of its own). */
+  | { type: 'streamstate'; state: ControllerState };
+
+/**
+ * Stealth mode's scene, as the app describes it and the streaming engine takes it
+ * (engine/src/scene.rs): the dashboard's window with the game's window drawn over its panel.
+ */
+export interface StealthScene {
+  window: string;
+  cursor: boolean;
+  size?: { w: number; h: number };
+  game?: {
+    window: string;
+    rect: { x: number; y: number; w: number; h: number };
+    crop: { top: number; right: number; bottom: number; left: number };
+    stripPx: number;
+    fit: 'contain' | 'cover' | 'stretch';
+  };
+}
 
 export interface AudioDevice {
   id: string;
@@ -111,10 +139,12 @@ export function deviceBox(el: Element, dpr = window.devicePixelRatio) {
  * Tells the shell where the game should go: el's box in device pixels, kept up to date while
  * panels move and resize. The game window is made bigger than the box by the crop (percent per
  * edge) and stripPx (the WoW addon's strip, in game pixels), and those parts sit under the
- * dashboard, out of sight. A null element takes the game back out.
+ * dashboard, out of sight. In stealth mode the game is full screen instead, and the stream draws it
+ * over this box with the same crop, fitted as the panel's `fit` says. A null element takes the game
+ * back out.
  */
-export function useHole(el: HTMLElement | null, crop: Crop, stripPx: number) {
-  const cropKey = `${crop.top},${crop.right},${crop.bottom},${crop.left},${stripPx}`;
+export function useHole(el: HTMLElement | null, crop: Crop, stripPx: number, fit: VideoFit = 'contain') {
+  const cropKey = `${crop.top},${crop.right},${crop.bottom},${crop.left},${stripPx},${fit}`;
   useEffect(() => {
     if (!shell) return;
     if (!el) {
@@ -128,7 +158,7 @@ export function useHole(el: HTMLElement | null, crop: Crop, stripPx: number) {
       const key = JSON.stringify(rect);
       if (key !== last) {
         last = key;
-        send({ type: 'rect', ...rect, crop, stripPx });
+        send({ type: 'rect', ...rect, crop, stripPx, fit });
       }
       frame = requestAnimationFrame(report);
     };

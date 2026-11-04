@@ -10,6 +10,13 @@
 // page decides when to start and stop and restarts a stream that dropped (src/stream); this file
 // only runs the program and reports on it.
 //
+// Stealth mode (the Uncbox app's OBS-like manager, with the game played full screen) streams a
+// scene instead of a screen: the dashboard window with the game's window drawn over its panel.
+// Only Uncbox's own engine can make one (FFmpeg can't put two windows together), so a stream that
+// starts with a scene always runs on the engine, even in a launch that otherwise uses FFmpeg. The
+// app says where everything is (see clampScene); while the engine streams, a change goes to it
+// straight away and it shows it from the next picture.
+//
 // Nothing here needs setting up: the check picks the encoder and the quickest way to scale the
 // picture that it has seen work on this PC, and a Twitch sign-in that can read the stream key
 // stands in for pasting one.
@@ -18,7 +25,8 @@
 //   POST /api/stream/key         { key } saves a pasted stream key ('' forgets it); this PC only
 //   POST /api/stream/key/twitch  reads the key from the Twitch sign-in; this PC only
 //   POST /api/stream/check       { force? } looks for FFmpeg and an encoder (the answer is kept); this PC only
-//   POST /api/stream/start       { audioPipe?, test?, settings } starts FFmpeg; this PC only
+//   POST /api/stream/start       { audioPipe?, test?, settings, scene? } starts the stream (a scene: stealth mode); this PC only
+//   POST /api/stream/scene       { scene } stealth mode's scene changed (null: back to the screen); this PC only
 //   POST /api/stream/stop        ends the stream; this PC only
 //
 // The stream key lives only in data/stream.json. The page is told whether one is set and its last
@@ -245,18 +253,85 @@ export function buildFfmpegArgs({ settings, key, test = false, audioPipe = '', e
   ];
 }
 
+// ---- stealth mode's scene ----
+
+/** The biggest side anything in a scene may have, and the furthest a panel may sit, in pixels. */
+const MAX_SIDE = 16384;
+const finite = (v) => typeof v === 'number' && Number.isFinite(v);
+
+/** A window handle as the engine takes it: digits (a number or a string of them), 1 up to 2^48 - 1. */
+function handleOf(value) {
+  const text = typeof value === 'number' ? String(value) : typeof value === 'string' ? value.trim() : '';
+  if (!/^\d{1,15}$/.test(text)) return null;
+  const n = Number(text);
+  return n >= 1 && n <= 0xffff_ffff_ffff ? text : null;
+}
+
+function clampGame(raw) {
+  if (!raw || typeof raw !== 'object') return null;
+  const window = handleOf(raw.window);
+  const r = raw.rect;
+  if (!window || !r || typeof r !== 'object' || ![r.x, r.y, r.w, r.h].every(finite)) return null;
+  const w = Math.round(r.w);
+  const h = Math.round(r.h);
+  if (w < 2 || h < 2 || w > MAX_SIDE || h > MAX_SIDE || Math.abs(r.x) > MAX_SIDE || Math.abs(r.y) > MAX_SIDE) return null;
+  const crop = raw.crop && typeof raw.crop === 'object' ? raw.crop : {};
+  const edge = (v) => (finite(v) ? clamp(v, 0, 45) : 0);
+  return {
+    window,
+    rect: { x: Math.round(r.x), y: Math.round(r.y), w, h },
+    crop: { top: edge(crop.top), right: edge(crop.right), bottom: edge(crop.bottom), left: edge(crop.left) },
+    stripPx: finite(raw.stripPx) ? clamp(Math.round(raw.stripPx), 0, 256) : 0,
+    fit: ['contain', 'cover', 'stretch'].includes(raw.fit) ? raw.fit : 'contain',
+  };
+}
+
+/**
+ * Stealth mode's scene as the engine takes it (engine/src/scene.rs), or null when it isn't one:
+ * `window` is the dashboard's window, `cursor` whether to draw the pointer over it, `size` the
+ * dashboard's size the panel was measured at, and `game` the game's window with its panel (`rect`,
+ * in the dashboard's device pixels), `crop` (percent per edge), `stripPx` (the WoW strip) and `fit`.
+ * Held to the limits the engine holds it to, so nothing odd from the page ever reaches it; a game
+ * that isn't described well enough is left out, and the dashboard alone is streamed.
+ */
+export function clampScene(raw) {
+  if (!raw || typeof raw !== 'object') return null;
+  const window = handleOf(raw.window);
+  if (!window) return null;
+  const scene = { window, cursor: raw.cursor === true };
+  if (raw.size && typeof raw.size === 'object' && finite(raw.size.w) && finite(raw.size.h)) {
+    scene.size = { w: clamp(Math.round(raw.size.w), 0, MAX_SIDE), h: clamp(Math.round(raw.size.h), 0, MAX_SIDE) };
+  }
+  const game = clampGame(raw.game);
+  if (game) scene.game = game;
+  return scene;
+}
+
 // ---- Uncbox's own engine ----
 
 /**
  * What the engine is told on stdin, as one line of JSON. The address (with the key in it) goes
  * here rather than in the arguments, which other programs on this PC can read. The engine reads
- * the same settings FFmpeg does and picks the card itself ('auto'), but only ever drives NVENC
- * directly ('nvenc'): through Windows' own encoder its picture is worse than FFmpeg's (see
- * checkNative), and a stream must look the same whichever program makes it.
+ * the same settings FFmpeg does and picks the card itself ('auto'), but drives NVENC directly
+ * ('nvenc'): through Windows' own encoder its picture is worse than FFmpeg's (see checkNative),
+ * and a stream must look the same whichever program makes it. Stealth mode's `scene` is the one
+ * exception: only the engine can make one, so on AMD and Intel cards it streams through Windows'
+ * encoder (`backend: 'auto'`) rather than not at all.
  */
-export function buildEngineConfig({ settings, key, test = false, audioPipe = '', env = process.env }) {
+export function buildEngineConfig({ settings, key, test = false, audioPipe = '', env = process.env, scene = null, backend = 'nvenc' }) {
   const { screen, fps, height, kbps } = clampSettings(settings);
-  return { url: ingestUrl(key, test, env), screen, fps, height, kbps, ...(audioPipe ? { audioPipe } : {}), encoder: 'auto', backend: 'nvenc' };
+  const shown = scene ? clampScene(scene) : null;
+  return {
+    url: ingestUrl(key, test, env),
+    screen,
+    fps,
+    height,
+    kbps,
+    ...(audioPipe ? { audioPipe } : {}),
+    encoder: 'auto',
+    backend: backend === 'auto' ? 'auto' : 'nvenc',
+    ...(shown ? { source: { scene: shown } } : {}),
+  };
 }
 
 /** The engine's names for the makers of graphics card encoders, and the encoder ids the page knows them by. */
@@ -290,7 +365,13 @@ export function parseProbe(text) {
     const backend = entry && typeof entry === 'object' && typeof entry.backend === 'string' ? entry.backend : p.backend && typeof p.backend === 'object' && typeof p.backend[maker] === 'string' ? p.backend[maker] : null;
     encoders.push({ id, tuning: own ?? listed ?? 'quality', backend });
   }
-  return { version: typeof p.version === 'string' ? p.version : '', encoders, adapters: Array.isArray(p.adapters) ? p.adapters : [] };
+  return {
+    version: typeof p.version === 'string' ? p.version : '',
+    encoders,
+    adapters: Array.isArray(p.adapters) ? p.adapters : [],
+    // Stealth mode's scene needs Windows to capture windows; an engine from before scenes doesn't say.
+    windowCapture: p.windowCapture === true,
+  };
 }
 
 const SERVER_DIR = path.dirname(fileURLToPath(import.meta.url));
@@ -376,6 +457,14 @@ export const listsName = (output, name) => new RegExp(`^\\s*[A-Z.]{2,}\\s+${name
 const fail = (status, message, extra = {}) => Object.assign(new Error(message), { status }, extra);
 
 const NO_ENCODER = 'Uncbox streams with the encoder on your graphics card (NVIDIA, AMD or Intel), and this PC can’t start one. Update your graphics driver.';
+/** Why a stealth-mode stream can't start, by what is missing. */
+export const STEALTH = {
+  noEngine: 'Streaming in stealth mode needs Uncbox’s own streaming engine. Run npm run engine once (or use the installed Uncbox), then go live again.',
+  noAnswer: 'Uncbox’s own streaming engine didn’t answer its check, so stealth mode can’t stream. Rebuild it with npm run engine.',
+  noWindowCapture: 'Streaming in stealth mode needs Windows 10 version 1903 or later, and the latest build of Uncbox’s own engine (npm run engine).',
+  noEncoder: NO_ENCODER,
+  badScene: 'That isn’t a scene Uncbox can show.',
+};
 
 /**
  * The tools as far as anyone knows before a check. `encoder` is the id of the one that works (see
@@ -433,6 +522,10 @@ export function createStream({
   let stats = null;
   let error = '';
   let child = null;
+  /** The running program takes scene changes on stdin (Uncbox's own engine does, FFmpeg doesn't). */
+  let childTakesScenes = false;
+  /** The engine for stealth mode's scenes, looked for the first time one is wanted: { path, backend } or { error }. */
+  let sceneEngine = null;
   let launching = false;
   let stopTimer = null;
   let lastSent = 0;
@@ -594,6 +687,30 @@ export function createStream({
     return { path: found, tools: { ffmpeg: true, version: info.version, encoder: first.id, tuning: first.tuning, scaler: 'd3d11', ddagrab: true, engine: 'native' } };
   }
 
+  /**
+   * Uncbox's own engine for a stealth-mode scene, which FFmpeg can't make: it has to be there, able to
+   * capture windows and to encode. NVENC driven directly is preferred; on AMD and Intel it streams
+   * through Windows' own encoder rather than not at all. { path, backend } or { error } in plain words.
+   */
+  async function findSceneEngine() {
+    const found = noHelpers() ? '' : await findNative().catch(() => '');
+    if (!found) return { error: STEALTH.noEngine };
+    const probe = await run(found, ['probe']);
+    const info = probe.code === 0 ? parseProbe(probe.out) : null;
+    if (!info) return { error: STEALTH.noAnswer };
+    if (!info.windowCapture) return { error: STEALTH.noWindowCapture };
+    if (!info.encoders.length) return { error: STEALTH.noEncoder };
+    return { path: found, backend: info.encoders.some((e) => e.backend === 'nvenc') ? 'nvenc' : 'auto' };
+  }
+
+  /** The scene engine, found once; a failure is looked into again next time (it may have been built since). */
+  async function sceneEngineReady() {
+    sceneEngine ??= findSceneEngine();
+    const found = await sceneEngine;
+    if (found.error) sceneEngine = null;
+    return found;
+  }
+
   async function doCheck() {
     const mine = ++generation;
     const native = wanted === 'native' ? await checkNative() : null;
@@ -638,9 +755,10 @@ export function createStream({
    * Starts the program: FFmpeg with `args`, or Uncbox's own engine, which is told what to do by one
    * line of JSON on stdin (`config`) instead, so the key is never in anything another program can read.
    */
-  function launch({ args, config, key }) {
-    const mine = config ? spawn(enginePath, ['run'], { windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] }) : spawn(ffmpegPath, args, { windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] });
+  function launch({ args, config, key, program = enginePath }) {
+    const mine = config ? spawn(program, ['run'], { windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] }) : spawn(ffmpegPath, args, { windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] });
     child = mine;
+    childTakesScenes = Boolean(config);
     if (mine.pid) {
       try {
         raisePriority(mine.pid);
@@ -728,6 +846,9 @@ export function createStream({
     const audioPipe = body?.audioPipe === undefined || body.audioPipe === null || body.audioPipe === '' ? '' : String(body.audioPipe);
     if (audioPipe && !PIPE_SHAPE.test(audioPipe)) throw fail(400, 'That isn’t a sound pipe made by the Uncbox app.');
     const settings = clampSettings(body?.settings);
+    const given = body?.scene;
+    const scene = given === undefined || given === null ? null : clampScene(given);
+    if (given !== undefined && given !== null && !scene) throw fail(400, STEALTH.badScene);
     // Taken before anything is waited on (the key from Twitch, the check), so a second Go live in
     // the meantime is turned away instead of starting a second FFmpeg nobody could stop.
     launching = true;
@@ -735,6 +856,14 @@ export function createStream({
       await takeSignInKey();
       const { key } = await loadKey();
       if (!key) throw fail(400, 'Add your Twitch stream key first.');
+      if (scene) {
+        // Stealth mode: Uncbox's own engine, whatever streams otherwise (FFmpeg isn't needed for it).
+        const engine = await sceneEngineReady();
+        if (engine.error) throw fail(400, engine.error);
+        test = Boolean(body?.test);
+        launch({ config: buildEngineConfig({ settings, key, test, audioPipe, env, scene, backend: engine.backend }), key, program: engine.path });
+        return;
+      }
       await check();
       if (!tools.ffmpeg) throw fail(400, 'FFmpeg isn’t installed. Install it from the Downloads widget.');
       if (tools.ddagrab === false) throw fail(400, 'This FFmpeg can’t capture the screen. Install the latest FFmpeg from the Downloads widget.');
@@ -778,6 +907,26 @@ export function createStream({
     stopTimer = setTimer(() => mine.kill?.(), stopGraceMs);
     stopTimer?.unref?.();
     void emit();
+  }
+
+  // ---- stealth mode ----
+
+  /**
+   * Stealth mode's scene changed: the panel moved, the game changed, or (null) stealth mode ended.
+   * The engine, if it is what streams, shows it from its next picture. Resolves to whether the
+   * running stream took it: false with nothing running, or with FFmpeg streaming (which can't show
+   * a scene: the page starts that stream again, on the engine).
+   */
+  function setScene(raw) {
+    const scene = raw === null || raw === undefined ? null : clampScene(raw);
+    if (raw !== null && raw !== undefined && !scene) throw fail(400, STEALTH.badScene);
+    if (!child || !childTakesScenes || state === 'stopping') return false;
+    try {
+      child.stdin?.write(`${JSON.stringify({ scene })}\n`);
+      return true;
+    } catch {
+      return false;
+    }
   }
 
   // ---- who streams ----
@@ -857,6 +1006,10 @@ export function createStream({
         await check({ force: (await readJson(req)).force === true });
       }
       else if (route === '/engine') await setEngine((await readJson(req)).engine);
+      else if (route === '/scene') {
+        const applied = setScene((await readJson(req)).scene);
+        return sendJson(res, 200, { ...(await snapshot()), sceneApplied: applied });
+      }
       else if (route === '/start') await start(await readJson(req));
       else if (route === '/stop') stop();
       else return sendJson(res, 404, { error: 'Not found' });
@@ -884,5 +1037,6 @@ export function createStream({
   handle.start = start;
   handle.stop = stop;
   handle.setEngine = setEngine;
+  handle.setScene = setScene;
   return handle;
 }

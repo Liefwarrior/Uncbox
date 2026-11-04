@@ -20,13 +20,20 @@ internal static partial class Native
     public const long WS_EX_STATICEDGE = 0x00020000;
     public const long WS_EX_TOOLWINDOW = 0x00000080;
     public const long WS_EX_WINDOWEDGE = 0x00000100;
+    public const long WS_EX_APPWINDOW = 0x00040000;
+    public const long WS_EX_NOACTIVATE = 0x08000000;
 
+    public const uint SWP_NOSIZE = 0x0001;
+    public const uint SWP_NOMOVE = 0x0002;
     public const uint SWP_NOACTIVATE = 0x0010;
     public const uint SWP_FRAMECHANGED = 0x0020;
     public const uint SWP_NOZORDER = 0x0004;
     public const uint SWP_SHOWWINDOW = 0x0040;
     public static readonly IntPtr HWND_TOP = IntPtr.Zero;
+    public static readonly IntPtr HWND_BOTTOM = new(1);
 
+    public const int SW_HIDE = 0;
+    public const int SW_SHOWNOACTIVATE = 4;
     public const int SW_RESTORE = 9;
     public const int RGN_DIFF = 4;
 
@@ -146,7 +153,21 @@ internal static partial class Native
         public int SourceClientAreaOnly;
     }
 
-    public const int TNP_RECTDESTINATION = 0x1, TNP_OPACITY = 0x4, TNP_VISIBLE = 0x8, TNP_SOURCECLIENTAREAONLY = 0x10;
+    public const int TNP_RECTDESTINATION = 0x1, TNP_RECTSOURCE = 0x2, TNP_OPACITY = 0x4, TNP_VISIBLE = 0x8, TNP_SOURCECLIENTAREAONLY = 0x10;
+
+    // ---- capture: keeping a window out of every screen capture (stealth mode's manager) ----
+
+    /// <summary>The window shows on the monitor only: screen captures, recordings and screen shares leave it out (Windows 10 2004 and later).</summary>
+    public const uint WDA_EXCLUDEFROMCAPTURE = 0x11;
+    /// <summary>The older version: captures show the window as black.</summary>
+    public const uint WDA_MONITOR = 0x1;
+
+    [LibraryImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static partial bool SetWindowDisplayAffinity(IntPtr hwnd, uint affinity);
+
+    [LibraryImport("user32.dll")]
+    public static partial IntPtr GetForegroundWindow();
 
     [LibraryImport("dwmapi.dll")]
     public static partial int DwmRegisterThumbnail(IntPtr destination, IntPtr source, out IntPtr thumbnail);

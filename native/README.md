@@ -71,6 +71,52 @@ in the panel. A game you start from there takes the panel the moment its window 
 tells Uncbox about new windows, and Uncbox takes any from your Steam game folders), and Steam comes
 back as soon as you quit it.
 
+## Stealth mode
+
+Play the game full screen, the way you would with OBS minimized, while viewers keep seeing the
+dashboard with the game in its panel. **Stealth mode** in the sidebar, Ctrl+K or the tray menu turns
+it on (see [Stealth mode](../docs/streaming-with-uncbox.md#stealth-mode-the-uncbox-app) for using it).
+
+- The game window is placed full screen on its monitor, in front, and focused.
+- The dashboard window stays up at its own size, behind everything (`HWND_BOTTOM`), as a tool window
+  that never activates (`WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE`), so it is out of the taskbar and Alt+Tab
+  and a stray click can't bring it over the game. The style change keeps the same window handle, which
+  the stream's capture of it relies on. Minimizing it is undone at once: a minimized window draws nothing.
+  WebView2 runs with Chromium's window occlusion tracking off (`--disable-features=CalculateNativeWinOcclusion`),
+  or the covered page would stop drawing. Outside stealth mode the dashboard is topmost (nothing covers it),
+  and hidden (tray, Full screen) it stops drawing as before.
+- No hole is cut: the game isn't behind the panel any more. The page keeps reporting the panel's box,
+  crop, WoW strip and fit (`rect`), and the app turns that into the **scene** it sends the page
+  (`StealthLayout.Scene`): this window, its size, the game's window and the panel. The page passes it to
+  the server, which hands it to Uncbox's own streaming engine; the engine captures both windows with
+  Windows.Graphics.Capture and draws the game over the panel on the graphics card (engine/src/scene.rs).
+- The **manager** (`StealthForm.cs`) is a normal window with the same page in its manager view
+  (`?native=1&view=manager`, same WebView2 environment and profile). Its preview is two DWM thumbnails
+  (the dashboard, and the game placed over its panel the way the engine places it, `StealthLayout.PlaceGame`)
+  in a small borderless window owned by the manager over the page's preview box, so its coordinates are
+  the thumbnails' own and it moves and minimizes with the manager. Both windows are excluded from every
+  capture (`SetWindowDisplayAffinity(WDA_EXCLUDEFROMCAPTURE)`, black on Windows before 10 2004).
+- The manager's page has a short list of messages of its own (`OnManagerMessage`): leave stealth mode,
+  where its preview goes, the game in front, minimize, the stream's volumes, the mic list, start with
+  Windows, and **relays** to the dashboard's page: Go live / Test / End stream and Save clip, which the
+  dashboard does (it owns the stream controller, the sound pipe and the replay buffer), while the
+  dashboard's controller state comes back the same way. It can't move the game or open web views.
+- **Ctrl+Shift+F12** swaps between the game and the manager. Closing the manager leaves stealth mode:
+  the dashboard comes back topmost and full screen, and the game goes back into its panel.
+
+| Message (page → app) | |
+| --- | --- |
+| `{ type: "stealth", on }` / `{ type: "stealth" }` | into or out of stealth mode / ask whether it's on |
+| `{ type: "previewrect", x, y, w, h }` / `{ type: "previewrect" }` | the manager's preview box, in device pixels / hide it |
+| `{ type: "relay", message }` | `streamcommand` or `clipsave` from the manager, `streamstate` from the dashboard |
+
+| Message (app → page) | |
+| --- | --- |
+| `{ type: "stealth", on }` | to both pages |
+| `{ type: "scene", scene }` | to the dashboard: what the stream shows (null outside stealth mode) |
+| `{ type: "streamcommand", action }`, `{ type: "clipsave" }` | to the dashboard, from the manager |
+| `{ type: "streamstate", state }` | to the manager, from the dashboard |
+
 For OBS, use a **Display Capture** of the monitor Uncbox is on. A Window Capture of Uncbox leaves
 the game out, because the game is its own window.
 
@@ -116,7 +162,9 @@ The page and the app talk with small JSON messages over WebView2's `postMessage`
 | File | What it does |
 | --- | --- |
 | `UncboxShell/Program.cs` | Options, one copy at a time. |
-| `UncboxShell/ShellForm.cs` | The window, tray, WebView2, messages, the hole and Full screen. |
+| `UncboxShell/ShellForm.cs` | The window, tray, WebView2, messages, the hole, Full screen and stealth mode. |
+| `UncboxShell/StealthForm.cs` | Stealth mode's manager window: its page, the live preview, kept out of captures. |
+| `UncboxShell/StealthLayout.cs` | Stealth mode's arithmetic: the scene, where the game goes in the preview, where the manager opens. |
 | `UncboxShell/ServerHost.cs` | Finds or starts the Uncbox server (the repo's, or a package's own). |
 | `UncboxShell/GameWindow.cs` | Restyles, places and restores the game's window. |
 | `UncboxShell/Native.cs` | The Win32 calls. |
@@ -141,6 +189,11 @@ Driven over WebView2's DevTools port, with a stand-in game window:
   Ctrl+Shift+F12 returned it.
 - Turn on clips: the window picker shows above the game, and picking the game started the capture
   and the instant-replay buffer.
+
+**Stealth mode is new and not yet tried on a Windows PC.** It builds (`dotnet build` with the Windows
+targeting pack), and its arithmetic (the scene, where the game goes in the preview, where the manager
+opens) is covered by `StealthLayoutTests`, with the same cases as the engine's placement tests. The
+windows themselves, the preview's thumbnails and the stream's scene haven't been seen working yet.
 
 **Not yet tried:** a real game with a controller, and anti-cheat. Moving and restyling another
 app's window is what tools like Borderless Gaming do, and it never touches the game's memory or

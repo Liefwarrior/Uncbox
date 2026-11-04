@@ -153,6 +153,22 @@ describe('clips and stream mode', () => {
     expect(ready.actions.toggleStream).toHaveBeenCalled();
   });
 
+  it('offers stealth mode only in the Uncbox app, and leaving it once it is on', () => {
+    expect(setup().find('stream:stealth')).toBeUndefined();
+    expect(setup({ stealth: { available: false, on: false } }).find('stream:stealth')).toBeUndefined();
+    const stealth = vi.fn();
+    const off = setup({ stealth: { available: true, on: false }, actions: { ...fakeActions(), stealth } });
+    expect(off.find('stream:stealth')!.title).toBe('Stealth mode');
+    off.find('stream:stealth')!.run();
+    expect(stealth).toHaveBeenLastCalledWith(true);
+    const on = setup({ stealth: { available: true, on: true }, actions: { ...fakeActions(), stealth } });
+    expect(on.find('stream:stealth')!.title).toBe('Leave stealth mode');
+    on.find('stream:stealth')!.run();
+    expect(stealth).toHaveBeenLastCalledWith(false);
+    // Stream mode is stealth mode's to keep on while it lasts.
+    expect(on.find('stream:toggle')).toBeUndefined();
+  });
+
   it('hides Save a clip while one is being saved', () => {
     const busy = setup({ clips: { recording: true, saving: true, clips: [] } });
     busy.state.clips.enabled = true;

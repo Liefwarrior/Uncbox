@@ -18,7 +18,9 @@ import { activePreset } from './state/presets';
 import { useAppState } from './state/useAppState';
 import { listen } from './events';
 import { PrivacyProvider } from './privacy';
-import { StreamRunner } from './stream/live';
+import { STEALTH_EVENT, StreamRunner } from './stream/live';
+import { ManagerApp } from './stealth/Manager';
+import { isManagerView } from './stealth/stealth';
 import { useWowAutoSetup } from './wow';
 import { dismissUndoOnSwitch, showNotice } from './undo';
 
@@ -27,7 +29,12 @@ function initialStreamMode() {
   return v !== null && v !== '0' && v !== 'false';
 }
 
+/** Uncbox: the dashboard, or (in the app's stealth mode window, ?view=manager) the manager. */
 export function App() {
+  return isManagerView() ? <ManagerApp /> : <Dashboard />;
+}
+
+function Dashboard() {
   const { state, mutate, mutatePreset, status } = useAppState();
   // Per-window, not saved: a phone can stay in edit mode while the captured window is in stream mode.
   const [streamMode, setStreamMode] = useState(initialStreamMode);
@@ -47,6 +54,14 @@ export function App() {
 
   // F8, and the command palette's "Toggle stream mode".
   const toggleStream = useCallback(() => (streaming.current ? exitStream() : enterStream()), [enterStream, exitStream]);
+
+  // Stealth mode (the Uncbox app): this dashboard is what viewers see, so its edit controls go. It
+  // stays in stream mode afterwards, as a stream may still be going; Esc brings them back.
+  useEffect(() => {
+    const on = () => setStreamMode(true);
+    window.addEventListener(STEALTH_EVENT, on);
+    return () => window.removeEventListener(STEALTH_EVENT, on);
+  }, []);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {

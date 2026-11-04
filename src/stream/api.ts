@@ -1,3 +1,4 @@
+import type { StealthScene } from '../native';
 import { markToolsChecked, readStatus, setStreamStatus } from './status';
 
 // The page's calls to the server's streaming routes (server/stream.mjs). Each answer is the
@@ -24,11 +25,23 @@ export interface StartBody {
   audioPipe?: string;
   test: boolean;
   settings: { screen: number; fps: number; height: number; kbps: number };
+  /** Stealth mode's scene (see src/stealth): the stream shows it instead of the screen, through Uncbox's own engine. */
+  scene?: StealthScene;
 }
 
 export async function startStream(body: StartBody): Promise<string> {
   const { ok, data } = await post('/start', body);
   return ok ? '' : problem(data, 'Couldn’t start the stream.');
+}
+
+/**
+ * Tells the server stealth mode's scene changed (null: back to the screen). Resolves to whether the
+ * running stream took it (false while FFmpeg streams, which can't show a scene), or null when the
+ * server couldn't be asked.
+ */
+export async function sendStreamScene(scene: StealthScene | null): Promise<{ applied: boolean } | null> {
+  const { ok, data } = await post('/scene', { scene });
+  return ok ? { applied: data.sceneApplied === true } : null;
 }
 
 export async function stopStream(): Promise<string> {
