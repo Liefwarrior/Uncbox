@@ -11,13 +11,16 @@
 //!   "encoders": [ { "id": "nvidia", "maker": "nvidia", "tuning": "quality", "backend": "nvenc", "bframes": 2 } ],
 //!   "backend": { "nvidia": "nvenc" },
 //!   "tuning": { "nvidia": "quality" },
-//!   "primary": 0 }
+//!   "primary": 0,
+//!   "windowCapture": true }
 //! ```
 //!
 //! `encoders` lists, one object each, the makers whose hardware H.264 encoder really encoded a few dozen tiny test
 //! pictures. `backend` is `nvenc` (the direct NVIDIA encoder) or `mediafoundation`; `tuning` is
 //! `quality` (the full FFmpeg-equivalent settings were taken) or `safe` (the card or driver refused
 //! part of them). `primary` is the number of the screen Windows calls the main one, or null.
+//! `windowCapture` says whether this Windows can capture a window (Windows.Graphics.Capture, Windows
+//! 10 1903 and later), which stealth mode's scene needs.
 
 use serde_json::{json, Map, Value};
 
@@ -46,7 +49,7 @@ pub struct ProbeAdapter {
     pub check: Option<EncoderCheck>,
 }
 
-pub fn to_json(version: &str, adapters: &[ProbeAdapter]) -> Value {
+pub fn to_json(version: &str, adapters: &[ProbeAdapter], window_capture: bool) -> Value {
     let mut encoders: Vec<Value> = Vec::new();
     let mut seen: Vec<&'static str> = Vec::new();
     let mut backends = Map::new();
@@ -82,6 +85,7 @@ pub fn to_json(version: &str, adapters: &[ProbeAdapter]) -> Value {
         "backend": backends,
         "tuning": tunings,
         "primary": primary,
+        "windowCapture": window_capture,
     })
 }
 
@@ -104,12 +108,14 @@ mod tests {
 
     #[test]
     fn reports_screens_encoders_backend_tuning_and_the_primary_screen() {
-        let v = to_json("0.2.0", &[nvidia()]);
+        let v = to_json("0.2.0", &[nvidia()], true);
         assert_eq!(v["version"], "0.2.0");
         assert_eq!(v["encoders"], json!([{ "id": "nvidia", "maker": "nvidia", "tuning": "quality", "backend": "nvenc", "bframes": 2 }]));
         assert_eq!(v["backend"], json!({ "nvidia": "nvenc" }));
         assert_eq!(v["tuning"], json!({ "nvidia": "quality" }));
         assert_eq!(v["primary"], 1, "the screen numbered 1 is the one Windows calls primary");
+        assert_eq!(v["windowCapture"], true, "stealth mode can capture windows here");
+        assert_eq!(to_json("x", &[], false)["windowCapture"], false);
         let a = &v["adapters"][0];
         assert_eq!(a["vendor"], "nvidia");
         assert_eq!(a["outputs"][1], json!({ "index": 1, "width": 2560, "height": 1440, "primary": true }));
@@ -120,7 +126,7 @@ mod tests {
     #[test]
     fn an_older_card_reports_the_safe_settings_and_a_media_foundation_card_says_so() {
         let older = ProbeAdapter { check: Some(EncoderCheck { backend: "nvenc", tuning: "safe", bframes: 2 }), ..nvidia() };
-        let v = to_json("x", &[older]);
+        let v = to_json("x", &[older], false);
         assert_eq!(v["tuning"]["nvidia"], "safe");
         assert_eq!(v["encoders"][0]["tuning"], "safe");
         let amd = ProbeAdapter {
@@ -129,7 +135,7 @@ mod tests {
             outputs: vec![out(0, true)],
             check: Some(EncoderCheck { backend: "mediafoundation", tuning: "safe", bframes: 0 }),
         };
-        let v = to_json("x", &[amd]);
+        let v = to_json("x", &[amd], false);
         assert_eq!(v["encoders"], json!([{ "id": "amd", "maker": "amd", "tuning": "safe", "backend": "mediafoundation", "bframes": 0 }]));
         assert_eq!(v["backend"], json!({ "amd": "mediafoundation" }));
         assert_eq!(v["adapters"][0]["encoder"]["bframes"], 0);
@@ -138,7 +144,7 @@ mod tests {
     #[test]
     fn a_card_that_wasnt_tried_or_failed_has_a_null_encoder_and_isnt_listed() {
         let intel = ProbeAdapter { name: "Intel(R) Graphics".into(), vendor: "intel", outputs: vec![], check: None };
-        let v = to_json("x", &[nvidia(), intel]);
+        let v = to_json("x", &[nvidia(), intel], false);
         assert_eq!(v["encoders"], json!([{ "id": "nvidia", "maker": "nvidia", "tuning": "quality", "backend": "nvenc", "bframes": 2 }]));
         assert!(v["adapters"][1]["encoder"].is_null());
         assert_eq!(v["adapters"][1]["outputs"], json!([]));
@@ -147,25 +153,25 @@ mod tests {
 
     #[test]
     fn two_cards_of_one_maker_are_listed_once() {
-        let v = to_json("x", &[nvidia(), nvidia()]);
+        let v = to_json("x", &[nvidia(), nvidia()], false);
         assert_eq!(v["encoders"], json!([{ "id": "nvidia", "maker": "nvidia", "tuning": "quality", "backend": "nvenc", "bframes": 2 }]));
         assert_eq!(v["adapters"].as_array().unwrap().len(), 2);
     }
 
     #[test]
     fn no_cards_or_no_primary_screen_is_empty_and_null() {
-        let v = to_json("x", &[]);
+        let v = to_json("x", &[], false);
         assert_eq!(v["adapters"], json!([]));
         assert_eq!(v["encoders"], json!([]));
         assert!(v["primary"].is_null());
         let no_primary = ProbeAdapter { outputs: vec![out(0, false)], ..nvidia() };
-        assert!(to_json("x", &[no_primary])["primary"].is_null());
+        assert!(to_json("x", &[no_primary], false)["primary"].is_null());
     }
 
     #[test]
     fn the_old_keys_are_still_there_for_the_server() {
         // The server reads `encoders` (objects with id/maker and tuning) and, per adapter, name, vendor and outputs (index, width, height, primary).
-        let v = to_json("x", &[nvidia()]);
+        let v = to_json("x", &[nvidia()], false);
         for key in ["version", "adapters", "encoders"] {
             assert!(v.get(key).is_some(), "{key}");
         }

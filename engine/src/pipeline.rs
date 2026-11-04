@@ -10,6 +10,11 @@
 //!   out video when the connection can't keep up (see `queue.rs`).
 //! - the **main** thread listens for `q`, prints the once-a-second report and ends everything.
 //!
+//! In stealth mode the capture thread's source is the scene (the dashboard and the game as two
+//! window captures, see `scene.rs`), and the server can change it while the stream runs: a new
+//! panel position, another game, or back to the screen and over again. The capture thread takes
+//! the newest change before each picture, so the stream itself never stops for it.
+//!
 //! One clock rules: `Instant` (Windows' high-resolution performance counter). Picture n is stamped
 //! n / fps seconds after the start; sound is stamped by how many samples have gone out. If the
 //! machine can't make a picture in time its slot is skipped, never stretched, so sound and picture
@@ -30,9 +35,10 @@ use crate::probe::{self, EncoderCheck, ProbeAdapter, ProbeOutput};
 use crate::progress::{Progress, RateWindow};
 use crate::queue::{AudioHold, Packet, PacketQueue, Taken};
 use crate::rtmp::{Publisher, RtmpUrl};
+use crate::scene::Scene;
 use crate::settings::{target_size, EncoderChoice, Output, Settings, Source as SourceSetting};
 use crate::sink::{FileSink, Sink};
-use crate::source::{Source, Y4mSource};
+use crate::source::{SceneSource, Source, Y4mSource};
 use std::io::Write;
 use std::sync::atomic::{AtomicBool, AtomicI64, AtomicU64, Ordering};
 use std::sync::mpsc::{sync_channel, Receiver, RecvTimeoutError, SyncSender, TrySendError};
@@ -40,6 +46,7 @@ use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 use windows::Win32::Foundation::{CloseHandle, HANDLE};
+use windows::Win32::Graphics::Dxgi::IDXGIAdapter1;
 use windows::Win32::System::Threading::{
     CreateWaitableTimerExW, GetCurrentProcess, SetPriorityClass, SetWaitableTimer, WaitForSingleObject, ABOVE_NORMAL_PRIORITY_CLASS,
     CREATE_WAITABLE_TIMER_HIGH_RESOLUTION, TIMER_ALL_ACCESS,
@@ -48,6 +55,8 @@ use windows::Win32::System::Threading::{
 /// What the main thread is told by whoever listens on stdin.
 pub enum Control {
     Stop,
+    /// Stealth mode's scene changed (`Some`), or the stream goes back to the screen (`None`).
+    Scene(Option<Scene>),
 }
 
 /// How long the whole stream gets to shut down after a stop.
@@ -72,6 +81,8 @@ struct Shared {
     skipped: AtomicU64,
     /// Pictures that repeated the last one because the screen hadn't changed.
     repeated: AtomicU64,
+    /// The newest change to the scene that the capture thread hasn't taken yet.
+    scene: Mutex<Option<Option<Scene>>>,
 }
 
 impl Shared {
@@ -206,7 +217,7 @@ struct Moved<T>(T);
 // SAFETY: see above; every `Moved` value is used by exactly one thread after it is handed over.
 // Only for the three things that are handed over, so nothing else can be moved this way by mistake.
 unsafe impl Send for Moved<Encoder> {}
-unsafe impl Send for Moved<(Source, Converter)> {}
+unsafe impl Send for Moved<CaptureParts> {}
 unsafe impl Send for Moved<Picture> {}
 
 impl<T> Moved<T> {
@@ -227,6 +238,22 @@ struct Parts {
     converter: Converter,
     encoder: Encoder,
     out: (u32, u32),
+    gpu: Gpu,
+    screen: Option<ScreenSpec>,
+}
+
+/// The screen a live stream captures when it isn't showing a scene (stealth mode switched off mid-stream).
+struct ScreenSpec {
+    adapter: IDXGIAdapter1,
+    on_adapter: u32,
+}
+
+/// What the capture thread works with.
+struct CaptureParts {
+    source: Source,
+    converter: Converter,
+    gpu: Gpu,
+    screen: Option<ScreenSpec>,
 }
 
 /// The card a video file is encoded on: the one asked for by name, else the one the screen is on, else the first.
@@ -246,7 +273,7 @@ fn adapter_for_file<'a>(adapters: &'a [AdapterInfo], settings: &Settings) -> Res
 
 fn prepare(settings: &mut Settings) -> Result<Parts> {
     let adapters = gpu::enumerate()?;
-    let (adapter, gpu, source) = match settings.source.clone() {
+    let (adapter, gpu, source, screen) = match settings.source.clone() {
         SourceSetting::Screen => {
             let (adapter, output) = gpu::find_output(&adapters, settings.screen)?;
             debug(&format!("screen {} is output {} of {} ({})", settings.screen, output.on_adapter, adapter.name, gpu::vendor_name(adapter.vendor_id)));
@@ -257,7 +284,19 @@ fn prepare(settings: &mut Settings) -> Result<Parts> {
             // once, the clock must not start before there is something to put on it, and the shape of
             // the picture (a screen on its side) is only certain once one has come.
             capturer.wait_for_picture(Duration::from_secs(2)).context("Couldn't capture the screen")?;
-            (adapter, gpu, Source::Screen(Box::new(capturer)))
+            let screen = ScreenSpec { adapter: dxgi_adapter, on_adapter: output.on_adapter };
+            (adapter, gpu, Source::Screen(Box::new(capturer)), Some(screen))
+        }
+        SourceSetting::Scene(scene) => {
+            // The card that drives the chosen screen encodes, as it would for the screen itself: Windows
+            // hands window captures over on any card, and the screen is still there to go back to.
+            let (adapter, output) = gpu::find_output(&adapters, settings.screen)?;
+            debug(&format!("stealth mode: a scene of window {} on {} ({})", scene.window, adapter.name, gpu::vendor_name(adapter.vendor_id)));
+            let dxgi_adapter = gpu::open_adapter(adapter.index)?;
+            let gpu = Gpu::open(&dxgi_adapter)?;
+            let source = SceneSource::new(&gpu, scene, settings.fps)?;
+            let screen = ScreenSpec { adapter: dxgi_adapter, on_adapter: output.on_adapter };
+            (adapter, gpu, Source::Scene(Box::new(source)), Some(screen))
         }
         SourceSetting::Y4m(path) => {
             let adapter = adapter_for_file(&adapters, settings)?;
@@ -267,7 +306,7 @@ fn prepare(settings: &mut Settings) -> Result<Parts> {
             let file = Y4mSource::open(&gpu, &path)?;
             // The file's own rate rules: its pictures are stamped at it.
             settings.fps = file.fps;
-            (adapter, gpu, Source::Y4m(Box::new(file)))
+            (adapter, gpu, Source::Y4m(Box::new(file)), None)
         }
     };
 
@@ -284,7 +323,7 @@ fn prepare(settings: &mut Settings) -> Result<Parts> {
         debug("This graphics card can't turn the picture upright, so the screen is sent sideways.");
     }
     encoder.set_releaser(converter.releaser());
-    Ok(Parts { source, converter, encoder, out })
+    Ok(Parts { source, converter, encoder, out, gpu, screen })
 }
 
 /// The lines added to every progress block: which encoder is running and how it is set.
@@ -293,7 +332,11 @@ fn encoder_lines(encoder: &Encoder, source: &Source) -> String {
     if let Some(tuning) = encoder.tuning {
         text.push_str(&format!("encoder_tuning={}\n", tuning.name()));
     }
-    text.push_str(if source.is_live() { "source=screen\n" } else { "source=y4m\n" });
+    text.push_str(match source {
+        Source::Screen(_) => "source=screen\n",
+        Source::Scene(_) => "source=scene\n",
+        Source::Y4m(_) => "source=y4m\n",
+    });
     text
 }
 
@@ -309,7 +352,7 @@ pub fn run(mut settings: Settings, control: Receiver<Control>) -> Result<()> {
         Output::Rtmp(url) => Some(RtmpUrl::parse(url)?),
         Output::File(_) => None,
     };
-    let Parts { source, converter, encoder, out } = prepare(&mut settings)?;
+    let Parts { source, converter, encoder, out, gpu, screen } = prepare(&mut settings)?;
     let extra = encoder_lines(&encoder, &source);
     let live = source.is_live();
     // A video file played as fast as it will go has no clock, so no sound either.
@@ -391,10 +434,9 @@ pub fn run(mut settings: Settings, control: Receiver<Control>) -> Result<()> {
     // -- capture --
     {
         let shared = shared.clone();
-        let graphics = Moved((source, converter));
+        let graphics = Moved(CaptureParts { source, converter, gpu, screen });
         handles.push(spawn("capture", shared.clone(), move || {
-            let (source, converter) = graphics.into_inner();
-            if let Err(e) = capture_thread(source, converter, tx, fps, start, paced, shared.clone()) {
+            if let Err(e) = capture_thread(graphics.into_inner(), tx, fps, start, paced, shared.clone()) {
                 shared.fail(e.to_string());
             }
         }));
@@ -475,6 +517,8 @@ fn report_loop(shared: &Shared, queue: &PacketQueue, control: &Receiver<Control>
     loop {
         match control.recv_timeout(Duration::from_millis(50)) {
             Ok(Control::Stop) | Err(RecvTimeoutError::Disconnected) => return,
+            // Only the newest change matters: one that wasn't taken yet is replaced.
+            Ok(Control::Scene(scene)) => *shared.scene.lock().expect("scene lock") = Some(scene),
             Err(RecvTimeoutError::Timeout) => {}
         }
         if shared.stop.load(Ordering::Relaxed) || shared.input_done.load(Ordering::Relaxed) {
@@ -496,16 +540,38 @@ fn report_loop(shared: &Shared, queue: &PacketQueue, control: &Receiver<Control>
     }
 }
 
-fn capture_thread(
-    mut source: Source,
-    mut converter: Converter,
-    tx: SyncSender<Frame>,
-    fps: u32,
-    start: Instant,
-    paced: bool,
-    shared: Arc<Shared>,
-) -> Result<()> {
-    let live = source.is_live();
+/// Takes a change to the scene: a scene that is showing takes the new description, the screen
+/// becomes the scene, and `None` goes back to the screen. Whatever can't be started (a window that
+/// can't be captured) leaves the stream as it was, with a note in the debug log.
+fn change_scene(parts: &mut CaptureParts, change: Option<Scene>, fps: u32) {
+    match (change, &mut parts.source) {
+        (_, Source::Y4m(_)) => {}
+        (Some(scene), Source::Scene(showing)) => showing.update(scene),
+        (Some(scene), Source::Screen(_)) => match SceneSource::new(&parts.gpu, scene, fps) {
+            Ok(source) => {
+                debug("stealth mode: the stream now shows the scene");
+                parts.source = Source::Scene(Box::new(source));
+            }
+            Err(e) => debug(&format!("stealth mode: kept the screen, the scene couldn't start: {e}")),
+        },
+        (None, Source::Scene(_)) => {
+            let Some(screen) = &parts.screen else { return };
+            match Capturer::new(&parts.gpu, &screen.adapter, screen.on_adapter) {
+                Ok(mut capturer) => {
+                    let _ = capturer.wait_for_picture(Duration::from_millis(500));
+                    debug("stealth mode: the stream shows the screen again");
+                    parts.source = Source::Screen(Box::new(capturer));
+                }
+                Err(e) => debug(&format!("stealth mode: kept the scene, the screen couldn't be captured: {e}")),
+            }
+        }
+        (None, Source::Screen(_)) => {}
+    }
+}
+
+fn capture_thread(mut parts: CaptureParts, tx: SyncSender<Frame>, fps: u32, start: Instant, paced: bool, shared: Arc<Shared>) -> Result<()> {
+    let live = parts.source.is_live();
+    let out = (parts.converter.out_width, parts.converter.out_height);
     let ticker = Ticker::new();
     let slot = |n: u64| start + Duration::from_nanos(n * 1_000_000_000 / u64::from(fps));
     let mut n: u64 = 0;
@@ -525,7 +591,14 @@ fn capture_thread(
                 n += late;
             }
         }
-        let Some(grabbed) = source.next_frame()? else {
+        if live {
+            let change = shared.scene.lock().expect("scene lock").take();
+            if let Some(change) = change {
+                change_scene(&mut parts, change, fps);
+            }
+        }
+        let CaptureParts { source, converter, .. } = &mut parts;
+        let Some(grabbed) = source.next_frame(out)? else {
             // The video file has played to its end.
             debug("the video file has ended");
             break;
@@ -535,7 +608,7 @@ fn capture_thread(
         }
         converter.set_source(grabbed.geometry)?;
         let picture = loop {
-            match converter.convert(&grabbed.texture)? {
+            match converter.convert(&grabbed.texture, grabbed.overlay.as_ref())? {
                 Some(p) => break Some(p),
                 // Every picture is with the encoder: the screen moves on, a file waits.
                 None if live => break None,
@@ -569,8 +642,8 @@ fn capture_thread(
         }
         n += 1;
     }
-    if source.restarts() > 0 {
-        debug(&format!("the screen capture restarted {} time(s)", source.restarts()));
+    if parts.source.restarts() > 0 {
+        debug(&format!("the screen capture restarted {} time(s)", parts.source.restarts()));
     }
     Ok(())
 }
@@ -728,7 +801,7 @@ pub fn probe_json() -> serde_json::Value {
             }
         })
         .collect();
-    probe::to_json(env!("CARGO_PKG_VERSION"), &listed)
+    probe::to_json(env!("CARGO_PKG_VERSION"), &listed, crate::wgc::supported())
 }
 
 /// Whether the adapter's hardware encoder really encodes (an installed driver can still refuse), and

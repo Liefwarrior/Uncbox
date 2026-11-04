@@ -5,17 +5,26 @@
 //!                          hardware encoders work
 //!   uncbox-stream run      reads one line of JSON settings on stdin (see settings.rs), then
 //!                          streams, printing FFmpeg-style progress on stdout every second.
-//!                          A line "q" on stdin (or closing stdin) ends it cleanly.
+//!                          A line "q" on stdin (or closing stdin) ends it cleanly. A line
+//!                          {"scene": …} changes stealth mode's scene while it runs (see scene.rs);
+//!                          {"scene": null} goes back to the screen.
 //!
 //! Problems are one plain sentence on stderr and a non-zero exit code. The stream key arrives on
 //! stdin, never in the arguments, and nothing printed ever contains it.
 
+#[cfg(windows)]
 use std::io::BufRead;
 use std::process::ExitCode;
+#[cfg(windows)]
 use std::sync::mpsc::channel;
+#[cfg(windows)]
 use uncbox_stream::redact;
+#[cfg(windows)]
+use uncbox_stream::scene::Scene;
+#[cfg(windows)]
 use uncbox_stream::settings::{Settings, Source};
 
+#[cfg(windows)]
 fn usage() -> ExitCode {
     eprintln!("Usage: uncbox-stream probe | uncbox-stream run (settings as one line of JSON on stdin)");
     ExitCode::from(2)
@@ -76,7 +85,7 @@ fn run() -> ExitCode {
 
     // Closing stdin means the server went away, which ends a stream of the screen. A test run of a video
     // file goes on to its end (only a line "q" stops it), so it can be started with `echo {...} | uncbox-stream run`.
-    let eof_stops = settings.source == Source::Screen;
+    let eof_stops = !matches!(settings.source, Source::Y4m(_));
     let (tx, rx) = channel();
     std::thread::spawn(move || {
         // "q" ends the stream; so does the end of stdin (the server went away).
@@ -87,7 +96,11 @@ fn run() -> ExitCode {
                     stopped_by_q = true;
                     break;
                 }
-                Ok(_) => {}
+                Ok(l) => {
+                    if let Some(scene) = Scene::update_from_line(&l) {
+                        let _ = tx.send(uncbox_stream::pipeline::Control::Scene(scene));
+                    }
+                }
                 Err(_) => break,
             }
         }

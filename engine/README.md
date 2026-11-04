@@ -10,6 +10,15 @@ screen ──▶ Desktop Duplication ──▶ cursor ──▶ video processor 
 Uncbox app ──▶ named pipe ──▶ same clock ──▶ AAC (Media Foundation) ───────────────────────┘
 ```
 
+In the Uncbox app's **stealth mode** the picture is a scene instead of a screen: the dashboard window
+and the game window, each captured with Windows.Graphics.Capture, the game drawn over the dashboard's
+game panel by a second pass of the same video processor, into the same picture:
+
+```
+dashboard window ──▶ window capture ──▶ video processor ──────────▶ NVENC ─▶ …
+game window ──────▶ window capture ──▶ video processor, into the panel ┘   (same picture, one more pass)
+```
+
 Every step of the picture happens on the graphics card. The processor only ever touches the small
 compressed stream. That is the point: FFmpeg 8.1's `scale_d3d11` can't take the screen capture's
 frames, so the FFmpeg setup copies every frame to the processor (or out and back in for CUDA) to
@@ -46,7 +55,7 @@ Then, from the Uncbox folder:
 
 ```bash
 npm run engine          # cd engine && cargo build --release  ->  engine/target/release/uncbox-stream.exe
-cd engine && cargo test # the unit tests
+cd engine && cargo test # the unit tests (the plain-data ones, scene.rs among them, also run off Windows)
 cd engine && cargo clippy --all-targets -- -D warnings && cargo fmt --check
 ```
 
@@ -89,6 +98,9 @@ found out):
   refused part of them (an older card without B-frames as references, for one). `backend` is `nvenc`
   (the direct NVIDIA encoder) or `mediafoundation` (AMD, Intel, and NVIDIA when NVENC can't open).
 - `primary` is the screen number Windows calls the main one (each output also says `primary`).
+- `windowCapture` says whether this Windows can capture windows (Windows.Graphics.Capture, Windows 10
+  1903 and later), which stealth mode's scene needs. An engine from before scenes doesn't print it, and
+  the server takes that as no.
 - Screens are numbered across all cards in the order Windows lists them, the same way FFmpeg's
   `ddagrab` counts.
 
@@ -113,14 +125,27 @@ defaults and limits; unknown fields are ignored so the settings can grow. The se
 | `quality` | Media Foundation only, safe settings only: 0 fastest, 100 best looking (the quality settings ask for 100) | 80 |
 | `tuning` | `auto`, `quality` or `safe`: where NVENC starts (`safe` skips the quality attempt, for a probe that already found it refused) | `auto` |
 | `backend` | `auto`, `nvenc` or `mf`: `mf` makes an NVIDIA card use Media Foundation (for comparing); `nvenc` refuses to fall back | `auto` |
-| `source` | `{ "y4m": "<file>" }`: encode a video file instead of the screen (testing) | the screen |
+| `source` | `{ "scene": { … } }`: stealth mode's scene (below); `{ "y4m": "<file>" }`: encode a video file instead of the screen (testing) | the screen |
 | `pace` | with a file as the source: `true` sends at the file's frame rate, `false` as fast as the encoder takes it (no sound then) | `true` |
+
+**Stealth mode's scene** (`src/scene.rs`, made by the app and checked by the server's `clampScene` the
+same way): `{ "window": "<dashboard handle>", "cursor": false, "size": { "w", "h" }, "game": { "window":
+"<game handle>", "rect": { "x", "y", "w", "h" }, "crop": { "top", "right", "bottom", "left" }, "stripPx",
+"fit": "contain" | "cover" | "stretch" } }`. `rect` is the game panel in the dashboard's device pixels
+(measured at `size`), `crop` the percent of the game's picture left out at each edge (0 to 45), `stripPx`
+the WoW addon's strip at its top, `fit` how the game fills the panel. The size sent is worked out from
+the dashboard's picture as it would be from a screen's, and the card is the one driving `screen`. A
+scene without a usable dashboard window is the screen; a game that isn't described well enough is left
+out and the dashboard alone is sent. While the stream runs, a line `{"scene": { … }}` on stdin changes the
+scene from the next picture (the panel moved, another game), from the screen as well, and `{"scene":
+null}` goes back to the screen, all without stopping the stream. A window that can't be captured leaves
+the stream as it was (the game is tried again every two seconds).
 
 Then, every second, a block on stdout in FFmpeg's `-progress` format (`frame=`, `fps=`, `bitrate=`,
 `total_size=`, `out_time_us=`, `dup_frames=`, `drop_frames=`, `speed=`, `progress=continue`), so the
 server's `createProgressParser()` reads it unchanged. Each block also carries a few extra lines the
 parser skips and a reader can use: `encoder_backend=nvenc|mediafoundation`, `encoder_name=...`,
-`encoder_bframes=N`, `encoder_tuning=quality|safe` (NVENC only) and `source=screen|y4m`. A line `q` on
+`encoder_bframes=N`, `encoder_tuning=quality|safe` (NVENC only) and `source=screen|scene|y4m` (how it started). A line `q` on
 stdin (or closing stdin, for a stream of the screen) stops capturing, flushes both encoders, sends
 the last packets, closes RTMP properly and exits 0 (about 100 to 250 ms with NVENC, which flushes its
 look-ahead). `progress=end` is the last block. Any fatal problem is one plain sentence on stderr and
@@ -176,9 +201,11 @@ bars if the shape differs).
 | `settings.rs` | the settings above, clamped; `target_size`; `file:` addresses |
 | `gpu.rs` | finds the graphics cards and their screens, opens Direct3D 11 on the right one |
 | `capture.rs` | Desktop Duplication into a texture (SDR even on HDR screens, restarted when the screen changes); the cursor drawn on a copy with a small shader (colour cursors blend; black-and-white inverting ones use the two-step mask trick Windows does) |
-| `source.rs`, `y4m.rs` | the picture sources: the screen, or a Y4M file uploaded to the card one picture at a time |
+| `source.rs`, `y4m.rs` | the picture sources: the screen, stealth mode's scene (both windows, the game placed over its panel), or a Y4M file uploaded to the card one picture at a time |
+| `scene.rs` | stealth mode's scene: reading its description (and the stdin lines that change it), and where the game goes on the picture that is sent, with its crop, the WoW strip and its fit (plain arithmetic, tested anywhere) |
+| `wgc.rs` | one window's picture with Windows.Graphics.Capture: the newest frame copied out on the card, captured no more often than the stream sends (Windows 11 24H2), the yellow border off where Windows allows it, the pointer drawn where asked |
 | `orient.rs` | which way up a screen is, and how a picture of one size fits another |
-| `convert.rs` | the Direct3D 11 video processor: BGRA (or NV12) to NV12 BT.709, turning and scaling in one pass; a plain copy when the file already is what the encoder takes; the pool of pictures |
+| `convert.rs` | the Direct3D 11 video processor: BGRA (or NV12) to NV12 BT.709, turning and scaling in one pass; a scene's game drawn into its panel by a second pass whose target rectangle is the panel, leaving the rest as the first pass made it; a plain copy when the file already is what the encoder takes; the pool of pictures |
 | `encoder.rs` | chooses NVENC or Media Foundation and gives the pipeline one way to talk to either |
 | `nvenc.rs`, `nvapi.rs`, `tuning.rs`, `reorder.rs` | NVIDIA's encoder directly: the session, the registered textures, the settings, decode times for B-frames |
 | `mf.rs` | Media Foundation: the card's H.264 encoder fed Direct3D textures, and Windows' AAC encoder |
@@ -190,8 +217,9 @@ bars if the shape differs).
 | `pipeline.rs`, `probe.rs` | the threads and the clock; what `run` does; the shape of the probe |
 | `progress.rs`, `redact.rs`, `log.rs` | the report, the key filter, the messages |
 
-**Threads.** Capture (wakes on the frame clock and never waits on anything slow), encoder, sound,
-network (the only one that writes to the server), and main (listens for `q`, prints the report).
+**Threads.** Capture (wakes on the frame clock and never waits on anything slow; takes the newest scene
+change before each picture), encoder, sound, network (the only one that writes to the server), and main
+(hands `q` and scene changes on, prints the report).
 
 **One clock.** Picture *n* is stamped *n*/fps seconds after the start; sound is stamped by the number
 of samples that have gone out; both are measured from the moment the app's pipe was opened (its writer
@@ -372,5 +400,14 @@ Also checked:
   while the NVIDIA card renders isn't supported (it says so, and FFmpeg has the same limit).
 - The encoder's constant bitrate isn't strictly constant: on Media Foundation it runs 7 to 13 percent over
   (the engine aims at 93 percent of the rate there); NVENC held 6.07 to 6.2 Mbit/s of container at 6000.
-- Not built, on purpose: other services, recording a second output, overlays composited on the card.
-  `settings.rs`, `sink.rs` and `pipeline.rs` are laid out so each slots in.
+- **Stealth mode's scene hasn't run on a real PC yet.** It builds for Windows (`cargo check` and `cargo
+  clippy` for `x86_64-pc-windows-gnullvm`) and its arithmetic is unit tested (`scene.rs`), but the window
+  captures, the second video processor pass and switching sources mid-stream haven't been seen working,
+  and nothing about it is measured yet: CPU, encoder load and picture are still to do, like the table
+  above. The second pass relies on the video processor leaving the picture outside its target rectangle
+  alone, which is what Direct3D 11 documents; a card that didn't would show the dashboard without the
+  game (said once in the debug log).
+- Window capture can't take a game in exclusive full screen (stealth mode puts the game borderless full
+  screen, as Play here does), and on Windows 10 Windows draws a yellow border around a captured window.
+- Not built, on purpose: other services, recording a second output, overlays other than stealth mode's
+  scene. `settings.rs`, `sink.rs` and `pipeline.rs` are laid out so each slots in.

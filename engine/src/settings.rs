@@ -7,12 +7,17 @@
 //! config grow (another service, a second output, a recording, overlays) without breaking older
 //! callers: add a field here, give it a default, and read it where it is needed.
 //!
+//! Stealth mode's picture is the third source: `"source": { "scene": { … } }` is the Uncbox dashboard
+//! captured as a window with the game's window drawn over its panel (see `scene.rs`). The server
+//! can change it while the stream runs, with a line `{"scene": …}` on stdin.
+//!
 //! For testing and tooling there are two more ways to run: `"source": { "y4m": "<file>" }` encodes a
 //! Y4M video file instead of the screen, and a `file:<path>.flv` address writes the stream to a file
 //! instead of sending it (see README.md).
 
 use crate::error::{Error, Result};
 use crate::redact;
+use crate::scene::Scene;
 use serde_json::Value;
 use std::fmt;
 use std::path::PathBuf;
@@ -90,9 +95,11 @@ impl TuningChoice {
 }
 
 /// Where the picture comes from.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Source {
     Screen,
+    /// Stealth mode: the dashboard window with the game's window over its panel.
+    Scene(Scene),
     /// A Y4M video file (testing and tooling).
     Y4m(PathBuf),
 }
@@ -296,8 +303,11 @@ impl Settings {
         } else {
             return Err(Error::new("There is no stream address to send to."));
         };
-        let source = match value.get("source").and_then(|s| s.get("y4m")).and_then(Value::as_str).map(str::trim) {
-            Some(path) if !path.is_empty() => Source::Y4m(PathBuf::from(path)),
+        let given = value.get("source");
+        let source = match (given.and_then(|s| s.get("y4m")).and_then(Value::as_str).map(str::trim), given.and_then(|s| s.get("scene"))) {
+            (Some(path), _) if !path.is_empty() => Source::Y4m(PathBuf::from(path)),
+            // A scene that can't be used streams the screen, as before stealth mode.
+            (_, Some(scene)) => Scene::from_value(scene).map_or(Source::Screen, Source::Scene),
             _ => Source::Screen,
         };
 
@@ -509,6 +519,17 @@ mod tests {
             assert_eq!(parse(odd).source, Source::Screen, "{odd}");
         }
         assert!(parse(r#","pace":"no""#).pace, "only a real true or false counts");
+    }
+
+    #[test]
+    fn stealth_mode_streams_a_scene() {
+        let s = parse(r#","source":{"scene":{"window":"4242","game":{"window":77,"rect":{"x":0,"y":0,"w":1280,"h":720}}}}"#);
+        let Source::Scene(scene) = s.source else { panic!("a scene") };
+        assert_eq!(scene.window, 4242);
+        assert_eq!(scene.game.map(|g| (g.window, g.w, g.h)), Some((77, 1280, 720)));
+        // A scene with no usable dashboard window is the screen, as before.
+        assert_eq!(parse(r#","source":{"scene":{"window":0}}"#).source, Source::Screen);
+        assert_eq!(parse(r#","source":{"scene":null}"#).source, Source::Screen);
     }
 
     #[test]

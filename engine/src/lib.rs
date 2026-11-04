@@ -2,7 +2,8 @@
 //! (with the app's sound) to Twitch over RTMP. `src/main.rs` is the program; this is its parts.
 //!
 //! The parts that are only data (settings, the stream key filter, FLV, H.264 NAL units, AMF0, the
-//! RTMP chunking, the packet line, the encoder settings, the NVENC structures, Y4M files) don't
+//! RTMP chunking, the packet line, the encoder settings, the NVENC structures, Y4M files, where the
+//! game goes in a stealth-mode scene) don't
 //! touch Windows and are tested on their own. The parts that talk to the graphics card, Media
 //! Foundation and the sound pipe are Windows-only.
 
@@ -20,6 +21,7 @@ pub mod queue;
 pub mod redact;
 pub mod reorder;
 pub mod rtmp;
+pub mod scene;
 pub mod settings;
 pub mod sink;
 pub mod tuning;
@@ -43,3 +45,5 @@ pub mod nvenc;
 pub mod pipeline;
 #[cfg(windows)]
 pub mod source;
+#[cfg(windows)]
+pub mod wgc;
