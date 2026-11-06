@@ -170,7 +170,7 @@ The page and the app talk with small JSON messages over WebView2's `postMessage`
 | `UncboxShell/Native.cs` | The Win32 calls. |
 | `UncboxShell/ClipAudio.cs` | The sound of clips: the game's, Discord's and the mic's last 70 seconds, each apart, in memory; the page asks for a clip's stretch (`clipaudioget`, answered in a WebView2 shared buffer). |
 | `UncboxShell/ProcessLoopback.cs` | WASAPI process loopback (one program's sound, or everything except one), which NAudio 2.2.1 doesn't offer. |
-| `UncboxShell/AudioKit.cs` | The shared audio pieces: 10 ms timeline, conversion to 48 kHz stereo, the small queue, the mic list. |
+| `UncboxShell/AudioKit.cs` | The shared audio pieces: 10 ms timeline, conversion to 48 kHz stereo, a mic folded to one voice in the middle (an audio interface's mic is on one of its two channels), the small queue, the mic list. |
 | `../scripts/app.mjs` | `npm run app`: builds when needed, then starts the app. |
 | `../scripts/package.mjs` | `npm run package`: the folder and zip anyone can run. |
 

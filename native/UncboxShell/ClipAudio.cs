@@ -45,7 +45,7 @@ internal sealed class ClipAudio : IDisposable
     private readonly object _gate = new();
     private readonly CancellationTokenSource _cts = new();
     private readonly Stopwatch _clock = new();
-    private readonly Source _game = new(), _discord = new(), _mic = new();
+    private readonly Source _game = new(), _discord = new(), _mic = new(voice: true);
     private Thread? _writer, _resolver;
     private string _title = "";
     private string? _micId;
@@ -439,7 +439,8 @@ internal sealed class ClipAudio : IDisposable
     /// One thing being recorded: a capture, its conversion to 48 kHz stereo, the small queue the
     /// writer takes 10 ms blocks from, and the ring the clips are cut from.
     /// </summary>
-    private sealed class Source : IDisposable
+    /// <summary>One of the three sounds. A mic (voice) is folded to one channel in the middle first (see AudioKit.VoiceFold).</summary>
+    private sealed class Source(bool voice = false) : IDisposable
     {
         public readonly ClipRing Ring = new(RingFrames);
         private readonly AudioKit.FrameRing _queue = new(AudioKit.RingFrames);
@@ -465,6 +466,7 @@ internal sealed class ClipAudio : IDisposable
             }
             int rate = format.SampleRate, bits = format.BitsPerSample, channels = format.Channels;
             var resampler = rate == AudioKit.Rate ? null : new AudioKit.StereoResampler(rate, AudioKit.Rate);
+            var fold = voice ? new AudioKit.VoiceFold(channels, rate) : null;
             float[] decoded = [], resampled = [];
             capture.DataAvailable += (_, e) =>
             {
@@ -474,7 +476,9 @@ internal sealed class ClipAudio : IDisposable
                     int frames = e.BytesRecorded / frameBytes;
                     if (frames == 0) return;
                     if (decoded.Length < frames * 2) decoded = new float[frames * 2];
-                    AudioKit.DecodeToStereo(e.Buffer.AsSpan(0, frames * frameBytes), isFloat, bits, channels, decoded);
+                    var bytes = e.Buffer.AsSpan(0, frames * frameBytes);
+                    if (fold is not null) fold.Decode(bytes, isFloat, bits, decoded);
+                    else AudioKit.DecodeToStereo(bytes, isFloat, bits, channels, decoded);
                     if (resampler is null)
                     {
                         _queue.Write(decoded, frames);

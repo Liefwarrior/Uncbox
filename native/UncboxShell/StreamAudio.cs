@@ -87,7 +87,7 @@ internal sealed class StreamAudio : IDisposable
             }
             if (mic is not null)
             {
-                _mic = new Source();
+                _mic = new Source(voice: true);
                 var capture = OpenMic(mic);
                 try
                 {
@@ -346,9 +346,10 @@ internal sealed class StreamAudio : IDisposable
 
     /// <summary>
     /// One thing being recorded: a capture device, its conversion to 48 kHz stereo, and the buffer
-    /// the writer thread takes blocks from.
+    /// the writer thread takes blocks from. A mic (voice) is folded to one channel in the middle
+    /// first (see AudioKit.VoiceFold), so an audio interface's mic isn't on one side only.
     /// </summary>
-    private sealed class Source : IDisposable
+    private sealed class Source(bool voice = false) : IDisposable
     {
         private readonly FrameRing _ring = new(RingFrames);
         private WasapiCapture? _capture;
@@ -368,6 +369,7 @@ internal sealed class StreamAudio : IDisposable
             int rate = format.SampleRate, bits = format.BitsPerSample, channels = format.Channels;
             bool same = rate == Rate;
             var resampler = same ? null : new StereoResampler(rate, Rate);
+            var fold = voice ? new VoiceFold(channels, rate) : null;
             float[] decoded = [], resampled = [];
             capture.DataAvailable += (_, e) =>
             {
@@ -375,7 +377,9 @@ internal sealed class StreamAudio : IDisposable
                 int frames = e.BytesRecorded / frameBytes;
                 if (frames == 0) return;
                 if (decoded.Length < frames * 2) decoded = new float[frames * 2];
-                DecodeToStereo(e.Buffer.AsSpan(0, frames * frameBytes), isFloat, bits, channels, decoded);
+                var bytes = e.Buffer.AsSpan(0, frames * frameBytes);
+                if (fold is not null) fold.Decode(bytes, isFloat, bits, decoded);
+                else DecodeToStereo(bytes, isFloat, bits, channels, decoded);
                 if (resampler is null)
                 {
                     _ring.Write(decoded, frames);

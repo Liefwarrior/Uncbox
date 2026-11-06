@@ -106,6 +106,104 @@ internal static class AudioKit
         return frames;
     }
 
+    /// <summary>
+    /// A microphone is one voice, whatever the device says it is. Audio interfaces (a Focusrite
+    /// Scarlett, and most others) show up in Windows as a two-channel input with the mic on one
+    /// channel only: decoded as stereo, the voice was on one side only, and anything that plays it in
+    /// mono (phones, Discord's embeds) averaged it with the silent side, half as loud. This folds a
+    /// mic's channels into one, in the middle, at its full level: the channels that carry the voice
+    /// (within 12 dB of the loudest, kept in until 18 dB down) are averaged, and the quiet ones (an
+    /// empty input's hiss) are left out. A USB mic that sends the same mono on both channels stays as it
+    /// was, and two mics on one interface are both kept. The levels follow the voice quickly (30 ms)
+    /// and let go slowly (1 s), and a change of channels fades over one buffer, so it never clicks.
+    /// A few multiply-adds a sample.
+    /// </summary>
+    internal sealed class VoiceFold(int channels, int rate)
+    {
+        private const float AttackSeconds = 0.03f, ReleaseSeconds = 1f;
+        /// <summary>Quieter than this (mean square, about -70 dBFS) is no voice at all.</summary>
+        private const float Floor = 1e-7f;
+        /// <summary>12 dB under the loudest to come in, 18 dB to drop out (as power ratios).</summary>
+        private const float JoinRatio = 1f / 16, LeaveRatio = 1f / 64;
+
+        private readonly int _channels = Math.Clamp(channels, 1, 8);
+        private readonly float[] _level = new float[Math.Clamp(channels, 1, 8)];
+        private readonly bool[] _active = new bool[Math.Clamp(channels, 1, 8)];
+        private readonly float[] _weight = new float[Math.Clamp(channels, 1, 8)];
+        private readonly float[] _target = new float[Math.Clamp(channels, 1, 8)];
+        private bool _started;
+
+        /// <summary>How much of each channel goes into the voice right now (they add up to 1).</summary>
+        public ReadOnlySpan<float> Weights => _weight;
+
+        /// <summary>
+        /// Turns a mic's bytes (as DecodeToStereo takes them) into interleaved stereo floats with the
+        /// voice on both sides, and returns the frames.
+        /// </summary>
+        public int Decode(ReadOnlySpan<byte> source, bool isFloat, int bitsPerSample, Span<float> stereo)
+        {
+            int bytes = bitsPerSample / 8;
+            int frames = source.Length / (bytes * channels);
+            if (frames == 0) return 0;
+            int n = _channels;
+            if (n == 1)
+            {
+                for (int i = 0; i < frames; i++) stereo[i * 2] = stereo[i * 2 + 1] = ReadSample(source.Slice(i * bytes * channels, bytes), isFloat, bytes);
+                return frames;
+            }
+
+            // How loud each channel was in this buffer.
+            Span<float> power = stackalloc float[8];
+            for (int i = 0; i < frames; i++)
+            {
+                int at = i * bytes * channels;
+                for (int c = 0; c < n; c++)
+                {
+                    float v = ReadSample(source.Slice(at + c * bytes, bytes), isFloat, bytes);
+                    power[c] += v * v;
+                }
+            }
+            float attack = 1 - MathF.Exp(-frames / (rate * AttackSeconds));
+            float release = 1 - MathF.Exp(-frames / (rate * ReleaseSeconds));
+            float loudest = 0;
+            for (int c = 0; c < n; c++)
+            {
+                float p = power[c] / frames;
+                _level[c] += (p > _level[c] ? attack : release) * (p - _level[c]);
+                loudest = Math.Max(loudest, _level[c]);
+            }
+            int count = 0;
+            for (int c = 0; c < n; c++)
+            {
+                float ratio = _active[c] ? LeaveRatio : JoinRatio;
+                _active[c] = _level[c] >= Floor && _level[c] >= loudest * ratio;
+                if (_active[c]) count++;
+            }
+            // Nothing above the floor (silence, or a mic still waking up): every channel alike.
+            for (int c = 0; c < n; c++) _target[c] = count == 0 ? 1f / n : _active[c] ? 1f / count : 0;
+            if (!_started)
+            {
+                _target.CopyTo(_weight, 0);
+                _started = true;
+            }
+
+            // The mix, the weights moving to their new values across this buffer.
+            for (int i = 0; i < frames; i++)
+            {
+                int at = i * bytes * channels;
+                float t = (i + 1f) / frames, voice = 0;
+                for (int c = 0; c < n; c++)
+                {
+                    float w = _weight[c] + (_target[c] - _weight[c]) * t;
+                    voice += w * ReadSample(source.Slice(at + c * bytes, bytes), isFloat, bytes);
+                }
+                stereo[i * 2] = stereo[i * 2 + 1] = voice;
+            }
+            _target.CopyTo(_weight, 0);
+            return frames;
+        }
+    }
+
     private static float ReadSample(ReadOnlySpan<byte> s, bool isFloat, int bytes) => bytes switch
     {
         4 when isFloat => BinaryPrimitives.ReadSingleLittleEndian(s),

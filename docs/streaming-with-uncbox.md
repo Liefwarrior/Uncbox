@@ -31,7 +31,7 @@ the sign-in the first time you open **Streaming** or press **Go live**. Everythi
 3. **Quality.** `1080p60 · 6000` suits most connections. Lower ones (`720p60 · 4500`,
    `720p30 · 3000`) need less upload. **Screen size** sends the screen as it is.
 4. **Sound** (in the app). **Desktop sound** is what Windows plays. **Mic** picks a microphone,
-   or **No mic**. The sliders go from silent to double volume, and while you are live a small
+   or **No mic**; it goes in the middle, whichever input of an audio interface it is on. The sliders go from silent to double volume, and while you are live a small
    bar under each shows how loud it is.
 
 The last line of the section says whether this PC is ready, naming the encoder it found ("Ready:
@@ -193,6 +193,26 @@ Outside stealth mode: the screen you picked, as it is, one picture. Anything on 
 stream, including Uncbox itself, so use stream mode (F8) or capture a screen with only the game. In
 stealth mode: the dashboard with the game in it, as above. Need other scenes and overlays? Use OBS, as
 before.
+
+## If your mic is quiet
+
+Audio interfaces (a Focusrite Scarlett, and most others) show up in Windows as a two-channel input
+with your mic on one of them. Uncbox puts a mic in the middle at its full level whichever input it is
+on (in the stream and in clips' Mic track), so it isn't on one side only, or half as loud on phones.
+If it is still quiet:
+
+1. **Turn up the gain on the interface itself**, the knob for your mic's input. Talk as loud as you
+   will on stream: on a Scarlett the ring around the knob should be green, touching amber on your
+   loudest, never red. On a 4th-gen Scarlett, **Auto Gain** in Focusrite Control 2 does this for you.
+2. **Phantom power (48V) for a condenser mic.** Without it a condenser mic is faint or silent. Dynamic
+   mics (Shure SM7B, SM58) don't need it.
+3. **Pad and Inst off.** A pad button (-10 dB on older Scarletts) makes everything quieter, and Inst is
+   for guitars plugged into the jack, not a mic on the XLR.
+4. **A quiet dynamic mic** (an SM7B especially) wants more gain than many interfaces have: talk within a
+   few centimetres, into its end, or put an inline booster (a Cloudlifter or FetHead) between them.
+5. **Windows:** Settings > System > Sound > your Focusrite input: volume 100.
+6. **Then Uncbox's Mic slider** under Streaming goes up to double. Use it last: it raises the hiss with
+   the voice, which the gain knob doesn't.
 
 ## If it won't start
 
